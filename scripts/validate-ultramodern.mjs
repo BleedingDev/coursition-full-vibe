@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const configPath = path.resolve(process.cwd(), 'modern.config.ts');
+const coursitionConfigPath = path.resolve(process.cwd(), 'server/coursition/config.ts');
 const templateManifestPath = path.resolve(process.cwd(), '.modernjs/mv-template-manifest.json');
 const packageSourcePath = path.resolve(process.cwd(), '.modernjs/ultramodern-package-source.json');
 const readPnpmConfig = (key) => {
@@ -38,6 +39,9 @@ if (!fs.existsSync(configPath)) {
 }
 
 const content = fs.readFileSync(configPath, 'utf-8');
+const coursitionConfigContent = fs.existsSync(coursitionConfigPath)
+  ? fs.readFileSync(coursitionConfigPath, 'utf-8')
+  : '';
 const requiredTokens = [
   'presetUltramodern(',
   'appTools()',
@@ -50,7 +54,8 @@ const requiredTokens = [
   'MODERN_PUBLIC_SITE_URL must be set for production builds',
   'globalVars',
 ];
-const missing = requiredTokens.filter((token) => !content.includes(token));
+const configContractContent = `${content}\n${coursitionConfigContent}`;
+const missing = requiredTokens.filter((token) => !configContractContent.includes(token));
 
 if (missing.length > 0) {
   console.error(`Ultramodern contract check failed. Missing tokens: ${missing.join(', ')}`);
@@ -91,12 +96,14 @@ const requiredPaths = [
   'oxlint.config.ts',
   'oxfmt.config.ts',
   'scripts/bootstrap-agent-skills.mjs',
+  'scripts/check-effect-diagnostics.mjs',
 
   '.mise.toml',
   '.modernjs/ultramodern-package-source.json',
   'pnpm-workspace.yaml',
   'rstest.config.mts',
   'scripts/check-i18n-strings.mjs',
+  'server/coursition/config.ts',
 
   'postcss.config.mjs',
   'tailwind.config.ts',
@@ -249,6 +256,7 @@ const skillsLock = JSON.parse(
 );
 
 const requiredScripts = {
+  'effect-diagnostics:check': 'node ./scripts/check-effect-diagnostics.mjs',
   format: 'oxfmt .',
   'format:check': 'oxfmt --check .',
   'i18n:check': 'node ./scripts/check-i18n-strings.mjs',
@@ -278,6 +286,11 @@ if (
 
 if (!packageJson.scripts?.['ultramodern:check']?.includes('pnpm test')) {
   console.error('ultramodern:check must run the generated Rstest suite');
+  process.exit(1);
+}
+
+if (!packageJson.scripts?.['ultramodern:check']?.includes('pnpm effect-diagnostics:check')) {
+  console.error('ultramodern:check must reject Effect diagnostic suppressions');
   process.exit(1);
 }
 

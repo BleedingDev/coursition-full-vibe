@@ -10,13 +10,11 @@ import {
 const aiModeSchema = Schema.Literals(['generate', 'assist']);
 const draftStepSchema = Schema.Literals([
   'mode',
-  'knowledge',
-  'questions',
-  'topics',
-  'target',
-  'chapters',
-  'lessons',
-  'builder',
+  'sources',
+  'preparation',
+  'objectives',
+  'activityPlan',
+  'courseContent',
   'preview',
 ]);
 const sourceStatusSchema = Schema.Literals([
@@ -30,26 +28,29 @@ const sourceStatusSchema = Schema.Literals([
   'deleted',
 ]);
 const sourceTypeSchema = Schema.Literals(['file', 'url', 'notes']);
-const sourceSupportSchema = Schema.Literals(['source_backed', 'partially_source_backed', 'manual']);
-const importanceSchema = Schema.Literals(['low', 'medium', 'high', 'critical']);
+const sourceSupportSchema = Schema.Literals([
+  'source_backed',
+  'partially_source_backed',
+  'inferred',
+]);
+const sourceConfidenceSchema = Schema.Literals(['high', 'medium', 'low', 'none']);
+const generatedStatusSchema = Schema.Literals(['empty', 'generated', 'edited', 'stale']);
 const confidenceSchema = Schema.Literals(['high', 'medium', 'low']);
-const lessonBlockTypeSchema = Schema.Literals([
-  'heading',
-  'rich_text',
-  'callout',
-  'image',
-  'media',
-  'file',
-  'quiz',
-  'exercise',
-  'code',
-  'reflection',
+const activityTypeSchema = Schema.Literals([
+  'retrieval_check',
+  'practice_task',
+  'scenario_decision',
+  'ordering_matching',
+  'rubric_answer',
+]);
+const contentBlockTypeSchema = Schema.Literals([
   'objective',
-  'explanation',
-  'check',
+  'source_explanation',
+  'worked_example',
+  'interactive_activity',
+  'reflection',
   'summary',
 ]);
-const provenanceSchema = Schema.Literals(['source-backed', 'AI-inferred', 'manual', 'mixed']);
 const aiRunStatusSchema = Schema.Literals([
   'queued',
   'running',
@@ -59,10 +60,9 @@ const aiRunStatusSchema = Schema.Literals([
   'cancelled',
 ]);
 const aiRunTypeSchema = Schema.Literals([
-  'topic_generation',
-  'target_learner_generation',
-  'chapter_generation',
-  'lesson_generation',
+  'course_generation',
+  'learning_blueprint_generation',
+  'course_content_generation',
   'teaching_quality_review',
 ]);
 
@@ -113,68 +113,205 @@ export const knowledgeChunkSchema = Schema.Struct({
   sourceAssetId: Schema.String,
 });
 
-export const guidedQuestionsSchema = Schema.Struct({
+export const coursePreparationSchema = Schema.Struct({
+  activityMixPreference: Schema.String,
   audience: Schema.String,
-  avoid: Schema.String,
-  depth: Schema.String,
-  outcome: Schema.String,
-  practice: Schema.String,
-  priorKnowledge: Schema.String,
-  strictSourceOnly: Schema.Boolean,
-});
-export type GuidedQuestions = Schema.Schema.Type<typeof guidedQuestionsSchema>;
-
-export const topicSchema = Schema.Struct({
-  description: Schema.String,
-  id: Schema.String,
-  importance: importanceSchema,
-  name: Schema.String,
-  sourceSupport: sourceSupportSchema,
-});
-export type Topic = Schema.Schema.Type<typeof topicSchema>;
-
-export const targetLearnerSchema = Schema.Struct({
   constraints: Schema.String,
-  currentKnowledge: Schema.String,
+  depth: Schema.String,
   desiredOutcome: Schema.String,
-  motivation: Schema.String,
-  pain: Schema.String,
-  practiceStyle: Schema.String,
-  profile: Schema.String,
+  language: Schema.Literals(['en', 'cs']),
+  languagePreference: Schema.Literals(['source', 'en', 'cs']),
+  priorKnowledge: Schema.String,
+  sourceStrictness: Schema.Literals(['standard', 'strict']),
+  tone: Schema.String,
 });
-export type TargetLearner = Schema.Schema.Type<typeof targetLearnerSchema>;
+export type CoursePreparation = Schema.Schema.Type<typeof coursePreparationSchema>;
 
-export const lessonBlockSchema = Schema.Struct({
+export const learningObjectiveSchema = Schema.Struct({
+  capability: Schema.String,
+  id: Schema.String,
+  sourceConfidence: sourceConfidenceSchema,
+  sourceReferences: Schema.optional(Schema.Array(sourceReferenceSchema)),
+  sourceSupport: sourceSupportSchema,
+  status: generatedStatusSchema,
+  title: Schema.String,
+  topicName: Schema.String,
+  updatedAt: Schema.String,
+});
+export type LearningObjective = Schema.Schema.Type<typeof learningObjectiveSchema>;
+
+export const activityBriefSchema = Schema.Struct({
+  feedbackGuidance: Schema.String,
+  id: Schema.String,
+  instructions: Schema.String,
+  learnerAction: Schema.String,
+  objectiveId: Schema.String,
+  objectiveIds: Schema.Array(Schema.String),
+  sourceConfidence: sourceConfidenceSchema,
+  sourceReferences: Schema.optional(Schema.Array(sourceReferenceSchema)),
+  status: generatedStatusSchema,
+  successCriteria: Schema.String,
+  title: Schema.String,
+  type: activityTypeSchema,
+  updatedAt: Schema.String,
+});
+export type ActivityBrief = Schema.Schema.Type<typeof activityBriefSchema>;
+
+const retrievalChoiceSchema = Schema.Struct({
+  feedback: Schema.String,
+  id: Schema.String,
+  isCorrect: Schema.Boolean,
+  text: Schema.String,
+});
+
+const retrievalCheckInteractionSchema = Schema.Struct({
+  choices: Schema.Array(retrievalChoiceSchema),
+  explanationPrompt: Schema.String,
+  feedback: Schema.String,
+  kind: Schema.Literal('retrieval_check'),
+  question: Schema.String,
+});
+
+const practiceTaskInteractionSchema = Schema.Struct({
+  checklist: Schema.Array(Schema.String),
+  feedback: Schema.String,
+  kind: Schema.Literal('practice_task'),
+  prompt: Schema.String,
+  submissionLabel: Schema.String,
+});
+
+const scenarioChoiceSchema = Schema.Struct({
+  consequence: Schema.String,
+  feedback: Schema.String,
+  id: Schema.String,
+  isPreferred: Schema.Boolean,
+  text: Schema.String,
+});
+
+const scenarioDecisionInteractionSchema = Schema.Struct({
+  choices: Schema.Array(scenarioChoiceSchema),
+  feedback: Schema.String,
+  justificationPrompt: Schema.String,
+  kind: Schema.Literal('scenario_decision'),
+  scenario: Schema.String,
+});
+
+const orderingMatchingItemSchema = Schema.Struct({
+  correctPosition: Schema.optional(Schema.Number),
+  id: Schema.String,
+  matchLabel: Schema.optional(Schema.String),
+  text: Schema.String,
+});
+
+const orderingMatchingInteractionSchema = Schema.Struct({
+  feedback: Schema.String,
+  items: Schema.Array(orderingMatchingItemSchema),
+  kind: Schema.Literal('ordering_matching'),
+  mode: Schema.Literals(['matching', 'ordering']),
+  prompt: Schema.String,
+});
+
+const rubricAnswerInteractionSchema = Schema.Struct({
+  criteria: Schema.Array(Schema.String),
+  feedback: Schema.String,
+  kind: Schema.Literal('rubric_answer'),
+  prompt: Schema.String,
+});
+
+const notPlayableInteractionSchema = Schema.Struct({
+  feedback: Schema.String,
+  kind: Schema.Literal('not_playable'),
+  prompt: Schema.String,
+  reason: Schema.String,
+});
+
+const generatedActivityBaseSchema = {
+  briefId: Schema.String,
+  id: Schema.String,
+  objectiveIds: Schema.Array(Schema.String),
+  sourceConfidence: sourceConfidenceSchema,
+  sourceReferences: Schema.optional(Schema.Array(sourceReferenceSchema)),
+  status: generatedStatusSchema,
+} as const;
+
+export const generatedActivitySchema = Schema.Union([
+  Schema.Struct({
+    ...generatedActivityBaseSchema,
+    interaction: retrievalCheckInteractionSchema,
+    type: Schema.Literal('retrieval_check'),
+  }),
+  Schema.Struct({
+    ...generatedActivityBaseSchema,
+    interaction: practiceTaskInteractionSchema,
+    type: Schema.Literal('practice_task'),
+  }),
+  Schema.Struct({
+    ...generatedActivityBaseSchema,
+    interaction: scenarioDecisionInteractionSchema,
+    type: Schema.Literal('scenario_decision'),
+  }),
+  Schema.Struct({
+    ...generatedActivityBaseSchema,
+    interaction: orderingMatchingInteractionSchema,
+    type: Schema.Literal('ordering_matching'),
+  }),
+  Schema.Struct({
+    ...generatedActivityBaseSchema,
+    interaction: rubricAnswerInteractionSchema,
+    type: Schema.Literal('rubric_answer'),
+  }),
+  Schema.Struct({
+    ...generatedActivityBaseSchema,
+    interaction: notPlayableInteractionSchema,
+    type: Schema.Literal('not_playable'),
+  }),
+]);
+export type GeneratedActivity = Schema.Schema.Type<typeof generatedActivitySchema>;
+
+export const learningBlueprintSchema = Schema.Struct({
+  activityBriefs: Schema.Array(activityBriefSchema),
+  assumptions: Schema.Array(Schema.String),
+  coursePreparation: coursePreparationSchema,
+  createdAt: Schema.String,
+  generatedActivities: Schema.Array(generatedActivitySchema),
+  objectives: Schema.Array(learningObjectiveSchema),
+  sourceCoverage: sourceSupportSchema,
+  updatedAt: Schema.String,
+});
+export type LearningBlueprint = Schema.Schema.Type<typeof learningBlueprintSchema>;
+
+export const courseContentBlockSchema = Schema.Struct({
+  activityId: Schema.optional(Schema.String),
   body: Schema.String,
   id: Schema.String,
-  provenance: provenanceSchema,
+  objectiveIds: Schema.Array(Schema.String),
+  sourceConfidence: sourceConfidenceSchema,
   sourceReferences: Schema.optional(Schema.Array(sourceReferenceSchema)),
+  status: generatedStatusSchema,
   title: Schema.String,
-  type: lessonBlockTypeSchema,
+  type: contentBlockTypeSchema,
 });
-export type LessonBlock = Schema.Schema.Type<typeof lessonBlockSchema>;
+export type CourseContentBlock = Schema.Schema.Type<typeof courseContentBlockSchema>;
 
-export const lessonSchema = Schema.Struct({
-  blocks: Schema.Array(lessonBlockSchema),
-  durationMinutes: Schema.Number,
+export const courseSectionSchema = Schema.Struct({
+  blocks: Schema.Array(courseContentBlockSchema),
   id: Schema.String,
+  objectiveIds: Schema.Array(Schema.String),
+  sourceConfidence: sourceConfidenceSchema,
+  sourceReferences: Schema.optional(Schema.Array(sourceReferenceSchema)),
+  status: generatedStatusSchema,
+  summary: Schema.String,
   title: Schema.String,
 });
-export type Lesson = Schema.Schema.Type<typeof lessonSchema>;
+export type CourseSection = Schema.Schema.Type<typeof courseSectionSchema>;
 
-export const chapterSchema = Schema.Struct({
-  coveredTopicIds: Schema.Array(Schema.String),
-  description: Schema.String,
-  difficulty: Schema.Literals(['introductory', 'intermediate', 'advanced']),
-  id: Schema.String,
-  lessons: Schema.Array(lessonSchema),
-  outcome: Schema.String,
-  plannedLessonCount: Schema.Number,
-  sourceSupport: sourceSupportSchema,
-  status: Schema.Literals(['draft', 'confirmed']),
-  title: Schema.String,
+export const courseContentSchema = Schema.Struct({
+  createdAt: Schema.String,
+  sections: Schema.Array(courseSectionSchema),
+  status: generatedStatusSchema,
+  updatedAt: Schema.String,
 });
-export type Chapter = Schema.Schema.Type<typeof chapterSchema>;
+export type CourseContent = Schema.Schema.Type<typeof courseContentSchema>;
 
 export const reviewFindingSchema = Schema.Struct({
   detail: Schema.String,
@@ -184,7 +321,15 @@ export const reviewFindingSchema = Schema.Struct({
   status: Schema.Literals(['open', 'resolved', 'dismissed']),
   step: draftStepSchema,
   targetId: Schema.String,
-  targetType: Schema.Literals(['block', 'chapter', 'course', 'lesson', 'source', 'topic']),
+  targetType: Schema.Literals([
+    'activity',
+    'block',
+    'course',
+    'objective',
+    'preparation',
+    'section',
+    'source',
+  ]),
   title: Schema.String,
 });
 
@@ -206,31 +351,30 @@ export const aiRunSchema = Schema.Struct({
 
 export const courseDraftSchema = Schema.Struct({
   aiRuns: Schema.Array(aiRunSchema),
-  chapters: Schema.Array(chapterSchema),
+  courseContent: courseContentSchema,
   createdAt: Schema.String,
   derivedSourceDocuments: Schema.Array(derivedSourceDocumentSchema),
   findings: Schema.Array(reviewFindingSchema),
   id: Schema.String,
   knowledgeChunks: Schema.Array(knowledgeChunkSchema),
   language: Schema.Literals(['en', 'cs']),
+  learningBlueprint: learningBlueprintSchema,
   mode: aiModeSchema,
   ownerId: Schema.String,
-  questions: guidedQuestionsSchema,
   sourceProcessingIncomplete: Schema.Boolean,
   sources: Schema.Array(sourceAssetSchema),
   step: draftStepSchema,
-  targetLearner: targetLearnerSchema,
   title: Schema.String,
-  topics: Schema.Array(topicSchema),
   updatedAt: Schema.String,
 });
 
 export const courseDraftSummarySchema = Schema.Struct({
-  chapterCount: Schema.Number,
+  activityCount: Schema.Number,
   id: Schema.String,
   language: Schema.Literals(['en', 'cs']),
-  lessonCount: Schema.Number,
   mode: aiModeSchema,
+  objectiveCount: Schema.Number,
+  sectionCount: Schema.Number,
   sourceCount: Schema.Number,
   step: draftStepSchema,
   title: Schema.String,
@@ -283,7 +427,7 @@ export const workflowActionSchema = Schema.Union([
     step: draftStepSchema,
   }),
   Schema.Struct({ action: Schema.Literal('setMode'), draftId: Schema.String, mode: aiModeSchema }),
-  Schema.Struct({ action: Schema.Literal('buildFullCourse'), draftId: Schema.String }),
+  Schema.Struct({ action: Schema.Literal('generateCourse'), draftId: Schema.String }),
   Schema.Struct({
     action: Schema.Literal('addSource'),
     draftId: Schema.String,
@@ -305,137 +449,30 @@ export const workflowActionSchema = Schema.Union([
     runId: Schema.String,
   }),
   Schema.Struct({
-    action: Schema.Literal('autosaveQuestions'),
+    action: Schema.Literal('updateCoursePreparation'),
     draftId: Schema.String,
-    questions: guidedQuestionsSchema,
+    preparation: coursePreparationSchema,
   }),
+  Schema.Struct({ action: Schema.Literal('generateLearningBlueprint'), draftId: Schema.String }),
   Schema.Struct({
-    action: Schema.Literal('saveQuestions'),
+    action: Schema.Literal('updateLearningObjective'),
+    capability: Schema.String,
     draftId: Schema.String,
-    questions: guidedQuestionsSchema,
-  }),
-  Schema.Struct({ action: Schema.Literal('generateTopics'), draftId: Schema.String }),
-  Schema.Struct({
-    action: Schema.Literal('addTopic'),
-    description: Schema.String,
-    draftId: Schema.String,
-    name: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('updateTopic'),
-    description: Schema.String,
-    draftId: Schema.String,
-    name: Schema.String,
-    topicId: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('deleteTopic'),
-    draftId: Schema.String,
-    topicId: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('generateTargetLearner'),
-    draftId: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('updateTargetLearner'),
-    draftId: Schema.String,
-    targetLearner: targetLearnerSchema,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('confirmTarget'),
-    draftId: Schema.String,
-    targetLearner: targetLearnerSchema,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('addChapter'),
-    description: Schema.String,
-    draftId: Schema.String,
-    outcome: Schema.String,
+    objectiveId: Schema.String,
     title: Schema.String,
   }),
   Schema.Struct({
-    action: Schema.Literal('updateChapter'),
-    chapterId: Schema.String,
-    description: Schema.String,
+    action: Schema.Literal('updateActivityBrief'),
+    briefId: Schema.String,
     draftId: Schema.String,
-    outcome: Schema.String,
+    feedbackGuidance: Schema.String,
+    instructions: Schema.String,
+    learnerAction: Schema.String,
+    successCriteria: Schema.String,
     title: Schema.String,
+    type: activityTypeSchema,
   }),
-  Schema.Struct({
-    action: Schema.Literal('deleteChapter'),
-    chapterId: Schema.String,
-    draftId: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('moveChapter'),
-    chapterId: Schema.String,
-    direction: Schema.Literals(['up', 'down']),
-    draftId: Schema.String,
-  }),
-  Schema.Struct({ action: Schema.Literal('confirmChapters'), draftId: Schema.String }),
-  Schema.Struct({ action: Schema.Literal('generateChapters'), draftId: Schema.String }),
-  Schema.Struct({ action: Schema.Literal('generateLessons'), draftId: Schema.String }),
-  Schema.Struct({
-    action: Schema.Literal('generateChapterLessons'),
-    chapterId: Schema.String,
-    draftId: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('regenerateLesson'),
-    draftId: Schema.String,
-    lessonId: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('addLesson'),
-    chapterId: Schema.String,
-    draftId: Schema.String,
-    title: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('updateLesson'),
-    draftId: Schema.String,
-    durationMinutes: Schema.Number,
-    lessonId: Schema.String,
-    title: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('deleteLesson'),
-    draftId: Schema.String,
-    lessonId: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('moveLesson'),
-    direction: Schema.Literals(['up', 'down']),
-    draftId: Schema.String,
-    lessonId: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('addBlock'),
-    blockType: lessonBlockTypeSchema,
-    body: Schema.String,
-    draftId: Schema.String,
-    lessonId: Schema.String,
-    title: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('updateBlock'),
-    blockId: Schema.String,
-    body: Schema.String,
-    draftId: Schema.String,
-    title: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('deleteBlock'),
-    blockId: Schema.String,
-    draftId: Schema.String,
-  }),
-  Schema.Struct({
-    action: Schema.Literal('moveBlock'),
-    blockId: Schema.String,
-    direction: Schema.Literals(['up', 'down']),
-    draftId: Schema.String,
-  }),
+  Schema.Struct({ action: Schema.Literal('generateCourseContent'), draftId: Schema.String }),
   Schema.Struct({
     action: Schema.Literal('setFindingStatus'),
     draftId: Schema.String,

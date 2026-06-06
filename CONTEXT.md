@@ -9,20 +9,20 @@ A repeatable learning experience for a defined audience and topic. A course may 
 _Avoid_: Course draft when referring to the final learner-facing experience, document, content bundle
 
 **Course Preparation**:
-The editable creator-facing setup that defines who the course is for, what learners should achieve, what source material is trusted, and what constraints shape the course.
+The editable creator-facing setup that defines who the course is for, what learners should achieve, what source material is trusted, the output language, and what constraints shape the course.
 _Avoid_: Wizard answers, metadata, prompt inputs
 
-**Learning Blueprint**:
-The internal teaching plan that connects course preparation, learning objectives, source evidence, activity briefs, and quality findings. It is not a user-facing step name.
-_Avoid_: Visible wizard step, course outline
+**Learning Goal / Source Focus**:
+An optional source-bound Course Preparation field that tells the system what the creator wants learners to get from the provided source material. It guides source retrieval, objective selection, and emphasis, but it does not permit no-source course generation.
+_Avoid_: Standalone prompt, no-source seed
 
-**Course Intent**:
-An optional short statement from the creator about who the course is for or what learners should be able to do. When Course Intent is missing, the system infers assumptions from source material and shows them in the playable course preview.
-_Avoid_: Required prompt, course description
+**Learning Blueprint**:
+The internal teaching plan that connects course preparation, learning objectives, source evidence, activity briefs, course sections, and quality findings. It is not a user-facing step name.
+_Avoid_: Visible wizard step, course outline
 
 **Learning Objective**:
 An observable learner capability that the course should create or improve. Learning objectives are the primary planning unit for course generation and should be specific enough to drive source retrieval, practice, feedback, and assessment.
-_Avoid_: Topic, chapter title, vague outcome
+_Avoid_: Content heading, vague outcome
 
 **Teaching Quality Gate**:
 A rule that protects whether generated course content can honestly be treated as an interactive course. Blocking gates are reserved for missing source material, missing learning objectives, unsupported strict-source objectives, missing learner action, missing feedback criteria, or text-only output.
@@ -35,10 +35,6 @@ _Avoid_: Learner personalization when the course does not change per individual 
 **Agent Memory**:
 Optional external memory that records how the course-generation agent made or revised preparation decisions. Agent Memory may improve observability or continuity, but the course must remain usable without it.
 _Avoid_: Source of truth, learner memory
-
-**Topic**:
-A subject area or content grouping covered by a course. Topics organize learning objectives and source coverage, but they are not the primary planning unit for interactive learning.
-_Avoid_: Learning objective when describing what the learner should be able to do
 
 **Course Mode**:
 The creator's chosen level of AI authority during course preparation and content generation. The primary course creation flow has two course modes: Generate Mode and Assist Mode.
@@ -53,8 +49,16 @@ A course mode where the system prefills course preparation as the creator moves 
 _Avoid_: Semi-automatic mode, guided wizard
 
 **Course Content**:
-The learner-facing material and activities produced from the course preparation. Course content can include editable text and less-editable interactive activities.
+The learner-facing material and activities produced from the course preparation. Course content is organized as course sections with editable content blocks and referenced generated activities.
 _Avoid_: AI output, generated blocks
+
+**Course Section**:
+A learner-facing segment of a course that sequences content blocks and references generated activities for one or more learning objectives.
+_Avoid_: Multi-level content hierarchy
+
+**Content Block**:
+Editable learner-facing text or media inside a course section, such as an explanation, example, instruction, callout, or reflection prompt.
+_Avoid_: Generated activity, mini-game config
 
 **Editable Course Text**:
 Learner-facing text that a creator can directly revise after generation, such as explanations, titles, instructions, and feedback wording.
@@ -104,10 +108,16 @@ _Avoid_: Knowledge base when referring to one original input
 A course preparation setting where generated objectives, explanations, and activities must stay supported by source material. Strict-Source Mode is optional and is most appropriate for compliance, safety, policy, legal, or other source-authoritative courses.
 _Avoid_: Default source grounding, provenance display
 
-## Flagged Ambiguities
+## Removed Legacy Concepts
 
 **Manual Mode**:
-Manual Mode is not a course mode. Blank creation or reviewing an existing course may exist as separate entry points, but the main course creation flow uses Generate Mode and Assist Mode.
+Manual Mode is removed from the course creation model. The main course creation flow uses Generate Mode and Assist Mode only.
+
+**Topic**:
+Topic is not a persisted planning unit in the course creation flow. Use Learning Objective for learner capability planning and Course Section for learner-facing organization.
+
+**GuidedQuestions / TargetLearner / Chapter / Lesson / LessonBlock**:
+These are legacy draft concepts and deletion targets. Do not preserve them or add new work using these concepts.
 
 **Example Dialogue**:
 Creator: "I uploaded safety training videos and want a course for warehouse staff."

@@ -1,0 +1,519 @@
+{
+  "generated_at": "2026-06-06T11:45:12.300595+00:00",
+  "graph_id": "source-material-course-workflow-rework",
+  "plan_set_hash": "2ff2fb13b8",
+  "selection_hash": "042d0648f8",
+  "plan_count": 6,
+  "edge_count": 6,
+  "plans_root": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans",
+  "selected_globs": [],
+  "selected_plan_paths": [
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/14-learning-rework-baseline-repair.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/15-learning-blueprint-domain.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/16-objective-retrieval-ai.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/17-activity-engines-quality-gates.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/18-course-studio-flow-ui.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/19-learning-rework-acceptance-rollout.plan.md"
+  ],
+  "edges": [
+    {
+      "source": "14-learning-rework-baseline-repair",
+      "target": "15-learning-blueprint-domain"
+    },
+    {
+      "source": "15-learning-blueprint-domain",
+      "target": "16-objective-retrieval-ai"
+    },
+    {
+      "source": "15-learning-blueprint-domain",
+      "target": "17-activity-engines-quality-gates"
+    },
+    {
+      "source": "16-objective-retrieval-ai",
+      "target": "18-course-studio-flow-ui"
+    },
+    {
+      "source": "17-activity-engines-quality-gates",
+      "target": "18-course-studio-flow-ui"
+    },
+    {
+      "source": "18-course-studio-flow-ui",
+      "target": "19-learning-rework-acceptance-rollout"
+    }
+  ],
+  "plans": [
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/14-learning-rework-baseline-repair.plan.md",
+      "slug": "14-learning-rework-baseline-repair",
+      "name": "learning-rework-baseline-repair",
+      "overview": "Repair the interrupted post-freeze workspace enough for the source-material-first rework to proceed, without restoring the old wizard workflow as the durable baseline.",
+      "todos": [
+        {
+          "id": "inspect-current-breakage",
+          "content": "Run focused format, lint, typecheck, i18n, test, and ultramodern commands far enough to classify every blocker for the source-material rework.",
+          "status": "completed",
+          "ordinal": 1
+        },
+        {
+          "id": "reconcile-shared-contract",
+          "content": "Make shared workflow types, Effect API schemas, store normalization, and route data agree on Generate/Assist-only mode handling without preserving removed wizard concepts as product concepts.",
+          "status": "in_progress",
+          "ordinal": 2
+        },
+        {
+          "id": "remove-legacy-baseline-tests",
+          "content": "Rewrite or delete tests and normalization paths that preserve removed draft shapes such as GuidedQuestions, Topic, TargetLearner, Chapter, Lesson, LessonBlock, old Manual Mode drafts, or old builder routes.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "preserve-human-authored-content",
+          "content": "Verify that existing human-authored provenance/sourceSupport still round-trips during baseline repair without preserving legacy content concepts as final model concepts.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "restore-baseline-gates",
+          "content": "Clear or explicitly isolate current blockers: plan artifact formatting, lint failures, i18n checker/code false positive, AI provider config test failures or coordinated Effect-lane ownership, typecheck, and focused workflow tests.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/15-learning-blueprint-domain.plan.md",
+      "slug": "15-learning-blueprint-domain",
+      "name": "learning-blueprint-domain",
+      "overview": "Replace the shared workflow contract with the durable source-material-first domain model, including steps, actions, schemas, draft shape, Course Preparation, Learning Objectives, Activity Briefs, Course Sections, Content Blocks, source support, stale status, and teaching quality findings.",
+      "todos": [
+        {
+          "id": "define-blueprint-types",
+          "content": "Add shared domain types for CoursePreparation including optional Learning Goal / Source Focus, LearningObjective, ActivityBrief, ActivityType, CourseSection, ContentBlock, SourceSupport, source confidence, and stale/generated status metadata.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "replace-workflow-surface",
+          "content": "Replace legacy DraftStep, WorkflowAction, gate reasons, and draft fields with the six-step source-material workflow and the approved action surface from the PRD.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "mirror-effect-schemas",
+          "content": "Mirror the new domain types, steps, actions, gates, WorkflowSnapshot, and CourseDraft schemas in the Effect API without preserving legacy draft shapes.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "add-store-defaults",
+          "content": "Add empty Course Preparation, Objective Map, Activity Plan, Course Section, Content Block, quality report, and staleness helpers for newly created drafts.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "add-edit-actions",
+          "content": "Add workflow actions for updating Course Preparation, Learning Objectives, Activity Briefs, Course Sections, and Content Blocks while marking downstream generated artifacts stale.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "add-domain-tests",
+          "content": "Add focused tests for blueprint defaults, schema round-trips, objective/activity edit actions, stale marking, and preservation of human-authored content.",
+          "status": "pending",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/16-objective-retrieval-ai.plan.md",
+      "slug": "16-objective-retrieval-ai",
+      "name": "objective-retrieval-ai",
+      "overview": "Generate Learning Objectives and Activity Briefs with Ax, retrieve source evidence by objective, and make generation useful for huge files and long transcripts.",
+      "todos": [
+        {
+          "id": "implement-objective-retrieval",
+          "content": "Replace fixed first-chunk evidence selection with an objective-targeted source evidence selector that can search knowledge chunks, source names, headings, pages, slides, and timestamps.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "add-blueprint-ax-programs",
+          "content": "Add structured Ax programs for Course Preparation assumptions, Learning Objectives, Activity Briefs, source confidence, and activity recommendations.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "add-deterministic-fallbacks",
+          "content": "Add deterministic fallback generation for objectives and activity briefs so local tests pass without a live AI provider.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "wire-blueprint-generation",
+          "content": "Add store orchestration for generating and saving Learning Blueprint data, including reviewable/applied AI run tracking and source references.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "update-full-generate-path",
+          "content": "Update Generate Mode build orchestration so source material plus optional Learning Goal / Source Focus can produce blueprint-backed course content and end on playable preview.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "add-retrieval-ai-tests",
+          "content": "Add AI provider and workflow tests for objective-specific retrieval, huge-source relevance, fallback blueprint generation, and Generate Mode with missing optional source focus.",
+          "status": "pending",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/17-activity-engines-quality-gates.plan.md",
+      "slug": "17-activity-engines-quality-gates",
+      "name": "activity-engines-quality-gates",
+      "overview": "Implement the v1 constrained activity engines and the teaching quality gates that ensure generated courses are interactive, source-aware, and feedback-driven.",
+      "todos": [
+        {
+          "id": "model-generated-activities",
+          "content": "Add generated activity data derived from Activity Briefs for Retrieval Check, Practice Task, Scenario Decision, Ordering / Matching Activity, and Rubric Answer.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "render-activity-content",
+          "content": "Map generated activities into learner-facing course content and preview blocks while keeping activity mechanics regenerable rather than directly editable.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "implement-quality-gates",
+          "content": "Add blocking Teaching Quality Gates for missing source material, missing objectives, unsupported strict-source objectives, missing learner action, missing feedback criteria, and text-only output.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "implement-quality-warnings",
+          "content": "Add non-blocking warnings for inferred audience/outcome, partial source coverage, suboptimal activity type, difficulty mismatch, lack of variety, and missing spaced review.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "enforce-strict-source-mode",
+          "content": "Enforce Strict-Source Mode only when enabled and keep default source-confidence behavior permissive with warnings.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "add-activity-quality-tests",
+          "content": "Add tests proving each activity type has learner action and feedback guidance, strict-source blocking works, text-only courses block, and transfer/guided-practice recommendations appear where applicable.",
+          "status": "pending",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/18-course-studio-flow-ui.plan.md",
+      "slug": "18-course-studio-flow-ui",
+      "name": "course-studio-flow-ui",
+      "overview": "Rework the Course Studio UI around Generate and Assist modes, exposing concrete Course Preparation including optional source focus, Objective Map, Activity Plan, Course Content, quality findings, and playable preview surfaces.",
+      "todos": [
+        {
+          "id": "enforce-two-mode-ui",
+          "content": "Ensure the mode picker, navigation, copy, persisted mode normalization, and tests expose only Generate Mode and Assist Mode as primary course modes.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "add-source-focus-surface",
+          "content": "Add optional Learning Goal / Source Focus inside Course Preparation and make Generate Mode infer it from sources when the creator leaves it blank.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "add-assist-preparation-ui",
+          "content": "Add Assist Mode surfaces for Course Preparation, Objective Map, and Activity Plan using concrete labels instead of exposing Learning Blueprint terminology.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "add-activity-brief-editing",
+          "content": "Let creators edit Learning Objectives, Activity Briefs, activity type choices from the approved set, instructions, and feedback/rubric wording.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "add-preview-assumptions-panel",
+          "content": "Make Generate Mode land on playable preview with a compact assumptions/source coverage/quality warning panel and actions to edit preparation or regenerate.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "update-i18n-and-visual-tests",
+          "content": "Add English and Czech copy for the revised flow and verify with i18n checks plus focused UI or screenshot coverage.",
+          "status": "pending",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/19-learning-rework-acceptance-rollout.plan.md",
+      "slug": "19-learning-rework-acceptance-rollout",
+      "name": "learning-rework-acceptance-rollout",
+      "overview": "Verify the full learning-objective rework end to end, document decisions, and prepare the implementation for agent handoff or release.",
+      "todos": [
+        {
+          "id": "add-end-to-end-workflow-tests",
+          "content": "Add end-to-end workflow coverage for Generate Mode source-only generation, Generate Mode with optional Learning Goal / Source Focus, Assist Mode editing, strict-source behavior, and preview gating.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "add-ui-acceptance-coverage",
+          "content": "Add browser or component coverage for the two-mode picker, assumptions panel, Objective Map, Activity Plan, activity brief editing, and playable preview.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "run-quality-gates",
+          "content": "Run format, lint, typecheck, i18n check, focused Rstest suites, and ultramodern contract checks; fix regressions inside the accepted scope.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "document-architecture-decisions",
+          "content": "Add ADRs only for hard-to-reverse decisions that are surprising without context, such as Activity Briefs as the editable boundary or optional Agent Memory as non-authoritative.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "update-product-docs",
+          "content": "Update PRD/README or implementation notes to reflect Generate/Assist flow, objective-first generation, strict-source behavior, and optional memory adapter boundaries.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "prepare-agent-handoff",
+          "content": "Summarize completed work, remaining risks, graph state, and exact verification commands for the next operator or subagent graph.",
+          "status": "pending",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "frontier": [
+    {
+      "plan_slug": "14-learning-rework-baseline-repair",
+      "plan_name": "learning-rework-baseline-repair",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/14-learning-rework-baseline-repair.plan.md",
+      "plan_status": "in_progress",
+      "state": "in_progress",
+      "blocked_by": [],
+      "active": [
+        {
+          "id": "reconcile-shared-contract",
+          "content": "Make shared workflow types, Effect API schemas, store normalization, and route data agree on Generate/Assist-only mode handling without preserving removed wizard concepts as product concepts.",
+          "status": "in_progress",
+          "ordinal": 2
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "remove-legacy-baseline-tests",
+          "content": "Rewrite or delete tests and normalization paths that preserve removed draft shapes such as GuidedQuestions, Topic, TargetLearner, Chapter, Lesson, LessonBlock, old Manual Mode drafts, or old builder routes.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "preserve-human-authored-content",
+          "content": "Verify that existing human-authored provenance/sourceSupport still round-trips during baseline repair without preserving legacy content concepts as final model concepts.",
+          "status": "pending",
+          "ordinal": 4
+        }
+      ],
+      "completed": 1,
+      "total": 5
+    },
+    {
+      "plan_slug": "17-activity-engines-quality-gates",
+      "plan_name": "activity-engines-quality-gates",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/17-activity-engines-quality-gates.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["15-learning-blueprint-domain"],
+      "active": [
+        {
+          "id": "model-generated-activities",
+          "content": "Add generated activity data derived from Activity Briefs for Retrieval Check, Practice Task, Scenario Decision, Ordering / Matching Activity, and Rubric Answer.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "render-activity-content",
+          "content": "Map generated activities into learner-facing course content and preview blocks while keeping activity mechanics regenerable rather than directly editable.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "implement-quality-gates",
+          "content": "Add blocking Teaching Quality Gates for missing source material, missing objectives, unsupported strict-source objectives, missing learner action, missing feedback criteria, and text-only output.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 6
+    },
+    {
+      "plan_slug": "18-course-studio-flow-ui",
+      "plan_name": "course-studio-flow-ui",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/18-course-studio-flow-ui.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["16-objective-retrieval-ai", "17-activity-engines-quality-gates"],
+      "active": [
+        {
+          "id": "enforce-two-mode-ui",
+          "content": "Ensure the mode picker, navigation, copy, persisted mode normalization, and tests expose only Generate Mode and Assist Mode as primary course modes.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "add-source-focus-surface",
+          "content": "Add optional Learning Goal / Source Focus inside Course Preparation and make Generate Mode infer it from sources when the creator leaves it blank.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "add-assist-preparation-ui",
+          "content": "Add Assist Mode surfaces for Course Preparation, Objective Map, and Activity Plan using concrete labels instead of exposing Learning Blueprint terminology.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 6
+    },
+    {
+      "plan_slug": "15-learning-blueprint-domain",
+      "plan_name": "learning-blueprint-domain",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/15-learning-blueprint-domain.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["14-learning-rework-baseline-repair"],
+      "active": [
+        {
+          "id": "define-blueprint-types",
+          "content": "Add shared domain types for CoursePreparation including optional Learning Goal / Source Focus, LearningObjective, ActivityBrief, ActivityType, CourseSection, ContentBlock, SourceSupport, source confidence, and stale/generated status metadata.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "replace-workflow-surface",
+          "content": "Replace legacy DraftStep, WorkflowAction, gate reasons, and draft fields with the six-step source-material workflow and the approved action surface from the PRD.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "mirror-effect-schemas",
+          "content": "Mirror the new domain types, steps, actions, gates, WorkflowSnapshot, and CourseDraft schemas in the Effect API without preserving legacy draft shapes.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 6
+    },
+    {
+      "plan_slug": "19-learning-rework-acceptance-rollout",
+      "plan_name": "learning-rework-acceptance-rollout",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/19-learning-rework-acceptance-rollout.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["18-course-studio-flow-ui"],
+      "active": [
+        {
+          "id": "add-end-to-end-workflow-tests",
+          "content": "Add end-to-end workflow coverage for Generate Mode source-only generation, Generate Mode with optional Learning Goal / Source Focus, Assist Mode editing, strict-source behavior, and preview gating.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "add-ui-acceptance-coverage",
+          "content": "Add browser or component coverage for the two-mode picker, assumptions panel, Objective Map, Activity Plan, activity brief editing, and playable preview.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "run-quality-gates",
+          "content": "Run format, lint, typecheck, i18n check, focused Rstest suites, and ultramodern contract checks; fix regressions inside the accepted scope.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 6
+    },
+    {
+      "plan_slug": "16-objective-retrieval-ai",
+      "plan_name": "objective-retrieval-ai",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/16-objective-retrieval-ai.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["15-learning-blueprint-domain"],
+      "active": [
+        {
+          "id": "implement-objective-retrieval",
+          "content": "Replace fixed first-chunk evidence selection with an objective-targeted source evidence selector that can search knowledge chunks, source names, headings, pages, slides, and timestamps.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "add-blueprint-ax-programs",
+          "content": "Add structured Ax programs for Course Preparation assumptions, Learning Objectives, Activity Briefs, source confidence, and activity recommendations.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "add-deterministic-fallbacks",
+          "content": "Add deterministic fallback generation for objectives and activity briefs so local tests pass without a live AI provider.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 6
+    }
+  ],
+  "errors": [],
+  "warnings": [],
+  "graph_source": "explicit"
+}

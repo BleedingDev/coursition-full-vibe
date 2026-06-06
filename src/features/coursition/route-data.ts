@@ -6,4 +6,5 @@ export interface CoursePageLoaderData {
   route: CourseRouteMatch | null;
   sessionUser: SessionUser | null;
   snapshot: WorkflowSnapshot | null;
+  theme?: 'light' | 'dark' | null;
 }

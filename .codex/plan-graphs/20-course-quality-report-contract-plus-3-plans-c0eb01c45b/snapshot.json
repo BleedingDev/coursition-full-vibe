@@ -1,0 +1,323 @@
+{
+  "generated_at": "2026-06-06T09:26:04.616331+00:00",
+  "graph_id": "20-course-quality-report-contract-plus-3-plans-c0eb01c45b",
+  "plan_set_hash": "3961b077ff",
+  "selection_hash": "c0eb01c45b",
+  "plan_count": 4,
+  "edge_count": 3,
+  "plans_root": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans",
+  "selected_globs": [],
+  "selected_plan_paths": [
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/20-course-quality-report-contract.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/21-deterministic-course-quality-evaluator.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/22-quality-report-persistence-preview.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/23-quality-eval-fixtures-gepa-readiness.plan.md"
+  ],
+  "edges": [
+    {
+      "source": "20-course-quality-report-contract",
+      "target": "21-deterministic-course-quality-evaluator"
+    },
+    {
+      "source": "21-deterministic-course-quality-evaluator",
+      "target": "22-quality-report-persistence-preview"
+    },
+    {
+      "source": "21-deterministic-course-quality-evaluator",
+      "target": "23-quality-eval-fixtures-gepa-readiness"
+    }
+  ],
+  "plans": [
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/20-course-quality-report-contract.plan.md",
+      "slug": "20-course-quality-report-contract",
+      "name": "course-quality-report-contract",
+      "overview": "Add the first-class CourseQualityReport domain contract with hard gates, four scored axes, deterministic observations, findings, evaluator metadata, and hidden optimization telemetry.",
+      "todos": [
+        {
+          "id": "define-quality-report-types",
+          "content": "Add CourseQualityReport, CourseQualityAxisScore, CourseQualityGate, CourseQualityObservation, CourseQualityEvaluator, and optimization telemetry types near the existing ReviewFinding and CourseDraft domain types.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "add-effect-api-schemas",
+          "content": "Add matching Effect schemas for the quality report contract and expose the optional qualityReport field through the draft snapshot API shape.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "align-report-with-existing-findings",
+          "content": "Represent report findings as ReviewFinding references or ReviewFinding-compatible repair items so quality output reuses the existing review workflow instead of creating a second findings model.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "add-contract-coverage",
+          "content": "Add focused contract coverage or type-level checks that prove legacy drafts can omit qualityReport while new snapshots can carry the full report shape.",
+          "status": "pending",
+          "ordinal": 4
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/21-deterministic-course-quality-evaluator.plan.md",
+      "slug": "21-deterministic-course-quality-evaluator",
+      "name": "deterministic-course-quality-evaluator",
+      "overview": "Promote the existing evidence-based learning checks into a reusable deterministic CourseQualityReport builder with hard gates, four scored axes, observations, findings, and reproducible evaluator metadata.",
+      "todos": [
+        {
+          "id": "extract-evidence-observations",
+          "content": "Move the reusable parts of validateLearningEvidence from test-only code into shared workflow evaluator helpers that produce deterministic observations from a CourseDraft, LearningBlueprint, generated activities, source coverage, and findings.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "compute-hard-gates-readiness",
+          "content": "Implement factualIntegrity and safetyAccessibilityBaseline gate results plus derived readiness from blocking findings, strict-source violations, text-only output, missing learner action, missing feedback, and unsupported claims.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "score-four-quality-axes",
+          "content": "Implement anchored 0-3 scores for sourceGrounding, learningAlignment, practiceFeedback, and learnerExperience using deterministic evidence and repair findings.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "detect-activity-quality-repairs",
+          "content": "Add deterministic findings for vague activity briefs, meta distractors, repeated lesson text, missing concrete learner action, missing feedback criteria, and placeholder-like generated choices.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "update-evaluator-tests",
+          "content": "Update focused workflow tests so the existing five-course evidence checks assert against CourseQualityReport readiness, gates, axes, observations, and findings.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/22-quality-report-persistence-preview.plan.md",
+      "slug": "22-quality-report-persistence-preview",
+      "name": "quality-report-persistence-preview",
+      "overview": "Persist CourseQualityReport on course drafts, recompute it at the right workflow points, and surface a concise creator-facing quality panel in the playable course preview.",
+      "todos": [
+        {
+          "id": "persist-quality-report",
+          "content": "Add qualityReport as a top-level CourseDraft field, normalize legacy drafts that omit it, and ensure draft serialization preserves evaluator metadata and observations.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "recompute-quality-report",
+          "content": "Recompute the deterministic report after full course generation, learning blueprint generation, opening preview, source/target mutations that affect quality, and activity brief updates that make generated activities stale.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "expose-report-to-client",
+          "content": "Ensure route data and Effect API responses deliver qualityReport consistently to the course workflow UI without duplicating report-building logic in the client.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "render-preview-quality-panel",
+          "content": "Replace or refine the current preview Quality signals block with readiness, two hard gates, four compact axes, and the most actionable blocking findings.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "add-i18n-copy",
+          "content": "Add all new user-visible quality report labels, statuses, findings, and tooltips to locale translation files instead of hardcoding JSX copy.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/23-quality-eval-fixtures-gepa-readiness.plan.md",
+      "slug": "23-quality-eval-fixtures-gepa-readiness",
+      "name": "quality-eval-fixtures-gepa-readiness",
+      "overview": "Build regression fixtures and comparison tooling so CourseQualityReport can support prompt experiments and later GEPA/Pareto optimization without becoming a fragile vanity metric.",
+      "todos": [
+        {
+          "id": "define-representative-fixtures",
+          "content": "Add or identify fixture coverage for markdown notes, uploaded PDF-style source, URL source, long school script, and compliance or safety training sources.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "add-adversarial-quality-fixtures",
+          "content": "Add adversarial cases for verbose-but-bad content, source-citation theater, fake interactivity, meta distractors, and over-personalized unsupported claims.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "add-report-regression-tests",
+          "content": "Add regression tests that assert per-fixture readiness, gate behavior, axis floors, observations, and critical findings instead of one averaged score.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "add-generation-comparison-script",
+          "content": "Add a script or test helper that runs comparable generation outputs through the report builder and prints per-axis/per-fixture deltas suitable for prompt iteration.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "document-gepa-readiness",
+          "content": "Document the future GEPA setup: use held-out fixtures, Pareto axes, textual traces, cost/latency telemetry, and anti-gaming checks only after report behavior is stable.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "frontier": [
+    {
+      "plan_slug": "20-course-quality-report-contract",
+      "plan_name": "course-quality-report-contract",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/20-course-quality-report-contract.plan.md",
+      "plan_status": "pending",
+      "state": "ready",
+      "blocked_by": [],
+      "active": [
+        {
+          "id": "define-quality-report-types",
+          "content": "Add CourseQualityReport, CourseQualityAxisScore, CourseQualityGate, CourseQualityObservation, CourseQualityEvaluator, and optimization telemetry types near the existing ReviewFinding and CourseDraft domain types.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "add-effect-api-schemas",
+          "content": "Add matching Effect schemas for the quality report contract and expose the optional qualityReport field through the draft snapshot API shape.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "align-report-with-existing-findings",
+          "content": "Represent report findings as ReviewFinding references or ReviewFinding-compatible repair items so quality output reuses the existing review workflow instead of creating a second findings model.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 4
+    },
+    {
+      "plan_slug": "21-deterministic-course-quality-evaluator",
+      "plan_name": "deterministic-course-quality-evaluator",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/21-deterministic-course-quality-evaluator.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["20-course-quality-report-contract"],
+      "active": [
+        {
+          "id": "extract-evidence-observations",
+          "content": "Move the reusable parts of validateLearningEvidence from test-only code into shared workflow evaluator helpers that produce deterministic observations from a CourseDraft, LearningBlueprint, generated activities, source coverage, and findings.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "compute-hard-gates-readiness",
+          "content": "Implement factualIntegrity and safetyAccessibilityBaseline gate results plus derived readiness from blocking findings, strict-source violations, text-only output, missing learner action, missing feedback, and unsupported claims.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "score-four-quality-axes",
+          "content": "Implement anchored 0-3 scores for sourceGrounding, learningAlignment, practiceFeedback, and learnerExperience using deterministic evidence and repair findings.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 5
+    },
+    {
+      "plan_slug": "23-quality-eval-fixtures-gepa-readiness",
+      "plan_name": "quality-eval-fixtures-gepa-readiness",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/23-quality-eval-fixtures-gepa-readiness.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["21-deterministic-course-quality-evaluator"],
+      "active": [
+        {
+          "id": "define-representative-fixtures",
+          "content": "Add or identify fixture coverage for markdown notes, uploaded PDF-style source, URL source, long school script, and compliance or safety training sources.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "add-adversarial-quality-fixtures",
+          "content": "Add adversarial cases for verbose-but-bad content, source-citation theater, fake interactivity, meta distractors, and over-personalized unsupported claims.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "add-report-regression-tests",
+          "content": "Add regression tests that assert per-fixture readiness, gate behavior, axis floors, observations, and critical findings instead of one averaged score.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 5
+    },
+    {
+      "plan_slug": "22-quality-report-persistence-preview",
+      "plan_name": "quality-report-persistence-preview",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/22-quality-report-persistence-preview.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["21-deterministic-course-quality-evaluator"],
+      "active": [
+        {
+          "id": "persist-quality-report",
+          "content": "Add qualityReport as a top-level CourseDraft field, normalize legacy drafts that omit it, and ensure draft serialization preserves evaluator metadata and observations.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "recompute-quality-report",
+          "content": "Recompute the deterministic report after full course generation, learning blueprint generation, opening preview, source/target mutations that affect quality, and activity brief updates that make generated activities stale.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "expose-report-to-client",
+          "content": "Ensure route data and Effect API responses deliver qualityReport consistently to the course workflow UI without duplicating report-building logic in the client.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 5
+    }
+  ],
+  "errors": [],
+  "warnings": [],
+  "graph_source": "generated-selection"
+}

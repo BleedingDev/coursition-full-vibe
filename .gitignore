@@ -16,6 +16,11 @@ node_modules/
 dist/
 coverage/
 .coursition-data/
+.scratch/
+.vera/
+artifacts/
+dogfood-output/
+test-results/
 release/
 output/
 output_resource/

@@ -1,6 +1,10 @@
-// @effect-diagnostics asyncFunction:off globalFetch:off
 import { snapshotFor, snapshotForRoute } from '@server/coursition/store';
+import { auth } from '@server/coursition/auth';
+import * as Data from 'effect/Data';
+import * as Effect from 'effect/Effect';
+import * as Schema from 'effect/Schema';
 import type { CoursePageLoaderData } from '@/features/coursition/route-data';
+import { sessionPayloadSchema } from '@shared/coursition/effect-api';
 import type { SessionPayload } from '@shared/coursition/effect-api';
 import {
   courseRoutePath,
@@ -22,20 +26,22 @@ const redirectResponse = (location: string) =>
     status: 302,
   });
 
-const sessionForRequest = async (request: Request): Promise<SessionPayload['session']> => {
-  const sessionUrl = new URL('/api/auth/session', request.url);
-  const headers = new Headers({ accept: 'application/json' });
-  const cookie = request.headers.get('cookie');
-  if (cookie !== null && cookie.length > 0) {
-    headers.set('cookie', cookie);
-  }
-  const response = await fetch(sessionUrl, { headers });
-  if (!response.ok) {
-    return null;
-  }
-  const payload = (await response.json()) as SessionPayload;
-  return payload.session;
-};
+class LoaderPromiseError extends Data.TaggedError('LoaderPromiseError')<{
+  readonly cause: unknown;
+}> {}
+
+const foreignPromise = <A>(evaluate: () => PromiseLike<A>) =>
+  Effect.tryPromise({
+    catch: (cause) => new LoaderPromiseError({ cause }),
+    try: evaluate,
+  });
+
+const sessionForRequest = (request: Request): Effect.Effect<SessionPayload['session']> =>
+  foreignPromise(() => auth.api.getSession({ headers: request.headers })).pipe(
+    Effect.flatMap((session) => Schema.decodeUnknownEffect(sessionPayloadSchema)({ session })),
+    Effect.map((payload) => payload.session),
+    Effect.orElseSucceed(() => null),
+  );
 
 const languageFrom = (
   params: Record<string, string | undefined>,
@@ -66,68 +72,87 @@ const snapshotForLanguage = (
   };
 };
 
-export const loader = async ({
+const loaderEffect = ({
   params,
   request,
-}: CoursePageLoaderArgs): Promise<CoursePageLoaderData | Response> => {
-  const pathname = requestPathname(request);
-  const language = languageFrom(params, pathname);
-  const session = await sessionForRequest(request);
-  const sessionUser =
-    session?.user === undefined || session.user === null
-      ? null
-      : {
-          email: session.user.email,
-          id: session.user.id,
-          ...(typeof session.user.name === 'string' && session.user.name.length > 0
-            ? { name: session.user.name }
-            : {}),
-        };
-  const route = parseCourseRoutePath(pathname);
+}: CoursePageLoaderArgs): Effect.Effect<CoursePageLoaderData | Response, LoaderPromiseError> =>
+  Effect.gen(function* effectProgram() {
+    const pathname = requestPathname(request);
+    const language = languageFrom(params, pathname);
+    const session = yield* sessionForRequest(request);
+    const sessionUser =
+      session?.user === undefined || session.user === null
+        ? null
+        : {
+            email: session.user.email,
+            id: session.user.id,
+            ...(typeof session.user.name === 'string' && session.user.name.length > 0
+              ? { name: session.user.name }
+              : {}),
+          };
+    const route = parseCourseRoutePath(pathname);
 
-  if (
-    route === null &&
-    (typeof params['courseId'] === 'string' || typeof params['step'] === 'string')
-  ) {
-    return new Response(null, { status: 404 });
-  }
-  if (sessionUser === null) {
+    const cookieHeader = request.headers.get('cookie') ?? '';
+    let theme: 'light' | 'dark' | null = null;
+    const themeMatch = cookieHeader.match(/(?:^|;\s*)theme=(light|dark)(?:;|$)/u);
+    if (themeMatch !== null) {
+      theme = themeMatch[1] as 'light' | 'dark';
+    }
+
+    if (
+      route === null &&
+      (typeof params['courseId'] === 'string' || typeof params['step'] === 'string')
+    ) {
+      return new Response(null, { status: 404 });
+    }
+    if (sessionUser === null) {
+      return {
+        language,
+        route,
+        sessionUser: null,
+        snapshot: null,
+        theme,
+      };
+    }
+    if (route === null) {
+      const snapshot = yield* foreignPromise(() => snapshotFor(sessionUser.id));
+      return {
+        language,
+        route: null,
+        sessionUser,
+        snapshot: {
+          ...snapshot,
+          draft: null,
+        },
+        theme,
+      };
+    }
+
+    const snapshotResult = yield* foreignPromise(() =>
+      snapshotForRoute(sessionUser.id, route.draftId, route.step),
+    ).pipe(
+      Effect.map((snapshot) => ({
+        snapshot: snapshotForLanguage(snapshot, language),
+        type: 'snapshot' as const,
+      })),
+      Effect.orElseSucceed(() => ({ type: 'notFound' as const })),
+    );
+    if (snapshotResult.type === 'notFound') {
+      return new Response(null, { status: 404 });
+    }
+    const { snapshot } = snapshotResult;
+    const { draft } = snapshot;
+    if (draft !== null && draft.step !== route.step) {
+      return redirectResponse(courseRoutePath(language, draft.id, draft.step));
+    }
     return {
       language,
       route,
-      sessionUser: null,
-      snapshot: null,
-    };
-  }
-  if (route === null) {
-    const snapshot = await snapshotFor(sessionUser.id);
-    return {
-      language,
-      route: null,
       sessionUser,
-      snapshot: {
-        ...snapshot,
-        draft: null,
-      },
+      snapshot,
+      theme,
     };
-  }
+  });
 
-  let snapshot: Awaited<ReturnType<typeof snapshotForRoute>>;
-  try {
-    snapshot = snapshotForLanguage(
-      await snapshotForRoute(sessionUser.id, route.draftId, route.step),
-      language,
-    );
-  } catch {
-    return new Response(null, { status: 404 });
-  }
-  if (snapshot.draft !== null && snapshot.draft.step !== route.step) {
-    return redirectResponse(courseRoutePath(language, snapshot.draft.id, snapshot.draft.step));
-  }
-  return {
-    language,
-    route,
-    sessionUser,
-    snapshot,
-  };
-};
+export const loader = (args: CoursePageLoaderArgs): Promise<CoursePageLoaderData | Response> =>
+  Effect.runPromise(loaderEffect(args));

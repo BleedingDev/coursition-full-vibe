@@ -10,7 +10,7 @@ const jsxTextPattern = />([^<>{}]*[A-Za-z][^<>{}]*)</gu;
 const likelyTypeScriptGenericFalsePositive = (text) =>
   /(?:\bconst\b|\blet\b|\btype\b|\buseState\b|\bChangeEvent\b|\bFormEvent\b|\bPick\b|\bRecord\b|\bset[A-Z]|\)\s*=>)/u.test(
     text,
-  );
+  ) || /(?:\bEffect\.Effect\b|\bPromiseLike\b|\bAppEffect\b|\bresponse\.json\(\))/u.test(text);
 
 const collectFiles = (directory) => {
   if (!fs.existsSync(directory)) {

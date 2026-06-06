@@ -1,55 +1,31 @@
-// @effect-diagnostics globalDate:off globalFetch:off processEnv:off asyncFunction:off strictBooleanExpressions:off
-import { setTimeout as wait } from 'node:timers/promises';
 import { ai as createAxAI, ax, f } from '@ax-llm/ax';
-import type { AxAIOpenAIModel, AxChatResponse, AxForwardable } from '@ax-llm/ax';
-import {
-  buildChapters,
-  buildLessons,
-  buildTargetLearner,
-  lessonBlockTitlesFor,
-  topicsForCourse,
-  sourceOnlyGapBlockFor,
-  suggestQuestions,
-} from '../../shared/coursition/workflow.ts';
+import type { AxAIOpenAIModel, AxForwardable } from '@ax-llm/ax';
+import * as Data from 'effect/Data';
+import { DateTime } from 'effect';
+import * as Effect from 'effect/Effect';
+import { activityTypes, emptyCoursePreparation } from '../../shared/coursition/workflow.ts';
 import type {
-  Chapter,
+  ActivityBrief,
+  ActivityType,
+  CourseContent,
+  CourseContentBlock,
   CourseDraft,
-  GuidedQuestions,
-  LessonBlock,
-  TargetLearner,
-  Topic,
+  CourseSection,
+  GeneratedActivity,
+  LearningBlueprint,
+  LearningObjective,
+  SourceConfidence,
+  SourceReference,
+  SourceSupport,
 } from '../../shared/coursition/workflow.ts';
+import type { CoursitionAiRuntimeConfig } from './config.ts';
+import { loadCoursitionAiRuntimeConfig } from './config.ts';
 
 interface AiProviderConfig {
   apiKey: string;
   baseURL: string;
   model: string;
   provider: string;
-}
-
-interface GeneratedTopic {
-  name?: unknown;
-  description?: unknown;
-  importance?: unknown;
-}
-
-interface GeneratedQuestionsObject {
-  questions: Partial<Record<keyof GuidedQuestions, unknown>>;
-}
-
-interface GeneratedChapter {
-  title?: unknown;
-  outcome?: unknown;
-}
-
-interface GeneratedLesson {
-  chapterTitle?: unknown;
-  lessonTitle?: unknown;
-  objective?: unknown;
-  explanation?: unknown;
-  exercise?: unknown;
-  check?: unknown;
-  summary?: unknown;
 }
 
 interface AiJsonResult<T> {
@@ -59,32 +35,70 @@ interface AiJsonResult<T> {
   value: T;
 }
 
+interface GeneratedLearningBlueprintObject {
+  activityBriefs?: unknown;
+  assumptions?: unknown;
+  coursePreparation?: unknown;
+  generatedActivities?: unknown;
+  objectives?: unknown;
+}
+
+interface GeneratedObjectiveObject {
+  capability?: unknown;
+  title?: unknown;
+  topicName?: unknown;
+}
+
+interface GeneratedActivityBriefObject {
+  feedbackGuidance?: unknown;
+  instructions?: unknown;
+  learnerAction?: unknown;
+  objectiveTitle?: unknown;
+  successCriteria?: unknown;
+  title?: unknown;
+  type?: unknown;
+}
+
+interface GeneratedPlayableActivityObject {
+  choices?: unknown;
+  criteria?: unknown;
+  explanationPrompt?: unknown;
+  feedback?: unknown;
+  items?: unknown;
+  justificationPrompt?: unknown;
+  mode?: unknown;
+  objectiveTitle?: unknown;
+  prompt?: unknown;
+  question?: unknown;
+  submissionLabel?: unknown;
+  type?: unknown;
+}
+
+interface GeneratedPlayableItemObject {
+  correctPosition?: unknown;
+  matchLabel?: unknown;
+  text?: unknown;
+}
+
+interface GeneratedPlayableChoiceObject {
+  consequence?: unknown;
+  feedback?: unknown;
+  isPreferred?: unknown;
+  isCorrect?: unknown;
+  text?: unknown;
+}
+
+class AiProviderEffectError extends Data.TaggedError('AiProviderEffectError')<{
+  readonly cause: unknown;
+}> {}
+
 const defaultLocalBaseUrl = 'http://localhost:8317/v1';
 const defaultLocalApiKey = 'droid-local-key';
 const defaultModel = 'gpt-5.3-codex-spark';
-const localFallbackProvider = 'local-deterministic-fallback';
+const localCourseContentRendererProvider = 'local-course-content-renderer';
 const axProviderLabel = 'ax/openai-compatible';
-const trueValues = new Set(['1', 'true', 'yes', 'on']);
-const falseValues = new Set(['0', 'false', 'no', 'off']);
 
-const configuredEnvValue = (name: string) => {
-  const value = process.env[name]?.trim();
-  return value && value.length > 0 ? value : undefined;
-};
-
-const configuredBoolean = (name: string): boolean | undefined => {
-  const value = configuredEnvValue(name)?.toLowerCase();
-  if (!value) {
-    return undefined;
-  }
-  if (trueValues.has(value)) {
-    return true;
-  }
-  if (falseValues.has(value)) {
-    return false;
-  }
-  return undefined;
-};
+const configuredAxOpenAiModel = (model: string) => model as AxAIOpenAIModel;
 
 const isLocalAiBaseUrl = (value: string) => {
   try {
@@ -96,7 +110,7 @@ const isLocalAiBaseUrl = (value: string) => {
 };
 
 const isLocalSiteUrl = (value: string | undefined) => {
-  if (!value) {
+  if (value === undefined) {
     return true;
   }
   try {
@@ -107,63 +121,28 @@ const isLocalSiteUrl = (value: string | undefined) => {
   }
 };
 
-const shouldUseDefaultLocalAiProvider = () =>
-  process.env['NODE_ENV'] !== 'production' || isLocalSiteUrl(process.env['MODERN_PUBLIC_SITE_URL']);
-
-const shouldUseLocalAiFallback = () => {
-  if (process.env['NODE_ENV'] === 'production') {
-    return false;
-  }
-  const configured = configuredBoolean('COURSITION_AI_LOCAL_FALLBACK');
-  return configured === true;
-};
+const shouldUseDefaultLocalAiProvider = (config: CoursitionAiRuntimeConfig) =>
+  config.nodeEnv !== 'production' || isLocalSiteUrl(config.modernPublicSiteUrl);
 
 const aiCallTimeoutMs = () => {
-  const configured = Number.parseInt(process.env['COURSITION_AI_TIMEOUT_MS'] ?? '', 10);
-  if (Number.isFinite(configured) && configured > 0) {
-    return configured;
+  const config = loadCoursitionAiRuntimeConfig();
+  if (config.aiTimeoutMs !== undefined) {
+    return config.aiTimeoutMs;
   }
-  if (process.env['NODE_ENV'] === 'test' || shouldUseLocalAiFallback()) {
-    return 1500;
-  }
-  return 20_000;
-};
-
-const aiOutputAttempts = () => {
-  const configured = Number.parseInt(process.env['COURSITION_AI_ATTEMPTS'] ?? '', 10);
-  if (Number.isFinite(configured) && configured > 0) {
-    return configured;
-  }
-  return 3;
-};
-
-const withAiOutputRetries = async <T>(
-  operation: () => Promise<AiJsonResult<T>>,
-): Promise<AiJsonResult<T>> => {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= aiOutputAttempts(); attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-      if (attempt < aiOutputAttempts()) {
-        await wait(250 * attempt);
-      }
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  return config.nodeEnv === 'test' ? 1500 : 20_000;
 };
 
 export const aiProviderConfig = (): AiProviderConfig | null => {
+  const config = loadCoursitionAiRuntimeConfig();
   const baseURL =
-    configuredEnvValue('COURSITION_AI_BASE_URL') ??
-    configuredEnvValue('OPENAI_BASE_URL') ??
-    (shouldUseDefaultLocalAiProvider() ? defaultLocalBaseUrl : '');
+    config.aiBaseUrl ??
+    config.openAiBaseUrl ??
+    (shouldUseDefaultLocalAiProvider(config) ? defaultLocalBaseUrl : '');
   const apiKey =
-    configuredEnvValue('COURSITION_AI_PROVIDER_API_KEY') ??
-    configuredEnvValue('OPENAI_API_KEY') ??
+    config.aiProviderApiKey ??
+    config.openAiApiKey ??
     (isLocalAiBaseUrl(baseURL) ? defaultLocalApiKey : '');
-  const model = configuredEnvValue('COURSITION_AI_MODEL') ?? defaultModel;
+  const model = config.aiModel ?? defaultModel;
   if (baseURL.length === 0 || apiKey.length === 0) {
     return null;
   }
@@ -177,1022 +156,1041 @@ export const aiProviderConfig = (): AiProviderConfig | null => {
 
 export const isAiProviderConfigured = () => aiProviderConfig() !== null;
 
-const processedSourceEvidence = (draft: CourseDraft) =>
-  draft.knowledgeChunks.length > 0
-    ? draft.knowledgeChunks
-        .slice(0, 16)
-        .map(
-          (chunk, index) =>
-            `Chunk ${index + 1} (${chunk.reference.heading ?? chunk.sourceAssetId}, ${
-              chunk.reference.position
-            })\n${chunk.content.slice(0, 1600)}`,
-        )
-        .join('\n\n')
-    : draft.sources
-        .filter((source) => source.status === 'processed')
-        .slice(0, 8)
-        .map(
-          (source, index) =>
-            `Source ${index + 1}: ${source.name}\n${source.content.slice(0, 4000)}`,
-        )
-        .join('\n\n');
-
-const topicEvidence = (draft: CourseDraft) =>
-  topicsForCourse(draft.topics)
-    .map((topic) => `${topic.name}: ${topic.description}`)
-    .join('\n');
-
-const questionsProgram = ax(
-  f()
-    .description('Create source-grounded course planning answers for an automatic course build.')
-    .input('languageCode', f.string('Language code for all generated course copy'))
-    .input('courseTitle', f.string('Course title'))
-    .input('sourceEvidence', f.string('Processed source excerpts that define the course scope'))
-    .output(
-      'questions',
-      f.object(
-        {
-          audience: f.string('Specific learners served by the source material'),
-          avoid: f.string('Coverage or assumptions to avoid for this course'),
-          depth: f.class(
-            ['practical', 'introductory', 'intermediate', 'advanced'] as const,
-            'Course depth',
-          ),
-          outcome: f.string('Observable capability learners should gain'),
-          practice: f.string('Concrete task learners will complete'),
-          priorKnowledge: f.string('Knowledge learners can be expected to have'),
-          strictSourceOnly: f.boolean('Whether course claims should stay source-only'),
-        },
-        'Guided planning answers',
-      ),
-    )
-    .build(),
-  { stream: true },
-);
-
-const topicsProgram = ax(
-  f()
-    .description('Create course topic suggestions grounded in source evidence and learner goals.')
-    .input('languageCode', f.string('Language code for all generated course copy'))
-    .input('courseTitle', f.string('Course title'))
-    .input('learningOutcome', f.string('Learner outcome'))
-    .input('audience', f.string('Target audience'))
-    .input('practiceStyle', f.string('Practice learners should complete'))
-    .input('sourceEvidence', f.string('Processed source excerpts that define topic scope'))
-    .output(
-      'topics',
-      f
-        .object({
-          description: f.string('One-sentence topic role in the course'),
-          importance: f.class(['critical', 'high', 'medium', 'low'] as const, 'Topic priority'),
-          name: f.string('Short specific topic name'),
-        })
-        .array('One to six source-backed course topics'),
-    )
-    .build(),
-  { stream: true },
-);
-
-const targetLearnerProgram = ax(
-  f()
-    .description('Create a target learner profile from course planning answers and topics.')
-    .input('languageCode', f.string('Language code for all generated course copy'))
-    .input('courseTitle', f.string('Course title'))
-    .input('learningOutcome', f.string('Learner outcome'))
-    .input('audience', f.string('Target audience answer'))
-    .input('priorKnowledge', f.string('Learner prior knowledge answer'))
-    .input('practiceStyle', f.string('Practice learners should complete'))
-    .input('topics', f.string('Course topics and descriptions'))
-    .output(
-      'targetLearner',
-      f.object(
-        {
-          constraints: f.string('Constraints or boundaries for the learning experience'),
-          currentKnowledge: f.string('What learners already understand'),
-          desiredOutcome: f.string('Outcome learners want from the course'),
-          motivation: f.string('Why learners care about the course'),
-          pain: f.string('Current pain or blocker learners face'),
-          practiceStyle: f.string('Best-fit practice style for these learners'),
-          profile: f.string('Specific learner profile'),
-        },
-        'Target learner profile',
-      ),
-    )
-    .build(),
-  { stream: true },
-);
-
-const chaptersProgram = ax(
-  f()
-    .description('Create a compact chapter outline from target learner needs and topics.')
-    .input('languageCode', f.string('Language code for all generated course copy'))
-    .input('courseTitle', f.string('Course title'))
-    .input('targetLearnerProfile', f.string('Target learner profile'))
-    .input('desiredOutcome', f.string('Desired learner outcome'))
-    .input('topics', f.string('Course topics and descriptions'))
-    .output(
-      'chapters',
-      f
-        .object({
-          outcome: f.string('Measurable learning outcome for this chapter'),
-          title: f.string('Chapter title without numeric prefix'),
-        })
-        .array('One to six ordered course chapters'),
-    )
-    .build(),
-  { stream: true },
-);
-
-const lessonsProgram = ax(
-  f()
-    .description('Create one editable lesson for each supplied chapter.')
-    .input('languageCode', f.string('Language code for all generated course copy'))
-    .input('courseTitle', f.string('Course title'))
-    .input('targetLearnerProfile', f.string('Target learner profile'))
-    .input('practiceStyle', f.string('Practice learners should complete'))
-    .input('strictSourceOnly', f.boolean('Whether explanations must stay source-only'))
-    .input('chapters', f.string('Chapter titles and outcomes requiring lessons'))
-    .input('sourceEvidence', f.string('Processed source excerpts that ground lesson content'))
-    .output(
-      'lessons',
-      f
-        .object({
-          chapterTitle: f.string('Matching chapter title'),
-          check: f.string('Understanding check for the lesson'),
-          exercise: f.string('Learner exercise for the lesson'),
-          explanation: f.string('Main explanation for the lesson'),
-          lessonTitle: f.string('Lesson title'),
-          objective: f.string('Lesson objective'),
-          summary: f.string('Lesson summary'),
-        })
-        .array('One lesson per supplied chapter'),
-    )
-    .build(),
-  { stream: true },
-);
-
-const configuredAxOpenAiModel = (model: string) => model as AxAIOpenAIModel;
-
-const normalizeCliProxyChatResponse = (response: AxChatResponse): AxChatResponse => ({
-  ...response,
-  results: response.results.map((result) => {
-    const normalized = { ...result } as typeof result & {
-      content?: string | null;
-      thought?: string | null;
-    };
-    if (normalized.content === null) {
-      Reflect.deleteProperty(normalized, 'content');
-    }
-    if (normalized.thought === null) {
-      Reflect.deleteProperty(normalized, 'thought');
-    }
-    return normalized;
-  }),
-});
-
-const normalizeCliProxyPayload = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map(normalizeCliProxyPayload);
-  }
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-  const normalized: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if ((key === 'content' || key === 'reasoning_content' || key === 'thought') && entry === null) {
-      continue;
-    }
-    normalized[key] = normalizeCliProxyPayload(entry);
-  }
-  return normalized;
-};
-
-const cliProxyCompatibleFetch: typeof fetch = async (input, init) => {
-  const response = await fetch(input, init);
-  const contentType = response.headers.get('content-type') ?? '';
-  if (!contentType.includes('application/json')) {
-    return response;
-  }
-  const body = await response.text();
-  if (body.trim().length === 0) {
-    return new Response(body, response);
-  }
-  try {
-    const headers = new Headers(response.headers);
-    headers.delete('content-length');
-    return Response.json(normalizeCliProxyPayload(JSON.parse(body)), {
-      headers,
-      status: response.status,
-      statusText: response.statusText,
-    });
-  } catch {
-    return new Response(body, response);
-  }
-};
-
 const createCoursitionAxAi = (config: AiProviderConfig) =>
   createAxAI({
     apiKey: config.apiKey,
     apiURL: config.baseURL,
-    chatRespProcessor: normalizeCliProxyChatResponse,
-    chatStreamRespProcessor: normalizeCliProxyChatResponse,
     config: {
       model: configuredAxOpenAiModel(config.model),
       temperature: 0,
     },
     name: 'openai',
     options: {
-      fetch: cliProxyCompatibleFetch,
       includeRequestBodyInErrors: false,
       stream: true,
       timeout: aiCallTimeoutMs(),
     },
   });
 
-const generateStructuredObject = async <TInput, TOutput>(
-  program: AxForwardable<TInput, TOutput, string>,
-  input: TInput,
-): Promise<AiJsonResult<TOutput>> => {
-  const config = aiProviderConfig();
-  if (!config) {
-    throw new Error('AI provider is not configured.');
-  }
-  const provider = createCoursitionAxAi(config);
-  const value = await program.forward(provider, input, {
-    stream: true,
-    timeout: aiCallTimeoutMs(),
-  });
-  return {
-    model: config.model,
-    provider: config.provider,
-    text: JSON.stringify(value, null, 2),
-    value,
-  };
-};
+const jsonTextFrom = (value: unknown) => JSON.stringify(value);
 
-const canUseLocalDeterministicFallback = () => {
-  const config = aiProviderConfig();
-  return config ? isLocalAiBaseUrl(config.baseURL) && shouldUseLocalAiFallback() : false;
-};
-
-const localFallbackResult = <T>(value: T): AiJsonResult<T> => ({
+const localCourseContentRendererResult = <T>(value: T): AiJsonResult<T> => ({
   model: `${defaultModel}/deterministic`,
-  provider: localFallbackProvider,
-  text: JSON.stringify(value, null, 2),
+  provider: localCourseContentRendererProvider,
+  text: jsonTextFrom(value),
   value,
 });
 
-const shouldBypassAiInTests = () =>
-  process.env['NODE_ENV'] === 'test' &&
-  configuredEnvValue('COURSITION_AI_BASE_URL') === undefined &&
-  configuredEnvValue('OPENAI_BASE_URL') === undefined &&
-  configuredEnvValue('COURSITION_AI_PROVIDER_API_KEY') === undefined &&
-  configuredEnvValue('OPENAI_API_KEY') === undefined;
+const foreignPromise = <Value>(evaluate: () => PromiseLike<Value>) =>
+  Effect.tryPromise({
+    catch: (cause) => new AiProviderEffectError({ cause }),
+    try: evaluate,
+  });
 
-const localAiTimeout = async <T>(timeoutMs: number): Promise<AiJsonResult<T>> => {
-  await wait(timeoutMs);
-  throw new Error('Local AI generation timed out.');
+const generateStructuredObjectEffect = <TInput, TOutput>(
+  program: AxForwardable<TInput, TOutput, string>,
+  input: TInput,
+): Effect.Effect<AiJsonResult<TOutput>, AiProviderEffectError> => {
+  const config = aiProviderConfig();
+  if (config === null) {
+    return Effect.fail(
+      new AiProviderEffectError({
+        cause: new Error('AI provider is not configured.'),
+      }),
+    );
+  }
+  const provider = createCoursitionAxAi(config);
+  return foreignPromise(() =>
+    program.forward(provider, input, {
+      stream: true,
+      timeout: aiCallTimeoutMs(),
+    }),
+  ).pipe(
+    Effect.map((value) => ({
+      model: config.model,
+      provider: config.provider,
+      text: jsonTextFrom(value),
+      value,
+    })),
+  );
 };
 
-const withLocalFallbackDeadline = <T>(
-  operation: () => Promise<AiJsonResult<T>>,
-): Promise<AiJsonResult<T>> => {
-  if (!canUseLocalDeterministicFallback()) {
-    return operation();
-  }
-  const timeoutMs = aiCallTimeoutMs() + 500;
-  return Promise.race([operation(), localAiTimeout<T>(timeoutMs)]);
-};
-
-const withLocalAiFallback = async <T>(
-  operation: () => Promise<AiJsonResult<T>>,
-  fallback: () => T,
-): Promise<AiJsonResult<T>> => {
-  if (shouldBypassAiInTests()) {
-    return localFallbackResult(fallback());
-  }
-  try {
-    return await withLocalFallbackDeadline(operation);
-  } catch (error) {
-    if (!canUseLocalDeterministicFallback()) {
-      throw error;
-    }
-    return localFallbackResult(fallback());
-  }
-};
-
-const asText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
-
-const recordFrom = (value: unknown): Record<string, unknown> | null =>
-  value && typeof value === 'object' && !Array.isArray(value)
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
+    : {};
+
+const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+const asText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+const firstNonEmptyText = (...values: readonly string[]) =>
+  values.find((value) => value.trim().length > 0)?.trim() ?? '';
+
+const currentIsoTimestamp = () => DateTime.formatIso(DateTime.nowUnsafe());
+
+const processedSourceEvidence = (draft: CourseDraft) => {
+  if (draft.knowledgeChunks.length > 0) {
+    return draft.knowledgeChunks
+      .slice(0, 16)
+      .map(
+        (chunk, index) =>
+          `Chunk ${index + 1} (${chunk.reference.heading ?? chunk.sourceAssetId}, ${
+            chunk.reference.position
+          })\n${chunk.content.slice(0, 1600)}`,
+      )
+      .join('\n\n');
+  }
+  return draft.sources
+    .filter((source) => source.status === 'processed' || source.status === 'partially_processed')
+    .slice(0, 8)
+    .map((source, index) => `Source ${index + 1}: ${source.name}\n${source.content.slice(0, 4000)}`)
+    .join('\n\n');
+};
+
+const courseOutputLanguage = (draft: CourseDraft): CourseDraft['language'] => {
+  const preference = draft.learningBlueprint.coursePreparation.languagePreference;
+  return preference === 'source' ? draft.learningBlueprint.coursePreparation.language : preference;
+};
+
+const fallbackTokens = (value: string) =>
+  [...value.matchAll(/[\p{L}\p{N}][\p{L}\p{N}+#./-]*/gu)]
+    .map((match) => match[0]?.toLowerCase() ?? '')
+    .filter((word) => word.length > 2)
+    .filter(
+      (word) =>
+        !new Set([
+          'and',
+          'are',
+          'course',
+          'from',
+          'learn',
+          'learning',
+          'source',
+          'that',
+          'the',
+          'this',
+          'with',
+          'kurz',
+          'kurzu',
+          'pro',
+          'zdroj',
+          'zdroje',
+        ]).has(word),
+    );
+
+const fallbackTitle = (draft: CourseDraft, index: number) => {
+  const tokens = fallbackTokens(`${draft.title} ${processedSourceEvidence(draft)}`).slice(
+    index,
+    index + 3,
+  );
+  if (tokens.length === 0) {
+    return draft.language === 'cs' ? `Cíl ${index + 1}` : `Objective ${index + 1}`;
+  }
+  const title = tokens.map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`).join(' ');
+  return draft.language === 'cs' ? title.toLowerCase() : title;
+};
+
+const objectiveEvidenceFor = (draft: CourseDraft, query: string) => {
+  const queryTokens = new Set(fallbackTokens(query));
+  const scoredChunks = draft.knowledgeChunks
+    .map((chunk, index) => {
+      const score = fallbackTokens(`${chunk.reference.heading ?? ''} ${chunk.content}`).filter(
+        (token) => queryTokens.has(token),
+      ).length;
+      return { chunk, index, score };
+    })
+    .toSorted((left, right) => right.score - left.score || left.index - right.index);
+  const selectedChunks = scoredChunks.filter((entry) => entry.score > 0).slice(0, 3);
+  const fallbackChunks = scoredChunks.slice(0, 2);
+  const chunks = selectedChunks.length > 0 ? selectedChunks : fallbackChunks;
+  const sourceReferences = chunks.map((entry) => entry.chunk.reference);
+  let sourceConfidence: SourceConfidence = 'none';
+  if (sourceReferences.length > 0) {
+    const [topChunk] = chunks;
+    sourceConfidence = topChunk !== undefined && topChunk.score > 2 ? 'high' : 'medium';
+  }
+  const sourceSupport: SourceSupport = sourceConfidence === 'none' ? 'inferred' : 'source_backed';
+  return {
+    sourceConfidence,
+    sourceReferences,
+    sourceSupport,
+  };
+};
+
+const normalizedActivityType = (value: unknown, index: number): ActivityType => {
+  if (typeof value === 'string' && activityTypes.some((activityType) => activityType === value)) {
+    return value as ActivityType;
+  }
+  return activityTypes[index % activityTypes.length] ?? 'retrieval_check';
+};
+
+const generatedActivityType = (value: unknown): ActivityType | null =>
+  typeof value === 'string' && activityTypes.some((activityType) => activityType === value)
+    ? (value as ActivityType)
     : null;
 
-const objectFieldFrom = (value: unknown, field: string): Record<string, unknown> => {
-  const record = recordFrom(value);
-  if (!record) {
-    return {};
-  }
-  return recordFrom(record[field]) ?? record;
-};
-
-const arrayFieldFrom = (value: unknown, field: string): unknown[] => {
-  if (Array.isArray(value)) {
-    return value;
-  }
-  const record = recordFrom(value);
-  const nested = record ? record[field] : undefined;
-  return Array.isArray(nested) ? nested : [];
-};
-
-const userVisibleProviderLabelPattern =
-  /\b(local[-\s]?deterministic[-\s]?fallback|ai[-\s]?sdk|openai|anthropic|vercel|github|provider|gpt[-\w.]*)\b/giu;
-
-const fallbackTopicStopWords = new Set([
-  'about',
-  'after',
-  'again',
-  'against',
-  'also',
-  'and',
-  'are',
-  'around',
-  'as',
-  'before',
-  'being',
-  'can',
-  'course',
-  'create',
-  'creates',
-  'creating',
-  'define',
-  'defines',
-  'does',
-  'during',
-  'each',
-  'for',
-  'from',
-  'have',
-  'in',
-  'into',
-  'is',
-  'junior',
-  'juniors',
-  'learner',
-  'learners',
-  'learning',
-  'local',
-  'material',
-  'materials',
-  'need',
-  'needs',
-  'not',
-  'of',
-  'on',
-  'openai',
-  'practice',
-  'practical',
-  'provider',
-  'source',
-  'sources',
-  'student',
-  'students',
-  'teach',
-  'teaching',
-  'that',
-  'the',
-  'their',
-  'they',
-  'this',
-  'through',
-  'to',
-  'using',
-  'with',
-  'without',
-  'work',
-  'workflow',
-  'workflows',
-  'za',
-  'aby',
-  'ale',
-  'bez',
-  'bude',
-  'budou',
-  'co',
-  'do',
-  'jak',
-  'jsou',
-  'junior',
-  'juniori',
-  'klub',
-  'klubu',
-  'kurz',
-  'kurzu',
-  'lekce',
-  'maji',
-  'mají',
-  'material',
-  'materiál',
-  'na',
-  'nebo',
-  'podle',
-  'pomoci',
-  'pomocí',
-  'praxe',
-  'prakticky',
-  'pro',
-  'student',
-  'studenti',
-  'tema',
-  'téma',
-  'ucit',
-  'učit',
-  'zdroj',
-  'zdroje',
-  'zdrojů',
-]);
-
-const fallbackTopicLabelWords = new Set([
-  'anthropic',
-  'fallback',
-  'github',
-  'gpt',
-  'local',
-  'openai',
-  'provider',
-  'vercel',
-]);
-
-const fallbackTopicTokenPattern = /[\p{L}\p{N}][\p{L}\p{N}+#./-]*/gu;
-
-interface FallbackTopicCandidate {
-  firstSeen: number;
-  key: string;
-  score: number;
-  words: string[];
-}
-
-const safeUserVisibleText = (value: string) =>
-  value
-    .replaceAll(userVisibleProviderLabelPattern, (label) =>
-      label.toLowerCase() === 'github' ? 'repository' : 'platform',
+const learningBlueprintProgram = ax(
+  f()
+    .description(
+      'Create a source-grounded course preparation, objective map, and interactive activity plan.',
     )
-    .replaceAll(/\s+/gu, ' ')
-    .trim();
-
-const fallbackTopicTokens = (value: string) =>
-  [...safeUserVisibleText(value).matchAll(fallbackTopicTokenPattern)]
-    .map((match) => match[0]?.toLowerCase().replaceAll(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
-    .filter((word): word is string => Boolean(word && word.length > 2))
-    .filter((word) => !fallbackTopicStopWords.has(word) && !fallbackTopicLabelWords.has(word));
-
-const fallbackTitleCase = (words: string[]) =>
-  words
-    .map((word) =>
-      word.length <= 3 && /^[a-z0-9]+$/u.test(word)
-        ? word.toUpperCase()
-        : `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`,
+    .input('languageCode', f.string('Language code for all generated course copy'))
+    .input('courseTitle', f.string('Course title'))
+    .input('existingPreparation', f.string('Creator-edited course preparation fields'))
+    .input('sourceEvidence', f.string('Source excerpts that define the course scope'))
+    .output(
+      'coursePreparation',
+      f.object(
+        {
+          activityMixPreference: f.string('Preferred mix of learner practice activities'),
+          audience: f.string('Specific intended learner group'),
+          constraints: f.string('Constraints and exclusions for the course'),
+          depth: f.string('Course depth'),
+          desiredOutcome: f.string('Observable learner outcome'),
+          priorKnowledge: f.string('Expected prior knowledge'),
+          sourceStrictness: f.class(['standard', 'strict'] as const, 'Source strictness mode'),
+          tone: f.string('Tone for learner-facing content'),
+        },
+        'Course preparation',
+      ),
     )
-    .join(' ');
+    .output(
+      'assumptions',
+      f.string('One assumption per line about inferred audience, outcome, depth, or constraints'),
+    )
+    .output(
+      'objectives',
+      f
+        .object({
+          capability: f.string('Observable learner capability'),
+          title: f.string('Short objective title'),
+          topicName: f.string('Source topic or grouping for this objective'),
+        })
+        .array('Three to six learning objectives'),
+    )
+    .output(
+      'activityBriefs',
+      f
+        .object({
+          feedbackGuidance: f.string('Feedback or rubric guidance'),
+          instructions: f.string('Learner-facing instructions'),
+          learnerAction: f.string('What the learner must do'),
+          objectiveTitle: f.string('Objective title this brief supports'),
+          successCriteria: f.string('What a good answer or action must include'),
+          title: f.string('Activity brief title'),
+          type: f.class(activityTypes, 'One approved activity type'),
+        })
+        .array('One activity brief per objective or objective cluster'),
+    )
+    .output(
+      'generatedActivities',
+      f
+        .object({
+          choices: f
+            .object({
+              consequence: f.string(
+                'Learner-facing consequence for this choice; empty string when not used',
+              ),
+              feedback: f.string('Immediate feedback for this choice; empty string when not used'),
+              isCorrect: f.boolean('True only for correct retrieval-check choices'),
+              isPreferred: f.boolean('True only for the strongest scenario decision'),
+              text: f.string('Learner-facing choice text; empty string when not used'),
+            })
+            .array('Choices for retrieval_check or scenario_decision; empty for other types'),
+          criteria: f.string(
+            'One learner-facing checklist or rubric criterion per line; no assessor-only text',
+          ),
+          explanationPrompt: f.string(
+            'Short learner-facing explanation prompt for retrieval checks; empty when not used',
+          ),
+          feedback: f.string('Learner-facing feedback after checking the activity'),
+          items: f
+            .object({
+              correctPosition: f.number(
+                '1-based correct order for ordering items; use 0 when not an ordering item',
+              ),
+              matchLabel: f.string(
+                'Correct label for matching items; empty string when not a matching item',
+              ),
+              text: f.string('Learner-facing card/item text; empty string when not used'),
+            })
+            .array('Cards/items for matching or ordering; empty for other types'),
+          justificationPrompt: f.string(
+            'Short learner-facing justification prompt for scenario decisions; empty when not used',
+          ),
+          mode: f.class(
+            ['matching', 'ordering', 'none'] as const,
+            'Use matching/order for ordering_matching, otherwise none',
+          ),
+          objectiveTitle: f.string('Objective title this generated activity supports'),
+          prompt: f.string(
+            'Self-contained playable prompt. If the task needs a sample, include the sample here.',
+          ),
+          question: f.string(
+            'Question text for retrieval checks; empty string for other activity types',
+          ),
+          submissionLabel: f.string(
+            'Learner-facing input label for practice/rubric tasks; empty when not used',
+          ),
+          type: f.class(activityTypes, 'One approved activity type'),
+        })
+        .array(
+          'One complete playable activity per activity brief. Do not reference missing samples. Do not use success criteria or evaluator guidance as answer text.',
+        ),
+    )
+    .build(),
+  { stream: true },
+);
 
-const fallbackTopicName = (draft: CourseDraft, words: string[]) => {
-  const safeWords = words.filter((word) => !fallbackTopicLabelWords.has(word));
-  if (draft.language === 'cs') {
-    return safeWords.join(' ');
+const firstProcessedSourceName = (draft: CourseDraft) =>
+  draft.sources.find(
+    (source) =>
+      (source.status === 'processed' || source.status === 'partially_processed') &&
+      source.name.trim().length > 0,
+  )?.name ?? draft.title;
+
+const fallbackPreparationFor = (
+  draft: CourseDraft,
+  language: CourseDraft['language'],
+): LearningBlueprint['coursePreparation'] => {
+  const sourceName = firstProcessedSourceName(draft);
+  const focus = fallbackTitle({ ...draft, language }, 0);
+  if (language === 'cs') {
+    return {
+      ...emptyCoursePreparation(language),
+      activityMixPreference: 'Krátké vybavovací kontroly, praktické úkoly a scénářová rozhodnutí.',
+      audience: `Studenti, kteří potřebují prakticky použít materiál ${sourceName}.`,
+      constraints: `Držet se zdrojového materiálu ${sourceName} a jasně označit odvozené části.`,
+      depth: 'practical',
+      desiredOutcome: `Student umí použít ${focus} v konkrétní praktické situaci.`,
+      priorKnowledge: `Student zná základní kontext zdroje ${sourceName}, ale potřebuje vedenou praxi.`,
+      tone: 'jasný, praktický a konkrétní',
+    };
   }
-  return fallbackTitleCase(safeWords);
+  return {
+    ...emptyCoursePreparation(language),
+    activityMixPreference: 'Short retrieval checks, practical tasks, and scenario decisions.',
+    audience: `Learners who need to apply the material in ${sourceName}.`,
+    constraints: `Stay grounded in ${sourceName} and clearly mark inferred material.`,
+    depth: 'practical',
+    desiredOutcome: `Learners can apply ${focus} in a concrete practical situation.`,
+    priorKnowledge: `Learners know the basic context of ${sourceName}, but need guided practice.`,
+    tone: 'clear, practical, and specific',
+  };
 };
 
-const fallbackDescription = (draft: CourseDraft, topicName: string) => {
-  const outcome = safeUserVisibleText(draft.questions.outcome || draft.title);
-  const audience = safeUserVisibleText(draft.questions.audience || 'the target learners');
-  const practice = safeUserVisibleText(draft.questions.practice || 'guided practice');
-  const normalizedTopic = draft.language === 'cs' ? topicName : topicName.toLowerCase();
-
-  if (draft.language === 'cs') {
-    return `Propojuje ${normalizedTopic} s cílem ${outcome} pro ${audience} a procvičením ${practice}.`;
-  }
-  return `Connects ${normalizedTopic} to ${outcome} for ${audience} through ${practice}.`;
+const preparationFromDraft = (
+  draft: CourseDraft,
+  generated: Record<string, unknown> = {},
+): LearningBlueprint['coursePreparation'] => {
+  const outputLanguage = courseOutputLanguage(draft);
+  const existing = draft.learningBlueprint.coursePreparation;
+  const fallback = fallbackPreparationFor(draft, outputLanguage);
+  return {
+    activityMixPreference: firstNonEmptyText(
+      asText(generated['activityMixPreference']),
+      existing.activityMixPreference,
+      fallback.activityMixPreference,
+    ),
+    audience: firstNonEmptyText(
+      asText(generated['audience']),
+      existing.audience,
+      fallback.audience,
+    ),
+    constraints: firstNonEmptyText(
+      asText(generated['constraints']),
+      existing.constraints,
+      fallback.constraints,
+    ),
+    depth: firstNonEmptyText(asText(generated['depth']), existing.depth, fallback.depth),
+    desiredOutcome: firstNonEmptyText(
+      asText(generated['desiredOutcome']),
+      existing.desiredOutcome,
+      fallback.desiredOutcome,
+    ),
+    language: outputLanguage,
+    languagePreference: existing.languagePreference,
+    priorKnowledge: firstNonEmptyText(
+      asText(generated['priorKnowledge']),
+      existing.priorKnowledge,
+      fallback.priorKnowledge,
+    ),
+    sourceStrictness:
+      generated['sourceStrictness'] === 'strict' || existing.sourceStrictness === 'strict'
+        ? 'strict'
+        : 'standard',
+    tone: firstNonEmptyText(asText(generated['tone']), existing.tone, fallback.tone),
+  };
 };
 
-const hasProcessedSourceEvidence = (draft: CourseDraft) =>
-  draft.knowledgeChunks.length > 0 ||
-  draft.sources.some((source) => source.status === 'processed' && source.content.trim().length > 0);
+const normalizeObjectives = (
+  draft: CourseDraft,
+  generatedObjectives: unknown[],
+  timestamp: string,
+): LearningObjective[] => {
+  const objectiveInputs =
+    generatedObjectives.length > 0
+      ? generatedObjectives.map((objective) => {
+          const record = asRecord(objective) as GeneratedObjectiveObject;
+          return {
+            capability: asText(record.capability),
+            title: asText(record.title),
+            topicName: asText(record.topicName),
+          };
+        })
+      : Array.from({ length: 4 }, (_, index) => ({
+          capability:
+            draft.language === 'cs'
+              ? `Student umí prakticky použít ${fallbackTitle(draft, index)}.`
+              : `Learner can apply ${fallbackTitle(draft, index)} in a practical situation.`,
+          title: fallbackTitle(draft, index),
+          topicName: fallbackTitle(draft, index),
+        }));
 
-const fallbackTopicCorpusSections = (draft: CourseDraft) => [
-  {
-    text: draft.knowledgeChunks.map((chunk) => chunk.content).join(' '),
-    weight: 8,
-  },
-  {
-    text: draft.sources
-      .filter((source) => source.status === 'processed')
-      .map((source) => `${source.name} ${source.content}`)
-      .join(' '),
-    weight: 7,
-  },
-  { text: draft.questions.outcome, weight: 5 },
-  { text: draft.questions.practice, weight: 4 },
-  { text: draft.title, weight: 3 },
-  { text: draft.questions.audience, weight: 1 },
-];
-
-const addFallbackTopicCandidate = (
-  candidates: Map<string, FallbackTopicCandidate>,
-  words: string[],
-  score: number,
-  firstSeen: number,
-) => {
-  if (
-    words.length < 2 ||
-    words.some((word) => fallbackTopicLabelWords.has(word)) ||
-    new Set(words).size !== words.length
-  ) {
-    return;
-  }
-  const key = words.join(' ');
-  const existing = candidates.get(key);
-  if (existing) {
-    candidates.set(key, {
-      ...existing,
-      firstSeen: Math.min(existing.firstSeen, firstSeen),
-      score: existing.score + score,
-    });
-    return;
-  }
-  candidates.set(key, { firstSeen, key, score, words });
-};
-
-const collectFallbackTopicCandidates = (draft: CourseDraft) => {
-  const candidates = new Map<string, FallbackTopicCandidate>();
-  let sequence = 0;
-  for (const section of fallbackTopicCorpusSections(draft)) {
-    const sentences = safeUserVisibleText(section.text)
-      .split(/[.!?;:\n]+/u)
-      .map((sentence) => fallbackTopicTokens(sentence))
-      .filter((tokens) => tokens.length > 0);
-    for (const tokens of sentences) {
-      for (let start = 0; start < tokens.length; start += 1) {
-        for (let length = 3; length >= 2; length -= 1) {
-          const words = tokens.slice(start, start + length);
-          if (words.length === length) {
-            addFallbackTopicCandidate(candidates, words, section.weight + length * 0.5, sequence);
-            sequence += 1;
-          }
-        }
-      }
-    }
-  }
-  return candidates;
-};
-
-const fallbackTopicOverlap = (left: string[], right: string[]) => {
-  const rightWords = new Set(right);
-  return left.filter((word) => rightWords.has(word)).length / Math.min(left.length, right.length);
-};
-
-const selectedFallbackTopicCandidates = (draft: CourseDraft) => {
-  const selected: FallbackTopicCandidate[] = [];
-  const sortedCandidates = [...collectFallbackTopicCandidates(draft).values()].toSorted(
-    (left, right) =>
-      right.score - left.score ||
-      left.firstSeen - right.firstSeen ||
-      left.key.localeCompare(right.key),
-  );
-  for (const candidate of sortedCandidates) {
-    if (selected.some((existing) => fallbackTopicOverlap(existing.words, candidate.words) > 0.66)) {
-      continue;
-    }
-    selected.push(candidate);
-    if (selected.length >= 5) {
-      break;
-    }
-  }
-  return selected;
-};
-
-const fallbackTopicSeed = (draft: CourseDraft) => {
-  const seedWords = fallbackTopicTokens(
-    [draft.questions.outcome, draft.questions.practice, draft.title].join(' '),
-  ).slice(0, 3);
-  if (seedWords.length >= 2) {
-    return seedWords;
-  }
-  const titleWords = fallbackTopicTokens(draft.title);
-  if (titleWords.length > 0) {
-    return [...titleWords, draft.language === 'cs' ? 'postup' : 'practice'].slice(0, 3);
-  }
-  return draft.language === 'cs' ? ['prakticky', 'postup'] : ['practical', 'workflow'];
-};
-
-const fallbackTopicImportance = (index: number): Topic['importance'] => {
-  if (index === 0) {
-    return 'critical';
-  }
-  if (index < 3) {
-    return 'high';
-  }
-  return 'medium';
-};
-
-const buildFallbackTopics = (draft: CourseDraft): Topic[] => {
-  const candidates = selectedFallbackTopicCandidates(draft);
-  const seed = fallbackTopicSeed(draft);
-  const candidateWords =
-    candidates.length > 0
-      ? candidates.map((candidate) => candidate.words)
-      : [
-          seed,
-          [...seed.slice(0, 2), draft.language === 'cs' ? 'praxe' : 'practice'],
-          [...seed.slice(0, 2), draft.language === 'cs' ? 'rozhodnuti' : 'decisions'],
-        ];
-  const usedNames = new Set<string>();
-  const sourceSupport = hasProcessedSourceEvidence(draft) ? 'source_backed' : 'manual';
-  return candidateWords.slice(0, 5).flatMap((words, index): Topic[] => {
-    const name = fallbackTopicName(draft, words).trim();
-    const normalizedName = name.toLowerCase();
-    if (name.length === 0 || usedNames.has(normalizedName)) {
+  const usedTitles = new Set<string>();
+  return objectiveInputs.slice(0, 6).flatMap((objective, index): LearningObjective[] => {
+    const title = firstNonEmptyText(
+      objective.title,
+      objective.topicName,
+      fallbackTitle(draft, index),
+    );
+    const normalizedTitle = title.toLowerCase();
+    if (usedTitles.has(normalizedTitle)) {
       return [];
     }
-    usedNames.add(normalizedName);
+    usedTitles.add(normalizedTitle);
+    const capability = firstNonEmptyText(
+      objective.capability,
+      draft.language === 'cs'
+        ? `Student umí prakticky použít ${title}.`
+        : `Learner can apply ${title} in a practical situation.`,
+    );
+    const evidence = objectiveEvidenceFor(draft, `${title} ${capability} ${objective.topicName}`);
     return [
       {
-        description: fallbackDescription(draft, name),
-        id: `topic_${draft.id}_${index + 1}`,
-        importance: fallbackTopicImportance(index),
-        name,
-        sourceSupport,
+        capability,
+        id: `objective_${draft.id}_${index + 1}`,
+        sourceConfidence: evidence.sourceConfidence,
+        sourceReferences: evidence.sourceReferences,
+        sourceSupport: evidence.sourceSupport,
+        status: 'generated',
+        title,
+        topicName: firstNonEmptyText(objective.topicName, title),
+        updatedAt: timestamp,
       },
     ];
   });
 };
 
-const hasWeakTopicShape = (name: string, description: string) => {
-  const rawNameTokens = [
-    ...safeUserVisibleText(name.toLowerCase()).matchAll(fallbackTopicTokenPattern),
-  ].map((match) => match[0] ?? '');
-  const nameTokens = fallbackTopicTokens(name);
-  if (
-    nameTokens.length < 2 &&
-    rawNameTokens.some(
-      (word) => fallbackTopicStopWords.has(word) || fallbackTopicLabelWords.has(word),
-    )
-  ) {
-    return true;
-  }
-  if (nameTokens.some((word) => fallbackTopicLabelWords.has(word))) {
-    return true;
-  }
-  return /^teach the learner how\b/iu.test(description);
-};
-
-const normalizeImportance = (value: unknown, index: number): Topic['importance'] => {
-  if (value === 'critical' || value === 'high' || value === 'medium' || value === 'low') {
-    return value;
-  }
-  if (index === 0) {
-    return 'critical';
-  }
-  if (index < 3) {
-    return 'high';
-  }
-  return 'medium';
-};
-
-const hasBeginnerOrUnclearTarget = (targetLearner: TargetLearner) =>
-  /\b(beginner|beginners|basic|junior|limited formal|new to|no experience|little experience|novice|starter|starting|technical beginners|začátečník|začátečníci|základy|nováček|bez zkušeností)\b/u.test(
-    `${targetLearner.profile} ${targetLearner.currentKnowledge}`.toLowerCase(),
-  );
-
-const hasAdvancedTarget = (targetLearner: TargetLearner) =>
-  /\b(advanced|senior|expert|experienced|lead|principal|production incident|triage|pokročilý|seniorní|expert)\b/u.test(
-    `${targetLearner.profile} ${targetLearner.currentKnowledge}`.toLowerCase(),
-  );
-
-const difficultyFor = (index: number, targetLearner?: TargetLearner): Chapter['difficulty'] => {
-  if (targetLearner && hasBeginnerOrUnclearTarget(targetLearner) && index > 0) {
-    return 'intermediate';
-  }
-  if (targetLearner && !hasAdvancedTarget(targetLearner) && index > 0) {
-    return 'intermediate';
-  }
-  if (index > 2) {
-    return 'advanced';
-  }
-  if (index > 0) {
-    return 'intermediate';
-  }
-  return 'introductory';
-};
-
-const generatedQuestionsLookGeneric = (draft: CourseDraft, questions: GuidedQuestions) => {
-  const sourceTokens = fallbackTopicTokens(
-    [
-      draft.knowledgeChunks.map((chunk) => chunk.content).join(' '),
-      draft.sources
-        .filter((source) => source.status === 'processed')
-        .map((source) => `${source.name} ${source.content}`)
-        .join(' '),
-    ].join(' '),
-  ).slice(0, 8);
-  if (sourceTokens.length === 0) {
-    return false;
-  }
-  const combinedQuestions = safeUserVisibleText(
-    [
-      questions.outcome,
-      questions.audience,
-      questions.priorKnowledge,
-      questions.avoid,
-      questions.practice,
-    ].join(' '),
-  ).toLowerCase();
-  const mentionsSourceContent = sourceTokens.some((token) => combinedQuestions.includes(token));
-  const genericQuestionPattern =
-    /\b(creators who need a focused\W+practical learning path|guided path|limited time|real workflow|build\W+a\W+practical output)\b/iu;
-  return !mentionsSourceContent || genericQuestionPattern.test(combinedQuestions);
-};
-
-const normalizeGeneratedQuestions = (
+const activityBriefCopy = (
   draft: CourseDraft,
-  generatedQuestions: GeneratedQuestionsObject['questions'],
-): GuidedQuestions => {
-  const fallback = suggestQuestions(draft);
-  const questions = {
-    audience: asText(generatedQuestions.audience) || fallback.audience,
-    avoid: asText(generatedQuestions.avoid) || fallback.avoid,
-    depth: asText(generatedQuestions.depth) || fallback.depth,
-    outcome: asText(generatedQuestions.outcome) || fallback.outcome,
-    practice: asText(generatedQuestions.practice) || fallback.practice,
-    priorKnowledge: asText(generatedQuestions.priorKnowledge) || fallback.priorKnowledge,
-    strictSourceOnly:
-      typeof generatedQuestions.strictSourceOnly === 'boolean'
-        ? generatedQuestions.strictSourceOnly
-        : fallback.strictSourceOnly,
+  objective: LearningObjective,
+  type: ActivityType,
+) => {
+  if (draft.language === 'cs') {
+    const learnerAction =
+      type === 'retrieval_check'
+        ? `Vybavit si nebo rozpoznat klíčové prvky pro ${objective.title}.`
+        : `Použít ${objective.title} v praktické situaci.`;
+    return {
+      feedbackGuidance: `Zpětná vazba má porovnat odpověď s cílem: ${objective.capability}`,
+      instructions: `Vypracujte úkol k cíli ${objective.title}.`,
+      learnerAction,
+      successCriteria: `Odpověď musí prokázat, že student zvládá: ${objective.capability}`,
+      title: `${objective.title}: ${type.replaceAll('_', ' ')}`,
+    };
+  }
+  const learnerAction =
+    type === 'retrieval_check'
+      ? `Recall or recognize the key elements of ${objective.title}.`
+      : `Apply ${objective.title} to a practical situation.`;
+  return {
+    feedbackGuidance: `Feedback should compare the answer against this objective: ${objective.capability}`,
+    instructions: `Complete the task for ${objective.title}.`,
+    learnerAction,
+    successCriteria: `The response must show that the learner can: ${objective.capability}`,
+    title: `${objective.title}: ${type.replaceAll('_', ' ')}`,
   };
-  return generatedQuestionsLookGeneric(draft, questions) ? fallback : questions;
 };
 
-export const generateQuestionsWithAi = (
+const normalizeActivityBriefs = (
   draft: CourseDraft,
-): Promise<AiJsonResult<GuidedQuestions>> =>
-  withLocalAiFallback(
-    () =>
-      withAiOutputRetries(async () => {
-        const result = await generateStructuredObject(questionsProgram, {
-          courseTitle: draft.title,
-          languageCode: draft.language,
-          sourceEvidence: processedSourceEvidence(draft),
-        });
-        return {
-          ...result,
-          value: normalizeGeneratedQuestions(draft, objectFieldFrom(result.value, 'questions')),
-        };
-      }),
-    () => suggestQuestions(draft),
-  );
+  objectives: readonly LearningObjective[],
+  generatedBriefs: unknown[],
+  timestamp: string,
+): ActivityBrief[] => {
+  const briefsByObjectiveTitle = new Map<string, GeneratedActivityBriefObject>();
+  for (const brief of generatedBriefs) {
+    const record = asRecord(brief) as GeneratedActivityBriefObject;
+    const objectiveTitle = asText(record.objectiveTitle).toLowerCase();
+    if (objectiveTitle.length > 0) {
+      briefsByObjectiveTitle.set(objectiveTitle, record);
+    }
+  }
 
-export const generateTopicsWithAi = (draft: CourseDraft): Promise<AiJsonResult<Topic[]>> =>
-  withLocalAiFallback(
-    () =>
-      withAiOutputRetries(async () => {
-        const result = await generateStructuredObject(topicsProgram, {
-          audience: draft.questions.audience,
-          courseTitle: draft.title,
-          languageCode: draft.language,
-          learningOutcome: draft.questions.outcome,
-          practiceStyle: draft.questions.practice,
-          sourceEvidence: processedSourceEvidence(draft),
-        });
-        const generatedTopics = arrayFieldFrom(result.value, 'topics');
-        const topics = generatedTopics
-          .slice(0, 6)
-          .map((topic, index): Topic | null => {
-            const generatedTopic = topic as GeneratedTopic;
-            const name = asText(generatedTopic.name);
-            const description = asText(generatedTopic.description);
-            if (
-              name.length === 0 ||
-              description.length === 0 ||
-              hasWeakTopicShape(name, description)
-            ) {
-              return null;
-            }
-            return {
-              description,
-              id: `topic_${draft.id}_${index + 1}`,
-              importance: normalizeImportance(generatedTopic.importance, index),
-              name,
-              sourceSupport: 'source_backed',
-            };
-          })
-          .filter((topic): topic is Topic => topic !== null);
-        if (topics.length === 0) {
-          throw new Error('AI topic output did not include valid topics.');
-        }
-        return { ...result, value: topics };
-      }),
-    () => buildFallbackTopics(draft),
-  );
+  return objectives.map((objective, index): ActivityBrief => {
+    const generatedBrief =
+      briefsByObjectiveTitle.get(objective.title.toLowerCase()) ??
+      (asRecord(generatedBriefs[index]) as GeneratedActivityBriefObject | undefined) ??
+      {};
+    const type = normalizedActivityType(generatedBrief.type, index);
+    const copy = activityBriefCopy(draft, objective, type);
+    const sourceReferences = objective.sourceReferences ?? [];
+    return {
+      feedbackGuidance: firstNonEmptyText(
+        asText(generatedBrief.feedbackGuidance),
+        copy.feedbackGuidance,
+      ),
+      id: `activity_brief_${draft.id}_${index + 1}`,
+      instructions: firstNonEmptyText(asText(generatedBrief.instructions), copy.instructions),
+      learnerAction: firstNonEmptyText(asText(generatedBrief.learnerAction), copy.learnerAction),
+      objectiveId: objective.id,
+      objectiveIds: [objective.id],
+      sourceConfidence: objective.sourceConfidence,
+      sourceReferences,
+      status: 'generated',
+      successCriteria: firstNonEmptyText(
+        asText(generatedBrief.successCriteria),
+        copy.successCriteria,
+      ),
+      title: firstNonEmptyText(asText(generatedBrief.title), copy.title),
+      type,
+      updatedAt: timestamp,
+    };
+  });
+};
 
-export const generateTargetLearnerWithAi = (
-  draft: CourseDraft,
-): Promise<AiJsonResult<TargetLearner>> =>
-  withLocalAiFallback(
-    () =>
-      withAiOutputRetries(async () => {
-        const result = await generateStructuredObject(targetLearnerProgram, {
-          audience: draft.questions.audience,
-          courseTitle: draft.title,
-          languageCode: draft.language,
-          learningOutcome: draft.questions.outcome,
-          practiceStyle: draft.questions.practice,
-          priorKnowledge: draft.questions.priorKnowledge,
-          topics: topicEvidence(draft),
-        });
-        const target = objectFieldFrom(result.value, 'targetLearner');
-        const targetLearner: TargetLearner = {
-          constraints: asText(target['constraints']),
-          currentKnowledge: asText(target['currentKnowledge']),
-          desiredOutcome: asText(target['desiredOutcome']),
-          motivation: asText(target['motivation']),
-          pain: asText(target['pain']),
-          practiceStyle: asText(target['practiceStyle']),
-          profile: asText(target['profile']),
-        };
-        if (targetLearner.profile.length === 0 || targetLearner.desiredOutcome.length === 0) {
-          throw new Error('AI target learner output was incomplete.');
-        }
-        return { ...result, value: targetLearner };
-      }),
-    () => buildTargetLearner(draft),
-  );
+const cleanLearningToken = (value: string): string =>
+  value
+    .trim()
+    .replaceAll(/^[\s"'„“”]+|[\s"'„“”.!,;:]+$/gu, '')
+    .replaceAll(/\s+/gu, ' ');
 
-export const generateChaptersWithAi = (
-  draft: CourseDraft,
-  targetLearner: TargetLearner,
-): Promise<AiJsonResult<Chapter[]>> =>
-  withLocalAiFallback(
-    () =>
-      withAiOutputRetries(async () => {
-        const result = await generateStructuredObject(chaptersProgram, {
-          courseTitle: draft.title,
-          desiredOutcome: targetLearner.desiredOutcome,
-          languageCode: draft.language,
-          targetLearnerProfile: targetLearner.profile,
-          topics: topicEvidence(draft),
-        });
-        const generatedChapters = arrayFieldFrom(result.value, 'chapters');
-        const topics = topicsForCourse(draft.topics);
-        const chapters = generatedChapters
-          .slice(0, 6)
-          .map((chapter, index): Chapter | null => {
-            const generatedChapter = chapter as GeneratedChapter;
-            const title = asText(generatedChapter.title);
-            const outcome = asText(generatedChapter.outcome);
-            if (title.length === 0 || outcome.length === 0) {
-              return null;
-            }
-            const matchingTopic = draft.topics.find((topic) =>
-              title.toLowerCase().includes(topic.name.toLowerCase()),
-            );
-            const coveredTopic = matchingTopic ?? topics[index];
-            return {
-              coveredTopicIds: coveredTopic ? [coveredTopic.id] : [],
-              description: outcome,
-              difficulty: difficultyFor(index, targetLearner),
-              id: `chapter_${draft.id}_${index + 1}`,
-              lessons: [],
-              outcome,
-              plannedLessonCount: 1,
-              sourceSupport: coveredTopic?.sourceSupport ?? 'source_backed',
-              status: 'draft',
-              title: `${index + 1}. ${title.replace(/^\d+\.\s*/u, '')}`,
-            };
-          })
-          .filter((chapter): chapter is Chapter => chapter !== null);
-        if (chapters.length === 0) {
-          throw new Error('AI chapter output did not include valid chapters.');
-        }
-        return { ...result, value: chapters };
-      }),
-    () => buildChapters({ ...draft, targetLearner }),
-  );
-
-const lessonBlock = (
-  lessonId: string,
-  type: LessonBlock['type'],
-  title: string,
-  body: string,
-  provenance: LessonBlock['provenance'],
-  sourceReferences: LessonBlock['sourceReferences'] = [],
-): LessonBlock => ({
-  body,
-  id: `block_${lessonId}_${type}`,
-  provenance,
-  ...(sourceReferences.length > 0 ? { sourceReferences } : {}),
-  title,
-  type,
+const generatedActivityBaseFromBrief = (brief: ActivityBrief) => ({
+  briefId: brief.id,
+  id: `generated_activity_${brief.id}`,
+  objectiveIds: brief.objectiveIds.length > 0 ? brief.objectiveIds : [brief.objectiveId],
+  sourceConfidence: brief.sourceConfidence,
+  sourceReferences: brief.sourceReferences ?? [],
+  status: brief.status === 'stale' ? ('stale' as const) : ('generated' as const),
 });
 
-const cleanGeneratedLessonBody = (body: string) =>
-  body
-    .replace(/^source-gap instruction:\s*/iu, '')
-    .replace(/^source[- ]only instruction:\s*/iu, '')
-    .replace(/^developer instruction:\s*/iu, '')
-    .trim();
-
-const generatedLessonForChapter = (
-  generatedLessons: GeneratedLesson[],
-  chapter: Chapter,
-  index: number,
-) =>
-  (generatedLessons.find((lesson) =>
-    asText(lesson.chapterTitle)
-      .toLowerCase()
-      .includes(chapter.title.replace(/^\d+\.\s*/u, '').toLowerCase()),
-  ) as GeneratedLesson | undefined) ?? (generatedLessons[index] as GeneratedLesson | undefined);
-
-const chapterWithGeneratedLesson = (
-  draft: CourseDraft,
-  chapter: Chapter,
-  index: number,
-  generatedLesson: GeneratedLesson,
-): Chapter => {
-  const lessonTitle = asText(generatedLesson.lessonTitle);
-  const objective = cleanGeneratedLessonBody(asText(generatedLesson.objective));
-  const explanation = cleanGeneratedLessonBody(asText(generatedLesson.explanation));
-  const exercise = cleanGeneratedLessonBody(asText(generatedLesson.exercise));
-  const check = cleanGeneratedLessonBody(asText(generatedLesson.check));
-  const summary = cleanGeneratedLessonBody(asText(generatedLesson.summary));
-  if (
-    lessonTitle.length === 0 ||
-    objective.length === 0 ||
-    explanation.length === 0 ||
-    exercise.length === 0 ||
-    check.length === 0 ||
-    summary.length === 0
-  ) {
-    throw new Error(`AI lesson output for ${chapter.title} was incomplete.`);
+const lineItemsFrom = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map(asText).filter((item) => item.length > 0);
   }
-  const lessonId = `lesson_${chapter.id}_1`;
-  const sourceReferences = draft.knowledgeChunks.slice(0, 3).map((chunk) => chunk.reference);
-  const hasProcessedSources = sourceReferences.length > 0;
-  const needsSourceOnlyGap = draft.questions.strictSourceOnly && !hasProcessedSources;
-  const titles = lessonBlockTitlesFor(draft.language);
+  return asText(value)
+    .split(/\n+/u)
+    .map(cleanLearningToken)
+    .filter((item) => item.length > 0);
+};
+
+const generatedBoolean = (value: unknown) => (typeof value === 'boolean' ? value : null);
+
+const generatedPosition = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
+
+const hasAssessorOnlyShape = (value: string) =>
+  /\b(?:assessment-only|target-answer|evaluator|hodnot[ií]m|d[aá]v[aá]m body|pova[zž]uj za spr[aá]vn[eé]|spr[aá]vn[eé] pl[aá]ny|target answer)\b/iu.test(
+    value,
+  );
+
+const validLearnerText = (value: string) => value.trim().length > 0 && !hasAssessorOnlyShape(value);
+
+const normalizeGeneratedRetrievalActivity = (
+  brief: ActivityBrief,
+  generated: GeneratedPlayableActivityObject,
+): GeneratedActivity | null => {
+  const question = asText(generated.question);
+  const feedback = asText(generated.feedback);
+  const explanationPrompt = asText(generated.explanationPrompt);
+  const choices = asArray(generated.choices)
+    .map((choice, index) => {
+      const record = asRecord(choice) as GeneratedPlayableChoiceObject;
+      const text = asText(record.text);
+      const choiceFeedback = asText(record.feedback);
+      if (!validLearnerText(text) || !validLearnerText(choiceFeedback)) {
+        return null;
+      }
+      const isCorrect = generatedBoolean(record.isCorrect);
+      if (isCorrect === null) {
+        return null;
+      }
+      return {
+        feedback: choiceFeedback,
+        id: `${brief.id}_choice_${index + 1}`,
+        isCorrect,
+        text,
+      };
+    })
+    .filter((choice): choice is NonNullable<typeof choice> => choice !== null);
+  if (
+    !validLearnerText(question) ||
+    !validLearnerText(feedback) ||
+    !validLearnerText(explanationPrompt) ||
+    choices.length < 2 ||
+    !choices.some((choice) => choice.isCorrect)
+  ) {
+    return null;
+  }
   return {
-    ...chapter,
-    lessons: [
-      {
-        blocks: [
-          lessonBlock(lessonId, 'objective', titles.objective, objective, 'AI-inferred'),
-          lessonBlock(
-            lessonId,
-            'explanation',
-            titles.explanation,
-            needsSourceOnlyGap ? sourceOnlyGapBlockFor(draft.language, chapter.title) : explanation,
-            hasProcessedSources ? 'source-backed' : 'AI-inferred',
-            sourceReferences,
-          ),
-          lessonBlock(lessonId, 'exercise', titles.exercise, exercise, 'mixed'),
-          lessonBlock(lessonId, 'check', titles.check, check, 'AI-inferred'),
-          lessonBlock(lessonId, 'summary', titles.summary, summary, 'AI-inferred'),
-        ],
-        durationMinutes: 12 + index * 3,
-        id: lessonId,
-        title: lessonTitle,
-      },
-    ],
+    ...generatedActivityBaseFromBrief(brief),
+    interaction: {
+      choices,
+      explanationPrompt,
+      feedback,
+      kind: 'retrieval_check',
+      question,
+    },
+    type: 'retrieval_check',
   };
 };
 
-export const generateLessonsWithAi = (draft: CourseDraft): Promise<AiJsonResult<Chapter[]>> =>
-  withLocalAiFallback(
-    () =>
-      withAiOutputRetries(async () => {
-        const result = await generateStructuredObject(lessonsProgram, {
-          chapters: draft.chapters
-            .map((chapter) => `${chapter.title}: ${chapter.outcome}`)
-            .join('\n'),
-          courseTitle: draft.title,
-          languageCode: draft.language,
-          practiceStyle: draft.questions.practice,
-          sourceEvidence: processedSourceEvidence(draft),
-          strictSourceOnly: draft.questions.strictSourceOnly,
-          targetLearnerProfile: draft.targetLearner.profile,
-        });
-        const generatedLessons = arrayFieldFrom(result.value, 'lessons') as GeneratedLesson[];
-        if (generatedLessons.length === 0) {
-          throw new Error('AI lesson output did not include any lessons.');
+const normalizeGeneratedOrderingMatchingActivity = (
+  brief: ActivityBrief,
+  generated: GeneratedPlayableActivityObject,
+): GeneratedActivity | null => {
+  if (generated.mode !== 'matching' && generated.mode !== 'ordering') {
+    return null;
+  }
+  const mode = generated.mode;
+  const prompt = asText(generated.prompt);
+  const feedback = asText(generated.feedback);
+  const items = asArray(generated.items)
+    .map((item, index) => {
+      const record = asRecord(item) as GeneratedPlayableItemObject;
+      const text = asText(record.text);
+      if (!validLearnerText(text)) {
+        return null;
+      }
+      if (mode === 'matching') {
+        const { matchLabel: generatedMatchLabel } = record;
+        const validMatchLabel = asText(generatedMatchLabel);
+        if (!validLearnerText(validMatchLabel)) {
+          return null;
         }
-        const chapters = draft.chapters.map((chapter, index) => {
-          const generatedLesson = generatedLessonForChapter(generatedLessons, chapter, index);
-          if (!generatedLesson) {
-            throw new Error(`AI lesson output did not include a lesson for ${chapter.title}.`);
-          }
-          return chapterWithGeneratedLesson(draft, chapter, index, generatedLesson);
-        });
-        return { ...result, value: chapters };
-      }),
-    () => buildLessons(draft),
+        return {
+          id: `${brief.id}_match_${index + 1}`,
+          matchLabel: validMatchLabel,
+          text,
+        };
+      }
+      const correctPosition = generatedPosition(record.correctPosition);
+      if (correctPosition === null) {
+        return null;
+      }
+      return {
+        correctPosition,
+        id: `${brief.id}_order_${index + 1}`,
+        matchLabel: undefined,
+        text,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+  const enoughItems = mode === 'matching' ? items.length >= 2 : items.length >= 3;
+  const orderPositions = mode === 'ordering' ? items.map((item) => item.correctPosition) : [];
+  const positionsAreUnique =
+    mode !== 'ordering' ||
+    (orderPositions.every((position): position is number => typeof position === 'number') &&
+      new Set(orderPositions).size === orderPositions.length);
+  if (
+    !validLearnerText(prompt) ||
+    !validLearnerText(feedback) ||
+    !enoughItems ||
+    !positionsAreUnique
+  ) {
+    return null;
+  }
+  return {
+    ...generatedActivityBaseFromBrief(brief),
+    interaction: {
+      feedback,
+      items,
+      kind: 'ordering_matching',
+      mode,
+      prompt,
+    },
+    type: 'ordering_matching',
+  };
+};
+
+const normalizeGeneratedScenarioActivity = (
+  brief: ActivityBrief,
+  generated: GeneratedPlayableActivityObject,
+): GeneratedActivity | null => {
+  const scenario = asText(generated.prompt);
+  const feedback = asText(generated.feedback);
+  const justificationPrompt = asText(generated.justificationPrompt);
+  const choices = asArray(generated.choices)
+    .map((choice, index) => {
+      const record = asRecord(choice) as GeneratedPlayableChoiceObject;
+      const text = asText(record.text);
+      const consequence = asText(record.consequence);
+      const choiceFeedback = asText(record.feedback);
+      if (
+        !validLearnerText(text) ||
+        !validLearnerText(consequence) ||
+        !validLearnerText(choiceFeedback)
+      ) {
+        return null;
+      }
+      const isPreferred = generatedBoolean(record.isPreferred);
+      if (isPreferred === null) {
+        return null;
+      }
+      return {
+        consequence,
+        feedback: choiceFeedback,
+        id: `${brief.id}_decision_${index + 1}`,
+        isPreferred,
+        text,
+      };
+    })
+    .filter((choice): choice is NonNullable<typeof choice> => choice !== null);
+  if (
+    !validLearnerText(scenario) ||
+    !validLearnerText(feedback) ||
+    !validLearnerText(justificationPrompt) ||
+    choices.length < 2 ||
+    !choices.some((choice) => choice.isPreferred)
+  ) {
+    return null;
+  }
+  return {
+    ...generatedActivityBaseFromBrief(brief),
+    interaction: {
+      choices,
+      feedback,
+      justificationPrompt,
+      kind: 'scenario_decision',
+      scenario,
+    },
+    type: 'scenario_decision',
+  };
+};
+
+const normalizeGeneratedPracticeActivity = (
+  brief: ActivityBrief,
+  generated: GeneratedPlayableActivityObject,
+): GeneratedActivity | null => {
+  const prompt = asText(generated.prompt);
+  const feedback = asText(generated.feedback);
+  const submissionLabel = asText(generated.submissionLabel);
+  const checklist = lineItemsFrom(generated.criteria).filter(validLearnerText);
+  if (
+    !validLearnerText(prompt) ||
+    !validLearnerText(feedback) ||
+    !validLearnerText(submissionLabel) ||
+    checklist.length === 0
+  ) {
+    return null;
+  }
+  return {
+    ...generatedActivityBaseFromBrief(brief),
+    interaction: {
+      checklist,
+      feedback,
+      kind: 'practice_task',
+      prompt,
+      submissionLabel,
+    },
+    type: 'practice_task',
+  };
+};
+
+const normalizeGeneratedRubricActivity = (
+  brief: ActivityBrief,
+  generated: GeneratedPlayableActivityObject,
+): GeneratedActivity | null => {
+  const prompt = asText(generated.prompt);
+  const feedback = asText(generated.feedback);
+  const criteria = lineItemsFrom(generated.criteria).filter(validLearnerText);
+  if (!validLearnerText(prompt) || !validLearnerText(feedback) || criteria.length === 0) {
+    return null;
+  }
+  return {
+    ...generatedActivityBaseFromBrief(brief),
+    interaction: {
+      criteria,
+      feedback,
+      kind: 'rubric_answer',
+      prompt,
+    },
+    type: 'rubric_answer',
+  };
+};
+
+export const normalizeGeneratedPlayableActivity = (
+  brief: ActivityBrief,
+  generated: unknown,
+): GeneratedActivity | null => {
+  const record = asRecord(generated) as GeneratedPlayableActivityObject;
+  const type = generatedActivityType(record.type);
+  if (type === null) {
+    return null;
+  }
+  switch (type) {
+    case 'retrieval_check': {
+      return normalizeGeneratedRetrievalActivity(brief, record);
+    }
+    case 'ordering_matching': {
+      return normalizeGeneratedOrderingMatchingActivity(brief, record);
+    }
+    case 'scenario_decision': {
+      return normalizeGeneratedScenarioActivity(brief, record);
+    }
+    case 'practice_task': {
+      return normalizeGeneratedPracticeActivity(brief, record);
+    }
+    case 'rubric_answer': {
+      return normalizeGeneratedRubricActivity(brief, record);
+    }
+    default: {
+      const unsupportedType: never = type;
+      return unsupportedType;
+    }
+  }
+};
+
+const normalizeGeneratedPlayableActivities = (
+  activityBriefs: readonly ActivityBrief[],
+  objectives: readonly LearningObjective[],
+  generatedActivities: unknown[],
+): GeneratedActivity[] => {
+  const byObjectiveTitle = new Map<string, unknown>();
+  for (const generated of generatedActivities) {
+    const record = asRecord(generated) as GeneratedPlayableActivityObject;
+    const objectiveTitle = asText(record.objectiveTitle).toLowerCase();
+    if (objectiveTitle.length > 0) {
+      byObjectiveTitle.set(objectiveTitle, generated);
+    }
+  }
+  return activityBriefs.map((brief, index) => {
+    const generated =
+      byObjectiveTitle.get(objectives[index]?.title.toLowerCase() ?? '') ??
+      generatedActivities[index];
+    const activity = normalizeGeneratedPlayableActivity(brief, generated);
+    if (activity === null) {
+      throw new Error(
+        `Ax generatedActivities is missing a valid playable spec for activity brief "${brief.title}" (${brief.id}).`,
+      );
+    }
+    return activity;
+  });
+};
+
+export const generatedActivityFromPlayableSpec = (
+  brief: ActivityBrief,
+  generated: unknown,
+): GeneratedActivity | null => normalizeGeneratedPlayableActivity(brief, generated);
+
+const sourceCoverageFor = (objectives: readonly LearningObjective[]): SourceSupport => {
+  if (objectives.length === 0) {
+    return 'inferred';
+  }
+  if (objectives.every((objective) => objective.sourceSupport === 'source_backed')) {
+    return 'source_backed';
+  }
+  if (objectives.some((objective) => objective.sourceSupport !== 'inferred')) {
+    return 'partially_source_backed';
+  }
+  return 'inferred';
+};
+
+const normalizeLearningBlueprint = (
+  draft: CourseDraft,
+  generated: GeneratedLearningBlueprintObject,
+): LearningBlueprint => {
+  const timestamp = currentIsoTimestamp();
+  const generatedPreparation = asRecord(generated.coursePreparation);
+  const coursePreparation = preparationFromDraft(draft, generatedPreparation);
+  const objectives = normalizeObjectives(draft, asArray(generated.objectives), timestamp);
+  const activityBriefs = normalizeActivityBriefs(
+    { ...draft, language: coursePreparation.language },
+    objectives,
+    asArray(generated.activityBriefs),
+    timestamp,
   );
+  const assumptions =
+    typeof generated.assumptions === 'string'
+      ? generated.assumptions
+          .split(/\n+/u)
+          .map((assumption) => assumption.trim())
+          .filter(Boolean)
+      : asArray(generated.assumptions).map(asText).filter(Boolean);
+  return {
+    activityBriefs,
+    assumptions,
+    coursePreparation,
+    createdAt: timestamp,
+    generatedActivities: normalizeGeneratedPlayableActivities(
+      activityBriefs,
+      objectives,
+      asArray(generated.generatedActivities),
+    ),
+    objectives,
+    sourceCoverage: sourceCoverageFor(objectives),
+    updatedAt: timestamp,
+  };
+};
+
+export const generateLearningBlueprintWithAi = (
+  draft: CourseDraft,
+): Promise<AiJsonResult<LearningBlueprint>> =>
+  Effect.runPromise(
+    generateStructuredObjectEffect(learningBlueprintProgram, {
+      courseTitle: draft.title,
+      existingPreparation: jsonTextFrom(draft.learningBlueprint.coursePreparation),
+      languageCode: courseOutputLanguage(draft),
+      sourceEvidence: processedSourceEvidence(draft),
+    }).pipe(
+      Effect.map((structuredResult) => ({
+        ...structuredResult,
+        value: normalizeLearningBlueprint(
+          { ...draft, language: courseOutputLanguage(draft) },
+          structuredResult.value as GeneratedLearningBlueprintObject,
+        ),
+      })),
+    ),
+  );
+
+const sourceReferencesForObjective = (objective: LearningObjective): SourceReference[] => [
+  ...(objective.sourceReferences ?? []),
+];
+
+const sourceExplanationBody = (
+  draft: CourseDraft,
+  objective: LearningObjective,
+  references: readonly SourceReference[],
+) => {
+  if (references.length > 0 && draft.language === 'cs') {
+    return `Tato část vychází z přiložených zdrojů a vede studenta k praktickému použití: ${objective.capability}`;
+  }
+  if (references.length > 0) {
+    return `This section is grounded in the attached sources and moves the learner toward practical use: ${objective.capability}`;
+  }
+  if (draft.language === 'cs') {
+    return 'Tato část je odvozená z přípravy kurzu a měla by být zkontrolovaná proti lepším zdrojům.';
+  }
+  return 'This section is inferred from course preparation and should be checked against stronger source material.';
+};
+
+const activityPrompt = (activity: GeneratedActivity | undefined, fallback: string) => {
+  if (activity === undefined) {
+    return fallback;
+  }
+  switch (activity.interaction.kind) {
+    case 'retrieval_check': {
+      return activity.interaction.question;
+    }
+    case 'practice_task':
+    case 'ordering_matching':
+    case 'rubric_answer': {
+      return activity.interaction.prompt;
+    }
+    case 'scenario_decision': {
+      return activity.interaction.scenario;
+    }
+    case 'not_playable': {
+      return activity.interaction.prompt;
+    }
+    default: {
+      const unsupportedInteraction: never = activity.interaction;
+      return unsupportedInteraction;
+    }
+  }
+};
+
+const activityFeedback = (activity: GeneratedActivity | undefined, fallback: string) =>
+  activity?.interaction.feedback ?? fallback;
+
+const sectionBlocksFor = (
+  draft: CourseDraft,
+  objective: LearningObjective,
+  activity: GeneratedActivity | undefined,
+  index: number,
+): CourseContentBlock[] => {
+  const references = sourceReferencesForObjective(objective);
+  const { sourceConfidence } = objective;
+  const prefix = draft.language === 'cs' ? `${index + 1}.` : `${index + 1}.`;
+  return [
+    {
+      body: objective.capability,
+      id: `content_block_${objective.id}_objective`,
+      objectiveIds: [objective.id],
+      sourceConfidence,
+      sourceReferences: references,
+      status: 'generated' as const,
+      title: `${prefix} ${objective.title}`,
+      type: 'objective' as const,
+    },
+    {
+      body: sourceExplanationBody(draft, objective, references),
+      id: `content_block_${objective.id}_source_explanation`,
+      objectiveIds: [objective.id],
+      sourceConfidence,
+      sourceReferences: references,
+      status: 'generated' as const,
+      title: draft.language === 'cs' ? 'Vysvětlení ze zdrojů' : 'Source-grounded explanation',
+      type: 'source_explanation' as const,
+    },
+    {
+      activityId: activity?.id,
+      body: activityPrompt(activity, objective.capability),
+      id: `content_block_${objective.id}_activity`,
+      objectiveIds: [objective.id],
+      sourceConfidence: activity?.sourceConfidence ?? sourceConfidence,
+      sourceReferences: activity?.sourceReferences ?? references,
+      status: 'generated' as const,
+      title: activityPrompt(
+        activity,
+        draft.language === 'cs' ? 'Interaktivní úkol' : 'Interactive task',
+      ),
+      type: 'interactive_activity' as const,
+    },
+    {
+      body: activityFeedback(activity, objective.capability),
+      id: `content_block_${objective.id}_summary`,
+      objectiveIds: [objective.id],
+      sourceConfidence,
+      sourceReferences: references,
+      status: 'generated' as const,
+      title: draft.language === 'cs' ? 'Zpětná vazba a shrnutí' : 'Feedback and summary',
+      type: 'summary' as const,
+    },
+  ];
+};
+
+export const generateCourseContentWithAi = (
+  draft: CourseDraft,
+): Promise<AiJsonResult<CourseContent>> => {
+  const timestamp = currentIsoTimestamp();
+  const activitiesByObjective = new Map(
+    draft.learningBlueprint.generatedActivities.flatMap((activity) =>
+      activity.objectiveIds.map((objectiveId) => [objectiveId, activity] as const),
+    ),
+  );
+  const sections: CourseSection[] = draft.learningBlueprint.objectives.map((objective, index) => {
+    const activity = activitiesByObjective.get(objective.id);
+    const references = sourceReferencesForObjective(objective);
+    return {
+      blocks: sectionBlocksFor(draft, objective, activity, index),
+      id: `content_section_${objective.id}`,
+      objectiveIds: [objective.id],
+      sourceConfidence: objective.sourceConfidence,
+      sourceReferences: references,
+      status: 'generated' as const,
+      summary: objective.capability,
+      title: objective.title,
+    };
+  });
+  return Effect.runPromise(
+    Effect.succeed(
+      localCourseContentRendererResult({
+        createdAt: timestamp,
+        sections,
+        status: sections.length > 0 ? 'generated' : 'empty',
+        updatedAt: timestamp,
+      }),
+    ),
+  );
+};

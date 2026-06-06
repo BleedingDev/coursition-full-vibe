@@ -1,0 +1,409 @@
+{
+  "generated_at": "2026-06-06T10:23:15.199448+00:00",
+  "graph_id": "24-effect-diagnostics-baseline-guard-plus-4-plans-dd9575a07a",
+  "plan_set_hash": "aa744903d5",
+  "selection_hash": "dd9575a07a",
+  "plan_count": 5,
+  "edge_count": 5,
+  "plans_root": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans",
+  "selected_globs": [],
+  "selected_plan_paths": [
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/24-effect-diagnostics-baseline-guard.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/25-effect-strict-boolean-cleanup.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/26-effect-config-platform-boundary.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/27-effect-server-io-runtime.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/28-effect-ui-tests-cleanup.plan.md"
+  ],
+  "edges": [
+    {
+      "source": "24-effect-diagnostics-baseline-guard",
+      "target": "25-effect-strict-boolean-cleanup"
+    },
+    {
+      "source": "24-effect-diagnostics-baseline-guard",
+      "target": "26-effect-config-platform-boundary"
+    },
+    {
+      "source": "25-effect-strict-boolean-cleanup",
+      "target": "27-effect-server-io-runtime"
+    },
+    {
+      "source": "26-effect-config-platform-boundary",
+      "target": "27-effect-server-io-runtime"
+    },
+    {
+      "source": "27-effect-server-io-runtime",
+      "target": "28-effect-ui-tests-cleanup"
+    }
+  ],
+  "plans": [
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/24-effect-diagnostics-baseline-guard.plan.md",
+      "slug": "24-effect-diagnostics-baseline-guard",
+      "name": "effect-diagnostics-baseline-guard",
+      "overview": "Establish the enforced no-suppression contract for Effect diagnostics, preserve a reproducible diagnostic inventory, and prevent new `@effect-diagnostics` comments from entering the codebase while cleanup proceeds.",
+      "todos": [
+        {
+          "id": "capture-unsuppressed-inventory",
+          "content": "Re-run the unsuppressed main and test checker experiment and record the current file by category inventory for the cleanup branch.",
+          "status": "completed",
+          "ordinal": 1
+        },
+        {
+          "id": "add-suppression-ban",
+          "content": "Add a repository check that fails when any source file contains `@effect-diagnostics` and wire it into the existing quality gate.",
+          "status": "completed",
+          "ordinal": 2
+        },
+        {
+          "id": "define-test-typecheck-scope",
+          "content": "Decide and encode whether `tests/tsconfig.json` is an enforced gate for this cleanup, including handling existing test-only checker failures.",
+          "status": "completed",
+          "ordinal": 3
+        },
+        {
+          "id": "remove-stale-suppression-tokens",
+          "content": "Record that stale token-only cleanup is superseded by the suppression-ban gate; later cleanup lanes must delete whole comments instead of narrowing categories.",
+          "status": "completed",
+          "ordinal": 4
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/25-effect-strict-boolean-cleanup.plan.md",
+      "slug": "25-effect-strict-boolean-cleanup",
+      "name": "effect-strict-boolean-cleanup",
+      "overview": "Remove the dominant `strictBooleanExpressions` diagnostics by replacing truthy and falsy control flow with explicit null, undefined, length, and boolean checks across shared workflow, API handlers, server modules, and the workflow UI.",
+      "todos": [
+        {
+          "id": "clean-shared-workflow-booleans",
+          "content": "Replace non-boolean conditions in `shared/coursition/workflow.ts` with explicit predicates while preserving gate and finding behavior.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "clean-effect-api-booleans",
+          "content": "Replace non-boolean conditions in `api/effect/index.ts` with explicit session, user, cookie, and name checks.",
+          "status": "completed",
+          "ordinal": 2
+        },
+        {
+          "id": "clean-server-booleans",
+          "content": "Replace non-boolean conditions in `server/coursition/store.ts` and `server/coursition/ai-provider.ts` without changing generated course behavior.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "clean-workflow-app-booleans",
+          "content": "Replace non-boolean conditions in `src/features/coursition/coursition-workflow-app.tsx` with explicit checks while preserving React render state and navigation behavior.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "verify-strict-boolean-clean",
+          "content": "Run an unsuppressed checker pass and confirm no `strictBooleanExpressions` diagnostics remain in the selected cleanup files.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/26-effect-config-platform-boundary.plan.md",
+      "slug": "26-effect-config-platform-boundary",
+      "name": "effect-config-platform-boundary",
+      "overview": "Replace raw environment and platform-boundary reads with an accepted Effect-compatible configuration layer, including the dependency decision needed for `Config`, Node runtime services, and Modern config compatibility.",
+      "todos": [
+        {
+          "id": "choose-effect-platform-dependencies",
+          "content": "Decide whether to use Modern BFF Effect re-exports only or add explicit `effect` and platform dependencies for config, filesystem, HTTP, time, and random services.",
+          "status": "completed",
+          "ordinal": 1
+        },
+        {
+          "id": "create-coursition-config-module",
+          "content": "Add typed Coursition configuration accessors for AI provider, source providers, auth defaults, telemetry, and site URL values.",
+          "status": "completed",
+          "ordinal": 2
+        },
+        {
+          "id": "migrate-modern-and-auth-config",
+          "content": "Replace direct env reads in `modern.config.ts` and `server/coursition/auth.ts` with the accepted config boundary without weakening production site URL validation.",
+          "status": "completed",
+          "ordinal": 3
+        },
+        {
+          "id": "migrate-server-provider-config",
+          "content": "Replace direct env reads in `server/coursition/store.ts` and `server/coursition/ai-provider.ts` with typed config access while preserving local fallback behavior.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "add-config-coverage",
+          "content": "Add focused coverage for development, test, production, local fallback, and missing provider configuration paths.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/27-effect-server-io-runtime.plan.md",
+      "slug": "27-effect-server-io-runtime",
+      "name": "effect-server-io-runtime",
+      "overview": "Move server-side filesystem, HTTP, time, random, sleep, and async workflow operations into Effect runtime boundaries while preserving the Promise-shaped APIs expected by Modern BFF, route loaders, and tests.",
+      "todos": [
+        {
+          "id": "introduce-server-effect-runtime",
+          "content": "Add a server runtime boundary that can run Coursition Effect programs from Modern handlers, route loaders, and test helpers.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "migrate-store-filesystem-time-random",
+          "content": "Replace JSON-store filesystem operations, timestamps, temporary IDs, and mutation queue operations in `server/coursition/store.ts` with Effect services.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "migrate-provider-http-and-delays",
+          "content": "Replace provider fetch calls, retry waits, local fallback deadlines, and timestamp creation in `server/coursition/ai-provider.ts` with Effect programs.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "migrate-loader-session-fetch",
+          "content": "Replace route loader session fetch and async loader helpers in `src/routes/[lang]/course-page-loader.ts` with the accepted Effect boundary.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "adapt-bff-handler-boundaries",
+          "content": "Keep BFF handler signatures working while replacing `Effect.tryPromise` wrappers around non-Effect internals with direct Effect composition.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "verify-server-diagnostics-clean",
+          "content": "Run unsuppressed checker passes and confirm server, API, auth, config, and loader files no longer need diagnostic comments.",
+          "status": "pending",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/28-effect-ui-tests-cleanup.plan.md",
+      "slug": "28-effect-ui-tests-cleanup",
+      "name": "effect-ui-tests-cleanup",
+      "overview": "Finish diagnostic removal in the React workflow surface and tests, including raw browser fetch, async handlers, test harness Node usage, and the final deletion of every `@effect-diagnostics` comment.",
+      "todos": [
+        {
+          "id": "extract-workflow-client-boundary",
+          "content": "Replace raw workflow API fetch in `coursition-workflow-app.tsx` with the accepted client or Effect boundary while preserving error messages and credentials.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "tame-react-async-handlers",
+          "content": "Refactor React async handlers and autosave chains so async control flow is represented through the chosen Effect boundary or isolated framework adapters.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "split-workflow-app-if-needed",
+          "content": "Extract focused hooks or helper modules from `coursition-workflow-app.tsx` only where it makes diagnostic cleanup reviewable.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "migrate-test-harness-diagnostics",
+          "content": "Remove test-file suppressions by replacing raw Node env and process usage or by adding explicit test adapters that satisfy the selected checker scope.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "delete-all-effect-diagnostic-comments",
+          "content": "Remove every remaining `@effect-diagnostics` comment from the repository and confirm the suppression ban passes.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "run-final-quality-gates",
+          "content": "Run format, lint, typecheck, i18n check, tests, skills check, and ultramodern contract validation after all suppressions are gone.",
+          "status": "pending",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "frontier": [
+    {
+      "plan_slug": "26-effect-config-platform-boundary",
+      "plan_name": "effect-config-platform-boundary",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/26-effect-config-platform-boundary.plan.md",
+      "plan_status": "pending",
+      "state": "ready",
+      "blocked_by": [],
+      "active": [
+        {
+          "id": "migrate-server-provider-config",
+          "content": "Replace direct env reads in `server/coursition/store.ts` and `server/coursition/ai-provider.ts` with typed config access while preserving local fallback behavior.",
+          "status": "pending",
+          "ordinal": 4
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "add-config-coverage",
+          "content": "Add focused coverage for development, test, production, local fallback, and missing provider configuration paths.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "completed": 3,
+      "total": 5
+    },
+    {
+      "plan_slug": "25-effect-strict-boolean-cleanup",
+      "plan_name": "effect-strict-boolean-cleanup",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/25-effect-strict-boolean-cleanup.plan.md",
+      "plan_status": "pending",
+      "state": "ready",
+      "blocked_by": [],
+      "active": [
+        {
+          "id": "clean-shared-workflow-booleans",
+          "content": "Replace non-boolean conditions in `shared/coursition/workflow.ts` with explicit predicates while preserving gate and finding behavior.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "clean-server-booleans",
+          "content": "Replace non-boolean conditions in `server/coursition/store.ts` and `server/coursition/ai-provider.ts` without changing generated course behavior.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "clean-workflow-app-booleans",
+          "content": "Replace non-boolean conditions in `src/features/coursition/coursition-workflow-app.tsx` with explicit checks while preserving React render state and navigation behavior.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "verify-strict-boolean-clean",
+          "content": "Run an unsuppressed checker pass and confirm no `strictBooleanExpressions` diagnostics remain in the selected cleanup files.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "completed": 1,
+      "total": 5
+    },
+    {
+      "plan_slug": "27-effect-server-io-runtime",
+      "plan_name": "effect-server-io-runtime",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/27-effect-server-io-runtime.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["25-effect-strict-boolean-cleanup", "26-effect-config-platform-boundary"],
+      "active": [
+        {
+          "id": "introduce-server-effect-runtime",
+          "content": "Add a server runtime boundary that can run Coursition Effect programs from Modern handlers, route loaders, and test helpers.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "migrate-store-filesystem-time-random",
+          "content": "Replace JSON-store filesystem operations, timestamps, temporary IDs, and mutation queue operations in `server/coursition/store.ts` with Effect services.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "migrate-provider-http-and-delays",
+          "content": "Replace provider fetch calls, retry waits, local fallback deadlines, and timestamp creation in `server/coursition/ai-provider.ts` with Effect programs.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "migrate-loader-session-fetch",
+          "content": "Replace route loader session fetch and async loader helpers in `src/routes/[lang]/course-page-loader.ts` with the accepted Effect boundary.",
+          "status": "pending",
+          "ordinal": 4
+        }
+      ],
+      "completed": 0,
+      "total": 6
+    },
+    {
+      "plan_slug": "28-effect-ui-tests-cleanup",
+      "plan_name": "effect-ui-tests-cleanup",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/28-effect-ui-tests-cleanup.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["27-effect-server-io-runtime"],
+      "active": [
+        {
+          "id": "extract-workflow-client-boundary",
+          "content": "Replace raw workflow API fetch in `coursition-workflow-app.tsx` with the accepted client or Effect boundary while preserving error messages and credentials.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "tame-react-async-handlers",
+          "content": "Refactor React async handlers and autosave chains so async control flow is represented through the chosen Effect boundary or isolated framework adapters.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "split-workflow-app-if-needed",
+          "content": "Extract focused hooks or helper modules from `coursition-workflow-app.tsx` only where it makes diagnostic cleanup reviewable.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "migrate-test-harness-diagnostics",
+          "content": "Remove test-file suppressions by replacing raw Node env and process usage or by adding explicit test adapters that satisfy the selected checker scope.",
+          "status": "pending",
+          "ordinal": 4
+        }
+      ],
+      "completed": 0,
+      "total": 6
+    },
+    {
+      "plan_slug": "24-effect-diagnostics-baseline-guard",
+      "plan_name": "effect-diagnostics-baseline-guard",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/24-effect-diagnostics-baseline-guard.plan.md",
+      "plan_status": "completed",
+      "state": "done",
+      "blocked_by": [],
+      "active": [],
+      "upcoming": [],
+      "completed": 4,
+      "total": 4
+    }
+  ],
+  "errors": [],
+  "warnings": [],
+  "graph_source": "matched-plan-set"
+}

@@ -3,6 +3,7 @@
 
 import {
   createMemoryHistory,
+  modernTanstackRouterFastDefaults,
   createRootRouteWithContext,
   createRoute,
   createRouter,
@@ -111,16 +112,6 @@ function getLoaderParams(ctx: any): Record<string, string> {
   return typeof ctx?.params === 'object' && ctx.params !== null ? ctx.params : {};
 }
 
-function createLoaderRequest(href: string, signal: AbortSignal): Request {
-  try {
-    return new Request(href, { signal });
-  } catch {
-    const origin =
-      typeof globalThis.location?.origin === 'string' ? globalThis.location.origin : 'http://localhost';
-    return new Request(new URL(href || '/', origin), { signal });
-  }
-}
-
 function handleModernLoaderResult<LoaderResult>(result: LoaderResult): LoaderResult {
   if (isResponse(result)) {
     if (isRedirectResponse(result)) {
@@ -165,7 +156,7 @@ function modernLoaderToTanstack<TLoader extends (args: any) => any>(
 
       const request = baseRequest !== undefined
         ? new Request(baseRequest, { signal })
-        : createLoaderRequest(href, signal);
+        : new Request(href, { signal });
 
       const params = mapParamsForModernLoader(getLoaderParams(ctx), opts.hasSplat);
 
@@ -184,18 +175,14 @@ function modernLoaderToTanstack<TLoader extends (args: any) => any>(
   };
 }
 
-import component_0 from "../../routes/layout";
 import { loader as loader_0 } from "../../routes/[lang]/page.data";
 import { loader as loader_1 } from "../../routes/[lang]/course-creation/[courseId]/[step]/page.data";
 import { loader as loader_2 } from "../../routes/[lang]/course-creation/[courseId]/[step]/page.data";
 import { loader as loader_3 } from "../../routes/[lang]/dashboard/page.data";
 import { loader as loader_4 } from "../../routes/[lang]/dashboard/page.data";
-import component_1 from "../../routes/[lang]/page";
-import component_2 from "../../routes/[lang]/course-creation/[courseId]/[step]/page";
-import component_3 from "../../routes/[lang]/dashboard/page";
 
 export const rootRoute = createRootRouteWithContext<ModernRouterContext>()({
-  component: component_0,
+  
   staticData: createRouteStaticData({
     modernRouteId: "layout",
   }),
@@ -204,7 +191,6 @@ export const rootRoute = createRootRouteWithContext<ModernRouterContext>()({
 const route__lang__page = createRoute({
   getParentRoute: () => rootRoute,
   path: "$lang",
-  component: component_1,
   loader: modernLoaderToTanstack({ hasSplat: false }, loader_0),
   staticData: createRouteStaticData({
     modernRouteId: "(lang)/page",
@@ -215,7 +201,6 @@ const route__lang__page = createRoute({
 const route__lang__courseCreation__courseId___step__page = createRoute({
   getParentRoute: () => rootRoute,
   path: "$lang/course-creation/$courseId/$step",
-  component: component_2,
   loader: modernLoaderToTanstack({ hasSplat: false }, loader_1),
   staticData: createRouteStaticData({
     modernRouteId: "(lang)/course-creation/(courseId)/(step)/page",
@@ -226,7 +211,6 @@ const route__lang__courseCreation__courseId___step__page = createRoute({
 const route__lang__courseCreation__courseId___step__page__localised_lang_tvorbaKurzu_courseId_step = createRoute({
   getParentRoute: () => rootRoute,
   path: "$lang/tvorba-kurzu/$courseId/$step",
-  component: component_2,
   loader: modernLoaderToTanstack({ hasSplat: false }, loader_2),
   staticData: createRouteStaticData({
     modernRouteId: "(lang)/course-creation/(courseId)/(step)/page__localised_lang_tvorba-kurzu_courseId_step",
@@ -237,7 +221,6 @@ const route__lang__courseCreation__courseId___step__page__localised_lang_tvorbaK
 const route__lang__dashboard_page = createRoute({
   getParentRoute: () => rootRoute,
   path: "$lang/dashboard",
-  component: component_3,
   loader: modernLoaderToTanstack({ hasSplat: false }, loader_3),
   staticData: createRouteStaticData({
     modernRouteId: "(lang)/dashboard/page",
@@ -248,7 +231,6 @@ const route__lang__dashboard_page = createRoute({
 const route__lang__dashboard_page__localised_lang_nastenka = createRoute({
   getParentRoute: () => rootRoute,
   path: "$lang/nastenka",
-  component: component_3,
   loader: modernLoaderToTanstack({ hasSplat: false }, loader_4),
   staticData: createRouteStaticData({
     modernRouteId: "(lang)/dashboard/page__localised_lang_nastenka",
@@ -259,6 +241,7 @@ const route__lang__dashboard_page__localised_lang_nastenka = createRoute({
 export const routeTree = rootRoute.addChildren([route__lang__page, route__lang__courseCreation__courseId___step__page, route__lang__courseCreation__courseId___step__page__localised_lang_tvorbaKurzu_courseId_step, route__lang__dashboard_page, route__lang__dashboard_page__localised_lang_nastenka]);
 
 export const router = createRouter({
+  ...modernTanstackRouterFastDefaults,
   routeTree,
   history: createMemoryHistory({
     initialEntries: ['/'],

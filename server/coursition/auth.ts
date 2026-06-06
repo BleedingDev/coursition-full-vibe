@@ -1,16 +1,37 @@
-// @effect-diagnostics processEnv:off
-import { betterAuth } from 'better-auth';
+import { betterAuth } from 'better-auth/minimal';
+import { loadCoursitionAuthConfig } from './config.ts';
 
-const secret =
-  process.env['BETTER_AUTH_SECRET'] ??
-  'coursition-dev-secret-2026-06-02-fully-local-auth-session-key-64-bytes';
+const config = loadCoursitionAuthConfig();
+
+const originFrom = (value: string) => {
+  let origin: string | undefined;
+  try {
+    const { origin: parsedOrigin } = new URL(value);
+    origin = parsedOrigin;
+  } catch {
+    origin = undefined;
+  }
+  return origin;
+};
+
+const trustedOrigins = [
+  ...new Set(
+    [
+      originFrom(config.baseURL),
+      'http://localhost:*',
+      'http://127.0.0.1:*',
+      'http://[::1]:*',
+    ].filter((origin): origin is string => typeof origin === 'string'),
+  ),
+];
 
 export const auth = betterAuth({
-  baseURL: process.env['BETTER_AUTH_URL'] ?? 'http://localhost:8080',
+  baseURL: config.baseURL,
   emailAndPassword: {
     enabled: true,
   },
-  secret,
+  secret: config.secret,
+  trustedOrigins,
 });
 
 export const headersFromInput = (input: {

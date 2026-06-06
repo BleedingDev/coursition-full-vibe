@@ -14,26 +14,22 @@ const dashboardSlugByLanguage = {
 
 const stepSlugByLanguage = {
   cs: {
-    builder: 'editor',
-    chapters: 'kapitoly',
-    knowledge: 'zdroje',
-    lessons: 'lekce',
+    activityPlan: 'plan-aktivit',
+    courseContent: 'obsah-kurzu',
     mode: 'rezim',
+    objectives: 'cile',
+    preparation: 'priprava',
     preview: 'nahled',
-    questions: 'vyukove-otazky',
-    target: 'cilovy-student',
-    topics: 'temata',
+    sources: 'zdroje',
   },
   en: {
-    builder: 'builder',
-    chapters: 'chapters',
-    knowledge: 'sources',
-    lessons: 'lessons',
+    activityPlan: 'activity-plan',
+    courseContent: 'course-content',
     mode: 'mode',
+    objectives: 'objectives',
+    preparation: 'preparation',
     preview: 'preview',
-    questions: 'questions',
-    target: 'target-learner',
-    topics: 'topics',
+    sources: 'sources',
   },
 } as const satisfies Record<CourseRouteLanguage, Record<DraftStep, string>>;
 
