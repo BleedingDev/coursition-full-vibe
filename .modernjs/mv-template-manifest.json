@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "type": "builtin"
+  },
+  "integrity": {
+    "checksums": [
+      {
+        "algorithm": "sha256",
+        "scope": "source-tree",
+        "value": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "materialization": {
+    "deniedPaths": [
+      ".git/**",
+      ".npmrc",
+      ".yarnrc",
+      ".env",
+      ".env.*",
+      "node_modules/**",
+      "dist/**"
+    ]
+  },
+  "lifecyclePolicy": {
+    "denyByDefault": true,
+    "allowedScripts": ["postinstall"]
+  },
+  "validation": {
+    "postMaterializationValidation": [
+      "ultramodern-contract-check",
+      "agent-skill-postinstall-allowed",
+      "github-workflow-security-enforced",
+      "package-source-retained",
+      "pnpm-11-policy-enforced",
+      "rstest-smoke-tests",
+      "template-manifest-retained"
+    ]
+  }
+}

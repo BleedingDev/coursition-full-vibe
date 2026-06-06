@@ -1,0 +1,467 @@
+{
+  "generated_at": "2026-06-04T18:55:13.536797+00:00",
+  "graph_id": "coursition-visual-ux-20260604",
+  "plan_set_hash": "cebc3fe3b8",
+  "selection_hash": "4a4327644b",
+  "plan_count": 5,
+  "edge_count": 4,
+  "plans_root": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans",
+  "selected_globs": [],
+  "selected_plan_paths": [
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/09-coursition-visual-ux-foundation.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/10-coursition-sources-questions-streamline.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/11-coursition-topics-review-redesign.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/12-coursition-target-progression-redesign.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/13-coursition-visual-regression-verification.plan.md"
+  ],
+  "edges": [
+    {
+      "source": "09-coursition-visual-ux-foundation",
+      "target": "10-coursition-sources-questions-streamline"
+    },
+    {
+      "source": "10-coursition-sources-questions-streamline",
+      "target": "11-coursition-topics-review-redesign"
+    },
+    {
+      "source": "11-coursition-topics-review-redesign",
+      "target": "12-coursition-target-progression-redesign"
+    },
+    {
+      "source": "12-coursition-target-progression-redesign",
+      "target": "13-coursition-visual-regression-verification"
+    }
+  ],
+  "plans": [
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/09-coursition-visual-ux-foundation.plan.md",
+      "slug": "09-coursition-visual-ux-foundation",
+      "name": "coursition-visual-ux-foundation",
+      "overview": "Establish the shared layout, copy, navigation, and review-panel rules needed before screen-specific Coursition UI cleanup. This work removes persistent noise, makes the desktop layout use space intentionally, and preserves native route-driven navigation.",
+      "todos": [
+        {
+          "id": "audit-current-layout-helpers",
+          "content": "Inventory visible helper/status copy, empty Review rendering, and desktop width constraints in the current Coursition workflow component using the captured screenshot set as evidence.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "hide-empty-review-panel",
+          "content": "Hide the Review panel whenever there are no actionable findings; when findings exist, render only findings relevant to the current step.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "convert-nonessential-help",
+          "content": "Move persistent instructional helper text to screen-reader-only text, contextual tooltips, or validation-only messages while keeping labels and required/error states visible.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "widen-workflow-layout",
+          "content": "Adjust the desktop workflow layout so primary content uses the available viewport width without reintroducing cards, borders, shadows, or nested panels.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "normalize-stepper-and-actions",
+          "content": "Keep full step names visible on desktop, preserve non-color status cues, and keep Back/Next aligned with the current step title at normal control height.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/10-coursition-sources-questions-streamline.plan.md",
+      "slug": "10-coursition-sources-questions-streamline",
+      "name": "coursition-sources-questions-streamline",
+      "overview": "Simplify Sources and Questions so users see the current task and next action without repeated guidance text, redundant status panels, or always-expanded forms after successful source ingestion.",
+      "todos": [
+        {
+          "id": "streamline-source-type-control",
+          "content": "Convert source type selection into a compact segmented control with visible selected state, aria state, and no explanatory card-style copy.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "validation-only-source-help",
+          "content": "Remove default visible source help such as source-name and source-required hints; show them only as validation errors or blocked-next reasons.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "collapse-source-form-after-ready",
+          "content": "After at least one usable source is ready, collapse the add-source form behind an Add another source action while preserving source preview, retry, and delete controls.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "remove-ready-banner-duplication",
+          "content": "Replace the large ready-state banner with source row status plus an enabled Next/Continue control; avoid duplicate ready/status messages.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "compact-questions-layout",
+          "content": "Rework generated teaching questions into a denser desktop layout with Save questions and Generate topics aligned in one action row near the Questions title.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/11-coursition-topics-review-redesign.plan.md",
+      "slug": "11-coursition-topics-review-redesign",
+      "name": "coursition-topics-review-redesign",
+      "overview": "Redesign Topics as a review-first decision screen and fix low-quality generated topic fallback content so users can quickly accept, reject, or edit meaningful suggestions.",
+      "todos": [
+        {
+          "id": "improve-topic-generation-fallback",
+          "content": "Replace naive/generated fallback topic names and descriptions with source-aware, course-title-aware topic suggestions that are coherent in English and Czech.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "topic-review-row-model",
+          "content": "Convert generated topic items from always-visible edit forms into compact review rows showing name, one-line description, importance, status, and primary Accept/Reject actions.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "edit-topic-on-demand",
+          "content": "Add edit-on-demand behavior for topic name/description so fields appear only when the user chooses to edit a row.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "accepted-rejected-state-cues",
+          "content": "Make accepted, rejected, suggested, and manual states visibly distinct without relying only on color; ensure accepted rows are clearly changed after action.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "topic-next-action",
+          "content": "Make the accepted-topic count and Next-to-Target availability obvious without persistent explanatory copy when the requirement is satisfied.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/12-coursition-target-progression-redesign.plan.md",
+      "slug": "12-coursition-target-progression-redesign",
+      "name": "coursition-target-progression-redesign",
+      "overview": "Rework Target learner and downstream progression so generated profiles are reviewable at a glance, confirmation gives visible feedback, and chapter generation unlocks in an obvious way.",
+      "todos": [
+        {
+          "id": "target-summary-first-view",
+          "content": "Render generated target learner content as a compact review summary by default instead of seven large textareas.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "target-edit-on-demand",
+          "content": "Provide Edit controls that reveal grouped editable fields only when the user needs to change the generated target profile.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "target-confirm-feedback",
+          "content": "After Confirm target learner, show an explicit confirmed state and enable the next chapter-generation action without requiring users to infer state from disabled buttons.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "simplify-target-actions",
+          "content": "Establish one primary action at a time on Target: generate, confirm, then generate chapters/next; demote or hide unavailable actions until they are relevant.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "blocked-reason-placement",
+          "content": "Move blocked reasons to a compact status line near the current primary action and remove persistent generic instruction text once the requirement is satisfied.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/13-coursition-visual-regression-verification.plan.md",
+      "slug": "13-coursition-visual-regression-verification",
+      "name": "coursition-visual-regression-verification",
+      "overview": "Re-capture the Coursition workflow after implementation, compare it against the audit screenshots, and verify desktop, mobile, accessibility, SSR routing, and generated-mode behavior.",
+      "todos": [
+        {
+          "id": "refresh-screenshot-set",
+          "content": "Capture a new screenshot set for auth, dashboard, mode, sources, questions, topics, target, and dashboard-with-course at desktop and mobile viewports.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "compare-against-audit-findings",
+          "content": "Compare new screenshots against the 20260604 audit and confirm visible helper text, empty Review, topic rows, target density, and desktop width issues are resolved.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "expect-cli-flow-audit",
+          "content": "Run expect-cli through generated-course and assisted/manual paths, asking it to be strict about UX logic, navigation, visible copy, and consistency.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "accessibility-and-keyboard-check",
+          "content": "Run accessibility and keyboard checks for form labels, state cues, focus order, and non-color-only states across changed screens.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "project-healthcheck",
+          "content": "Run the project quality gate and focused workflow tests, including SSR route refresh and Back/Forward checks for localized URLs.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "frontier": [
+    {
+      "plan_slug": "09-coursition-visual-ux-foundation",
+      "plan_name": "coursition-visual-ux-foundation",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/09-coursition-visual-ux-foundation.plan.md",
+      "plan_status": "pending",
+      "state": "ready",
+      "blocked_by": [],
+      "active": [
+        {
+          "id": "audit-current-layout-helpers",
+          "content": "Inventory visible helper/status copy, empty Review rendering, and desktop width constraints in the current Coursition workflow component using the captured screenshot set as evidence.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "hide-empty-review-panel",
+          "content": "Hide the Review panel whenever there are no actionable findings; when findings exist, render only findings relevant to the current step.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "convert-nonessential-help",
+          "content": "Move persistent instructional helper text to screen-reader-only text, contextual tooltips, or validation-only messages while keeping labels and required/error states visible.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "widen-workflow-layout",
+          "content": "Adjust the desktop workflow layout so primary content uses the available viewport width without reintroducing cards, borders, shadows, or nested panels.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "normalize-stepper-and-actions",
+          "content": "Keep full step names visible on desktop, preserve non-color status cues, and keep Back/Next aligned with the current step title at normal control height.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "completed": 0,
+      "total": 5
+    },
+    {
+      "plan_slug": "10-coursition-sources-questions-streamline",
+      "plan_name": "coursition-sources-questions-streamline",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/10-coursition-sources-questions-streamline.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["09-coursition-visual-ux-foundation"],
+      "active": [
+        {
+          "id": "streamline-source-type-control",
+          "content": "Convert source type selection into a compact segmented control with visible selected state, aria state, and no explanatory card-style copy.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "validation-only-source-help",
+          "content": "Remove default visible source help such as source-name and source-required hints; show them only as validation errors or blocked-next reasons.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "collapse-source-form-after-ready",
+          "content": "After at least one usable source is ready, collapse the add-source form behind an Add another source action while preserving source preview, retry, and delete controls.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "remove-ready-banner-duplication",
+          "content": "Replace the large ready-state banner with source row status plus an enabled Next/Continue control; avoid duplicate ready/status messages.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "compact-questions-layout",
+          "content": "Rework generated teaching questions into a denser desktop layout with Save questions and Generate topics aligned in one action row near the Questions title.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "completed": 0,
+      "total": 5
+    },
+    {
+      "plan_slug": "12-coursition-target-progression-redesign",
+      "plan_name": "coursition-target-progression-redesign",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/12-coursition-target-progression-redesign.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["11-coursition-topics-review-redesign"],
+      "active": [
+        {
+          "id": "target-summary-first-view",
+          "content": "Render generated target learner content as a compact review summary by default instead of seven large textareas.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "target-edit-on-demand",
+          "content": "Provide Edit controls that reveal grouped editable fields only when the user needs to change the generated target profile.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "target-confirm-feedback",
+          "content": "After Confirm target learner, show an explicit confirmed state and enable the next chapter-generation action without requiring users to infer state from disabled buttons.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "simplify-target-actions",
+          "content": "Establish one primary action at a time on Target: generate, confirm, then generate chapters/next; demote or hide unavailable actions until they are relevant.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "blocked-reason-placement",
+          "content": "Move blocked reasons to a compact status line near the current primary action and remove persistent generic instruction text once the requirement is satisfied.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "completed": 0,
+      "total": 5
+    },
+    {
+      "plan_slug": "11-coursition-topics-review-redesign",
+      "plan_name": "coursition-topics-review-redesign",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/11-coursition-topics-review-redesign.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["10-coursition-sources-questions-streamline"],
+      "active": [
+        {
+          "id": "improve-topic-generation-fallback",
+          "content": "Replace naive/generated fallback topic names and descriptions with source-aware, course-title-aware topic suggestions that are coherent in English and Czech.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "topic-review-row-model",
+          "content": "Convert generated topic items from always-visible edit forms into compact review rows showing name, one-line description, importance, status, and primary Accept/Reject actions.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "edit-topic-on-demand",
+          "content": "Add edit-on-demand behavior for topic name/description so fields appear only when the user chooses to edit a row.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "accepted-rejected-state-cues",
+          "content": "Make accepted, rejected, suggested, and manual states visibly distinct without relying only on color; ensure accepted rows are clearly changed after action.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "topic-next-action",
+          "content": "Make the accepted-topic count and Next-to-Target availability obvious without persistent explanatory copy when the requirement is satisfied.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "completed": 0,
+      "total": 5
+    },
+    {
+      "plan_slug": "13-coursition-visual-regression-verification",
+      "plan_name": "coursition-visual-regression-verification",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/13-coursition-visual-regression-verification.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["12-coursition-target-progression-redesign"],
+      "active": [
+        {
+          "id": "refresh-screenshot-set",
+          "content": "Capture a new screenshot set for auth, dashboard, mode, sources, questions, topics, target, and dashboard-with-course at desktop and mobile viewports.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "compare-against-audit-findings",
+          "content": "Compare new screenshots against the 20260604 audit and confirm visible helper text, empty Review, topic rows, target density, and desktop width issues are resolved.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "expect-cli-flow-audit",
+          "content": "Run expect-cli through generated-course and assisted/manual paths, asking it to be strict about UX logic, navigation, visible copy, and consistency.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "accessibility-and-keyboard-check",
+          "content": "Run accessibility and keyboard checks for form labels, state cues, focus order, and non-color-only states across changed screens.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "project-healthcheck",
+          "content": "Run the project quality gate and focused workflow tests, including SSR route refresh and Back/Forward checks for localized URLs.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "completed": 0,
+      "total": 5
+    }
+  ],
+  "errors": [],
+  "warnings": [],
+  "graph_source": "explicit"
+}

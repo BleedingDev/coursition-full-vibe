@@ -1,0 +1,26 @@
+
+ expect v0.0.23  CI · opencode · timeout 7m
+
+ Narrow regression only. Test dashboard Create course 5 times from /en and /cs: every submit must navigate to a course route, never stay on dashboard, never about:blank, and no Failed to fetch console errors. Then run accessibility audit on /cs main and report whether  remains; do not test unrelated flows.
+ http://localhost:8080
+ ◯ Open app and inspect dashboard entry flow
+ → Open app and inspect dashboard entry flow [skipped]
+   CDP auto-discovery unavailable; retrying with a fresh browser session
+ ✔ Opened `/en`, created disposable account via `/api/auth/sign-up` 200, and confirmed authenticated workflow requests fired with no console errors while staying on the localized entry route (24s)
+ ◯ Create course from English dashboard five times and verify redirects never stay on dashboard or about:blank
+ ◯ Capture English flow failure diagnostics
+ ✘ Create course from English dashboard five times and verify redirects never stay on dashboard or about:blank (39s)
+   category=app-bug; domain=general; expected=Each of 5 submissions from `/en` should navigate directly from the dashboard to a course route and never log `Failed to fetch`; actual=iterations 1-4 stayed on `http://localhost:8080/en` after submit while loader fetches for `/en/course-creation/course_<id>/mode` failed, and only iteration 5 reached the course route; url=http://localhost:8080/en/course-creation/course_e06e20c40bf74d96984a971bb19976b4/mode; evidence=4 console errors `TypeError: Failed to fetch` plus 4 GET loader requests without 200 status before the fifth successful 200; repro=open `/en`, enter a title, click `Create course`, repeat 5 times; likely-scope=changed dashboard create-course navigation/loader files; next-agent-prompt=Investigate why the dashboard create-course submit intermittently leaves the user on `/en` and throws `TypeError: Failed to fetch` for the course loader route before navigation completes.
+ ◯ Create course from Czech dashboard five times and verify redirects never stay on dashboard or about:blank
+ ◯ Capture Czech flow failure diagnostics
+ ✘ Create course from Czech dashboard five times and verify redirects never stay on dashboard or about:blank (28s)
+   category=app-bug; domain=general; expected=Each of 5 submissions from `/cs` should navigate directly from the dashboard to a course route and never log `Failed to fetch`; actual=all 5 iterations initially remained on `http://localhost:8080/cs` after submit, with only the final iteration eventually resolving to `/cs/tvorba-kurzu/course_55aa176392f8467cba29094edeb07e72/rezim`, while earlier attempts logged loader fetch failures; url=http://localhost:8080/cs/tvorba-kurzu/course_55aa176392f8467cba29094edeb07e72/rezim; evidence=console contains additional `TypeError: Failed to fetch` errors at timestamps 1780567797020 and 1780567798142, and localized loader GETs for `course_f7b.../rezim` and `course_6fd.../rezim` have no 200 status; repro=open `/cs`, enter a course title, click `Vytvořit kurz`, repeat 5 times; likely-scope=changed localized dashboard create-course navigation/loader files; next-agent-prompt=Fix intermittent create-course navigation on the Czech dashboard so submit transitions immediately to `/cs/tvorba-kurzu/course_<id>/rezim` without loader fetch failures or staying on `/cs`.
+ ◯ Run accessibility audit on Czech main page and check whether the reported issue remains
+ ✘ Run accessibility audit on Czech main page and check whether the reported issue remains (10s)
+   category=app-bug; domain=accessibility; expected=`/cs` main should pass the requested accessibility check or clearly resolve the prior issue; actual=accessibility audit still reports a serious violation on the Czech main page; url=http://localhost:8080/cs; evidence=IBM Equal Access rule `style_color_misuse` flagged `/html[1]/head[1]/link[1]` with `Verify color is not used as the only visual means of conveying information`; repro=open `/cs`, run accessibility audit scoped to `main`; likely-scope=changed localized main/dashboard UI; next-agent-prompt=Review the Czech main page states and labels to ensure selected/current status is not conveyed by color alone and resolve the remaining `style_color_misuse` accessibility violation.
+ ◯ Collect performance metrics for the current browser run
+ ✔ Performance trace passed: FCP/LCP 88ms, CLS 0.006, and worst long-frame blocking 29ms on the current run (2s)
+ ◯ Run project healthcheck using repository package scripts
+ Still running… (4m elapsed)
+ Still running… (5m elapsed)
+ ✔ `pnpm ultramodern:check` passed, including format, lint, typecheck, i18n check, 44 tests, skills check, and contract validation (3m 35s)

@@ -1,0 +1,495 @@
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const configPath = path.resolve(process.cwd(), 'modern.config.ts');
+const templateManifestPath = path.resolve(process.cwd(), '.modernjs/mv-template-manifest.json');
+const packageSourcePath = path.resolve(process.cwd(), '.modernjs/ultramodern-package-source.json');
+const readPnpmConfig = (key) => {
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([envKey]) => !/^(?:npm|pnpm)_config_/iu.test(envKey)),
+  );
+  const output = execFileSync('pnpm', ['config', 'get', key, '--json'], {
+    cwd: process.cwd(),
+    encoding: 'utf-8',
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+  return output ? JSON.parse(output) : undefined;
+};
+const enableTailwind = true;
+const expectedPnpmVersion = '11.5.1';
+const activePnpmVersion = execFileSync('pnpm', ['--version'], {
+  cwd: process.cwd(),
+  encoding: 'utf-8',
+  stdio: ['ignore', 'pipe', 'pipe'],
+}).trim();
+
+if (activePnpmVersion !== expectedPnpmVersion) {
+  console.error(
+    `Generated app requires pnpm ${expectedPnpmVersion}; active pnpm is ${activePnpmVersion}. Run mise install, then rerun pnpm from the activated shell`,
+  );
+  process.exit(1);
+}
+
+if (!fs.existsSync(configPath)) {
+  console.error('modern.config.ts not found');
+  process.exit(1);
+}
+
+const content = fs.readFileSync(configPath, 'utf-8');
+const requiredTokens = [
+  'presetUltramodern(',
+  'appTools()',
+  'enableModuleFederationSSR',
+  'enableBffRequestId',
+  'enableTelemetryExporters',
+  'i18nPlugin(',
+  'localePathRedirect: true',
+  'ULTRAMODERN_SITE_URL',
+  'MODERN_PUBLIC_SITE_URL must be set for production builds',
+  'globalVars',
+];
+const missing = requiredTokens.filter((token) => !content.includes(token));
+
+if (missing.length > 0) {
+  console.error(`Ultramodern contract check failed. Missing tokens: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
+if (!fs.existsSync(templateManifestPath)) {
+  console.error('.modernjs/mv-template-manifest.json not found');
+  process.exit(1);
+}
+
+const templateManifest = JSON.parse(fs.readFileSync(templateManifestPath, 'utf-8'));
+const requiredDeniedPaths = [
+  '.git/**',
+  '.npmrc',
+  '.yarnrc',
+  '.env',
+  '.env.*',
+  'node_modules/**',
+  'dist/**',
+];
+const requiredPostMaterialization = [
+  'ultramodern-contract-check',
+  'agent-skill-postinstall-allowed',
+  'github-workflow-security-enforced',
+  'package-source-retained',
+  'pnpm-11-policy-enforced',
+  'rstest-smoke-tests',
+  'template-manifest-retained',
+];
+const requiredPaths = [
+  'AGENTS.md',
+  '.agents/skills-lock.json',
+  '.codex/hooks.json',
+  '.github/renovate.json',
+  '.github/workflows/ultramodern-gates.yml',
+  'lefthook.yml',
+  'oxlint.config.ts',
+  'oxfmt.config.ts',
+  'scripts/bootstrap-agent-skills.mjs',
+
+  '.mise.toml',
+  '.modernjs/ultramodern-package-source.json',
+  'pnpm-workspace.yaml',
+  'rstest.config.mts',
+  'scripts/check-i18n-strings.mjs',
+
+  'postcss.config.mjs',
+  'tailwind.config.ts',
+
+  'locales/en/translation.json',
+  'locales/cs/translation.json',
+  'src/modern-app-env.d.ts',
+  'src/routes/index.css',
+  'src/routes/layout.tsx',
+  'src/routes/[lang]/page.tsx',
+  'tests/ultramodern.contract.test.ts',
+];
+const manifestErrors = [];
+
+for (const requiredPath of requiredPaths) {
+  if (!fs.existsSync(path.resolve(process.cwd(), requiredPath))) {
+    console.error(`${requiredPath} not found`);
+    process.exit(1);
+  }
+}
+
+if (fs.existsSync(path.resolve(process.cwd(), 'src/routes/page.tsx'))) {
+  console.error('src/routes/page.tsx must move under src/routes/[lang]/page.tsx');
+  process.exit(1);
+}
+
+if (
+  !enableTailwind &&
+  (fs.existsSync(path.resolve(process.cwd(), 'postcss.config.mjs')) ||
+    fs.existsSync(path.resolve(process.cwd(), 'tailwind.config.ts')))
+) {
+  console.error('Tailwind config files must not be written when Tailwind is disabled');
+  process.exit(1);
+}
+
+const workflowContent = fs.readFileSync(
+  path.resolve(process.cwd(), '.github/workflows/ultramodern-gates.yml'),
+  'utf-8',
+);
+const renovateConfig = JSON.parse(
+  fs.readFileSync(path.resolve(process.cwd(), '.github/renovate.json'), 'utf-8'),
+);
+for (const requiredSnippet of [
+  'permissions:\n  contents: read',
+  'pull_request:',
+  'persist-credentials: false',
+  'jdx/mise-action',
+  'pnpm install --frozen-lockfile',
+  'pnpm run ultramodern:check',
+  'pnpm run build',
+  'MODERN_PUBLIC_SITE_URL: http://localhost:8080',
+  'timeout-minutes:',
+  'egress-policy: audit',
+]) {
+  if (!workflowContent.includes(requiredSnippet)) {
+    console.error(`Generated workflow must retain ${requiredSnippet.split('\n')[0]}`);
+    process.exit(1);
+  }
+}
+if (workflowContent.includes('pull_request_target')) {
+  console.error('Generated workflow must not use pull_request_target');
+  process.exit(1);
+}
+for (const match of workflowContent.matchAll(/^\s*uses:\s*([^@\s]+)@([^\s#]+)/gmu)) {
+  const [, actionName, actionRef] = match;
+  if (!/^[a-f0-9]{40}$/u.test(actionRef)) {
+    console.error(`Generated workflow must pin ${actionName}@${actionRef} to a commit SHA`);
+    process.exit(1);
+  }
+}
+if (
+  renovateConfig.dependencyDashboard !== true ||
+  renovateConfig.minimumReleaseAge !== '1 day' ||
+  !renovateConfig.extends?.includes('helpers:pinGitHubActionDigests') ||
+  !renovateConfig.packageRules?.some(
+    (rule) => rule.dependencyDashboardApproval === true && rule.matchUpdateTypes?.includes('major'),
+  )
+) {
+  console.error(
+    'Generated Renovate config must retain dashboard, release-age, action pinning, and major-approval policy',
+  );
+  process.exit(1);
+}
+
+if (templateManifest.schemaVersion !== 1) {
+  manifestErrors.push('schemaVersion');
+}
+
+if (templateManifest.source?.type !== 'builtin') {
+  manifestErrors.push('source.type');
+}
+
+if (
+  !Array.isArray(templateManifest.integrity?.checksums) ||
+  !templateManifest.integrity.checksums.some(
+    (checksum) =>
+      checksum.algorithm === 'sha256' &&
+      checksum.scope === 'source-tree' &&
+      /^[0-9a-f]{64}$/u.test(checksum.value),
+  )
+) {
+  manifestErrors.push('integrity.checksums[source-tree]');
+}
+
+for (const deniedPath of requiredDeniedPaths) {
+  if (!templateManifest.materialization?.deniedPaths?.includes(deniedPath)) {
+    manifestErrors.push(`materialization.deniedPaths:${deniedPath}`);
+  }
+}
+
+if (templateManifest.lifecyclePolicy?.denyByDefault !== true) {
+  manifestErrors.push('lifecyclePolicy.denyByDefault');
+}
+if (
+  JSON.stringify(templateManifest.lifecyclePolicy?.allowedScripts) !==
+  JSON.stringify(['postinstall'])
+) {
+  manifestErrors.push('lifecyclePolicy.allowedScripts');
+}
+
+for (const token of requiredPostMaterialization) {
+  if (!templateManifest.validation?.postMaterializationValidation?.includes(token)) {
+    manifestErrors.push(`validation.postMaterializationValidation:${token}`);
+  }
+}
+
+if (manifestErrors.length > 0) {
+  console.error(
+    `Ultramodern template manifest check failed. Invalid fields: ${manifestErrors.join(', ')}`,
+  );
+  process.exit(1);
+}
+
+const packageJson = JSON.parse(
+  fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf-8'),
+);
+const packageSource = JSON.parse(fs.readFileSync(packageSourcePath, 'utf-8'));
+const unresolvedTemplateMarker = String.fromCodePoint(123, 123);
+if (JSON.stringify(packageJson).includes(unresolvedTemplateMarker)) {
+  console.error('package.json contains unresolved template markers');
+  process.exit(1);
+}
+if (JSON.stringify(packageSource).includes(unresolvedTemplateMarker)) {
+  console.error('package source metadata contains unresolved template markers');
+  process.exit(1);
+}
+
+const skillsLock = JSON.parse(
+  fs.readFileSync(path.resolve(process.cwd(), '.agents/skills-lock.json'), 'utf-8'),
+);
+
+const requiredScripts = {
+  format: 'oxfmt .',
+  'format:check': 'oxfmt --check .',
+  'i18n:check': 'node ./scripts/check-i18n-strings.mjs',
+  lint: 'oxlint .',
+  'lint:fix': 'oxlint . --fix',
+  postinstall:
+    'node ./scripts/bootstrap-agent-skills.mjs && (git rev-parse --is-inside-work-tree >/dev/null 2>&1 && lefthook install || true)',
+  'skills:check': 'node ./scripts/bootstrap-agent-skills.mjs --check',
+  'skills:install': 'node ./scripts/bootstrap-agent-skills.mjs',
+  test: 'rstest run',
+};
+
+for (const [scriptName, scriptCommand] of Object.entries(requiredScripts)) {
+  if (packageJson.scripts?.[scriptName] !== scriptCommand) {
+    console.error(`Missing or invalid package script: ${scriptName}`);
+    process.exit(1);
+  }
+}
+
+if (
+  !packageJson.scripts?.typecheck?.includes('effect-tsgo') ||
+  !packageJson.scripts.typecheck.includes('get-exe-path')
+) {
+  console.error('typecheck must use effect-tsgo as the TypeScript checker');
+  process.exit(1);
+}
+
+if (!packageJson.scripts?.['ultramodern:check']?.includes('pnpm test')) {
+  console.error('ultramodern:check must run the generated Rstest suite');
+  process.exit(1);
+}
+
+if (packageJson.private !== true) {
+  console.error('Generated app package must be private by default');
+  process.exit(1);
+}
+
+const miseConfig = fs.readFileSync(path.resolve(process.cwd(), '.mise.toml'), 'utf-8');
+if (!miseConfig.includes(`pnpm = "${expectedPnpmVersion}"`)) {
+  console.error(`Generated app must pin pnpm ${expectedPnpmVersion} in .mise.toml`);
+  process.exit(1);
+}
+
+if (packageJson.packageManager !== `pnpm@${expectedPnpmVersion}`) {
+  console.error(`Generated app package must pin pnpm@${expectedPnpmVersion}`);
+  process.exit(1);
+}
+
+if (packageJson.engines?.pnpm !== `>=${expectedPnpmVersion} <11.6.0`) {
+  console.error(`Generated app package must require pnpm >=${expectedPnpmVersion} <11.6.0`);
+  process.exit(1);
+}
+
+if (packageJson.pnpm !== undefined) {
+  console.error('Generated app must keep pnpm policy in pnpm-workspace.yaml, not package.json');
+  process.exit(1);
+}
+
+if (readPnpmConfig('minimumReleaseAge') !== 0) {
+  console.error('pnpm minimumReleaseAge must be 0');
+  process.exit(1);
+}
+if (readPnpmConfig('minimumReleaseAgeStrict') !== true) {
+  console.error('pnpm minimumReleaseAgeStrict must be true');
+  process.exit(1);
+}
+if (readPnpmConfig('minimumReleaseAgeIgnoreMissingTime') !== false) {
+  console.error('pnpm minimumReleaseAgeIgnoreMissingTime must be false');
+  process.exit(1);
+}
+if (readPnpmConfig('minimumReleaseAgeExclude') !== undefined) {
+  console.error('pnpm minimumReleaseAgeExclude must stay unset');
+  process.exit(1);
+}
+if (readPnpmConfig('trustPolicy') !== 'no-downgrade') {
+  console.error('pnpm trustPolicy must be no-downgrade');
+  process.exit(1);
+}
+for (const [key, expected] of [
+  ['trustPolicyIgnoreAfter', 1440],
+  ['blockExoticSubdeps', true],
+  ['engineStrict', true],
+  ['pmOnFail', 'error'],
+  ['verifyDepsBeforeRun', 'error'],
+  ['strictDepBuilds', true],
+]) {
+  if (readPnpmConfig(key) !== expected) {
+    console.error(`pnpm ${key} must be ${String(expected)}`);
+    process.exit(1);
+  }
+}
+if (
+  JSON.stringify(readPnpmConfig('allowBuilds')) !==
+  JSON.stringify({
+    '@swc/core': true,
+    'core-js': true,
+    esbuild: true,
+    lefthook: true,
+    'msgpackr-extract': true,
+    sharp: true,
+    workerd: true,
+  })
+) {
+  console.error('pnpm allowBuilds must approve only the generated app build dependencies');
+  process.exit(1);
+}
+if (readPnpmConfig('onlyBuiltDependencies') !== undefined) {
+  console.error('pnpm onlyBuiltDependencies must not be set');
+  process.exit(1);
+}
+
+if (packageJson.modernjs?.preset !== 'presetUltramodern') {
+  console.error('package.json must declare presetUltramodern metadata');
+  process.exit(1);
+}
+
+if (packageJson.modernjs?.packageSource?.config !== './.modernjs/ultramodern-package-source.json') {
+  console.error('package.json must retain package source metadata location');
+  process.exit(1);
+}
+
+if (packageSource.schemaVersion !== 1) {
+  console.error('Package source metadata must use schemaVersion 1');
+  process.exit(1);
+}
+
+if (packageSource.preset !== 'presetUltramodern') {
+  console.error('Package source metadata must declare presetUltramodern');
+  process.exit(1);
+}
+
+if (packageSource.strategy !== 'workspace' && packageSource.strategy !== 'install') {
+  console.error('Package source strategy must be workspace or install');
+  process.exit(1);
+}
+
+const expectedModernPackages = [
+  '@modern-js/runtime',
+  '@modern-js/app-tools',
+  '@modern-js/tsconfig',
+  '@modern-js/plugin-i18n',
+  '@modern-js/plugin-tanstack',
+  '@modern-js/plugin-bff',
+  '@modern-js/adapter-rstest',
+];
+
+for (const packageName of expectedModernPackages) {
+  if (!packageSource.modernPackages?.packages?.includes(packageName)) {
+    console.error(`Package source metadata must include ${packageName}`);
+    process.exit(1);
+  }
+}
+
+const expectedModernSpecifier = packageSource.modernPackages?.specifier;
+if (typeof expectedModernSpecifier !== 'string' || expectedModernSpecifier.length === 0) {
+  console.error('Package source metadata must provide a Modern package specifier');
+  process.exit(1);
+}
+
+const expectedModernDependency = (packageName) => {
+  const alias = packageSource.modernPackages?.aliases?.[packageName];
+  return typeof alias === 'string'
+    ? `npm:${alias}@${expectedModernSpecifier}`
+    : expectedModernSpecifier;
+};
+
+for (const packageName of [
+  '@modern-js/runtime',
+  '@modern-js/plugin-i18n',
+  '@modern-js/plugin-tanstack',
+]) {
+  if (
+    packageJson.dependencies?.[packageName] &&
+    packageJson.dependencies[packageName] !== expectedModernDependency(packageName)
+  ) {
+    console.error(`Dependency ${packageName} must match package source metadata`);
+    process.exit(1);
+  }
+}
+
+for (const packageName of [
+  '@modern-js/app-tools',
+  '@modern-js/adapter-rstest',
+  '@modern-js/tsconfig',
+  '@modern-js/plugin-bff',
+]) {
+  if (
+    packageJson.devDependencies?.[packageName] &&
+    packageJson.devDependencies[packageName] !== expectedModernDependency(packageName)
+  ) {
+    console.error(`Dev dependency ${packageName} must match package source metadata`);
+    process.exit(1);
+  }
+}
+
+for (const dependency of ['@modern-js/plugin-i18n', 'i18next']) {
+  if (!packageJson.dependencies?.[dependency]) {
+    console.error(`Missing dependency: ${dependency}`);
+    process.exit(1);
+  }
+}
+
+for (const dependency of [
+  '@effect/tsgo',
+  '@modern-js/adapter-rstest',
+  '@rstest/core',
+  '@typescript/native-preview',
+  'happy-dom',
+
+  '@tailwindcss/postcss',
+  'postcss',
+  'tailwindcss',
+
+  'lefthook',
+  'oxlint',
+  'oxfmt',
+  'ultracite',
+]) {
+  if (!packageJson.devDependencies?.[dependency]) {
+    console.error(`Missing devDependency: ${dependency}`);
+    process.exit(1);
+  }
+}
+
+if (
+  packageJson.devDependencies?.tailwindcss !== '^4.3.0' ||
+  packageJson.devDependencies?.['@tailwindcss/postcss'] !== '^4.3.0'
+) {
+  console.error('Tailwind CSS dependencies must use the UltraModern default baseline');
+  process.exit(1);
+}
+
+const privateSource = skillsLock.sources?.find(
+  (source) => source.repository === 'https://github.com/TechsioCZ/skills',
+);
+const privateSkills = new Set(privateSource?.baseline?.map((skill) => skill.name));
+for (const skillName of ['plan-graph', 'dag', 'subagent-graph', 'helm', 'debugger-mode']) {
+  if (!privateSkills.has(skillName)) {
+    console.error(`Missing private skill allowlist entry: ${skillName}`);
+    process.exit(1);
+  }
+}
+
+console.log('Ultramodern contract check passed.');

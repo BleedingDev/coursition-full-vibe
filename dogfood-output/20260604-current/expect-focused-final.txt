@@ -1,0 +1,40 @@
+
+ expect v0.0.23  CI · opencode · timeout 10m
+
+ Focused regression pass for Coursition after fixes. Retest only: dashboard Create course must navigate into the workflow and never about:blank; course edit links on /cs must render the matching course step UI, not dashboard under a course URL; logo to dashboard then browser Back must restore the course step UI matching URL; manual mode starts at Sources and blocks empty Questions / zero-topic Next; Czech UI has no English leaks; accessibility audit on main should not report unlabeled complementary aside, white-on-white step rail contrast, invalid descendants in mode buttons, or copy containing above. Also verify no Failed to fetch console errors during dashboard creation.
+ http://localhost:8080
+ ◯ Open app and inspect dashboard entry flow
+ ✔ Authenticated into dashboard; URL remained http://localhost:8080/en and the Courses region with visible Create course button loaded without console errors (1m 3s)
+ ◯ [Setup] Create three adversarial courses from dashboard and verify workflow navigation
+ ◯ Reproduce first dashboard creation navigation failure with structured diagnostics
+ ✔ Created 3 adversarial courses; each appears in dashboard with Edit links, and later create attempts navigated to course URLs instead of about:blank with no Failed to fetch console errors (17s)
+ ◯ Verify /cs edit links render matching course step UI instead of dashboard
+ ✔ First Czech Edit link opened /cs/tvorba-kurzu/.../rezim and, after settle, rendered Režim plus Zdroje wizard steps instead of the dashboard (18s)
+ ◯ Verify logo to dashboard then browser Back restores matching course step UI
+ ✔ Logo returned to /cs and browser Back restored the same /cs/tvorba-kurzu/.../rezim step UI with Režim and Zdroje visible, not the dashboard (10s)
+ ◯ Verify manual mode can be selected and blocks empty progression to Questions/zero-topic Next
+ ✔ Manual empty-source progression reached /cs/.../vyukove-otazky and blocked forward navigation with status text plus non-clickable Další on unanswered questions (13s)
+ ◯ Verify zero-topic Next remains blocked from Questions/Témata path
+ ✔ After saving required questions, Témata opened at /cs/.../temata and still blocked forward progress with “0 přijatých témat” plus non-clickable Další (12s)
+ ◯ Responsive touch pass on touched wizard UI across required viewports
+ ✔ Wizard stayed readable with no horizontal overflow at all required viewports, and mobile touch selection on “Postavím ho ručně” advanced into Zdroje successfully (26s)
+ ◯ Dark mode detection on touched UI
+ → Dark mode detection on touched UI [skipped]
+   No dark mode support detected via theme attribute, dark class, or prefers-color-scheme integration
+ ◯ Cross-browser WebKit regression on primary create/edit flow
+ ✔ WebKit reproduced the primary flow successfully: Create course opened /cs/tvorba-kurzu/.../rezim with Režim and Zdroje visible and no about:blank state (24s)
+ ◯ Accessibility audit on touched main content and changed issues regression check
+ ✘ Accessibility audit on touched main content and changed issues regression check (23s)
+   category=app-bug; domain=accessibility; expected=Main accessibility audit should return no serious violations after the requested fixes; actual=IBM Equal Access still reports serious rule `style_color_misuse` on the main /cs page; url=http://localhost:8080/cs; evidence=accessibility_audit summary serious=1, node selector `/html[1]/head[1]/link[1]`, rule help `style_color_misuse`; repro=open /cs and run accessibility audit scoped to main; likely-scope=changed main course studio UI or shared stylesheet `/static/css/index.css`; next-agent-prompt=Investigate the remaining `style_color_misuse` accessibility violation on /cs and ensure visual state is not conveyed by color alone in the updated course studio UI
+ ◯ Performance trace on main flow and layout/font checks
+ ✔ Performance trace on /cs was healthy with FCP 72ms, LCP 72ms, CLS 0, TTFB 9ms; earlier layout-shift sample stayed at 0.028 and document.fonts reported no pending font loads (3s)
+ ◯ Run project healthcheck scripts for changed code
+ Still running… (7m elapsed)
+ Still running… (8m elapsed)
+ Still running… (9m elapsed)
+ ✔ Project healthcheck passed via `pnpm ultramodern:check` including format, lint, typecheck, i18n, 44 tests, skills check, and ultramodern validation (3m 26s)
+ ✘ Reproduce first dashboard creation navigation failure with structured diagnostics (8m 7s)
+   category=app-bug; domain=general; expected=Dashboard Create course should immediately navigate into the new course workflow on every attempt; actual=one create attempt left the app on http://localhost:8080/en instead of entering the course route, while later attempts did navigate; url=http://localhost:8080/en; evidence=created-course run returned `finalUrl=http://localhost:8080/en` and first item `hasSources=false` after submit, even though subsequent creates produced course URLs and dashboard cards; repro=sign up, open dashboard, enter course title, click Create course repeatedly from /en; likely-scope=changed dashboard create-course navigation flow; next-agent-prompt=Investigate why dashboard course creation sometimes stays on /en instead of routing into the new course workflow after submit
+
+ Tests  10 passed | 2 failed | 1 skipped (13)
+ Time   19m 4s

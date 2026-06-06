@@ -1,0 +1,351 @@
+{
+  "coursition": {
+    "app": {
+      "auth": {
+        "createAccount": "Vytvořit účet",
+        "creatingAccount": "Vytváříme účet...",
+        "email": "E-mail",
+        "emailPlaceholder": "autor@example.com",
+        "modeLabel": "Režim přihlášení",
+        "name": "Jméno",
+        "password": "Heslo",
+        "passwordPlaceholder": "Alespoň 8 znaků",
+        "signIn": "Přihlásit",
+        "signingIn": "Přihlašujeme...",
+        "signOut": "Odhlásit",
+        "signUp": "Registrovat",
+        "validation": {
+          "emailInvalid": "Zadejte platný e-mail.",
+          "emailRequired": "E-mail je povinný.",
+          "errorPrefix": "Chyba:",
+          "nameRequired": "Jméno je povinné.",
+          "passwordLength": "Použijte alespoň 8 znaků.",
+          "passwordRequired": "Heslo je povinné."
+        }
+      },
+      "builder": {
+        "addBlock": "Přidat blok",
+        "addLesson": "Přidat lekci",
+        "blockBody": "Text bloku",
+        "blockTitle": "Název bloku",
+        "blockType": "Typ bloku",
+        "chapter": "Kapitola",
+        "chooseChapter": "Vyberte kapitolu",
+        "chooseLesson": "Vyberte lekci",
+        "deleteBlock": "Smazat blok",
+        "deleteLesson": "Smazat lekci",
+        "empty": "Vygenerujte kapitoly a lekce, abyste mohli upravit obsah kurzu.",
+        "lesson": "Lekce",
+        "lessonDuration": "Minuty",
+        "lessonTitle": "Název lekce",
+        "moveDown": "Posunout dolů",
+        "moveUp": "Posunout nahoru",
+        "provenance": {
+          "AI-inferred": "Odvozeno AI",
+          "manual": "Ruční",
+          "mixed": "Smíšené",
+          "source-backed": "Podloženo zdrojem"
+        },
+        "regenerateLesson": "Vygenerovat lekci znovu",
+        "title": "Obsah lekcí"
+      },
+      "blockTypes": {
+        "callout": "Zvýraznění",
+        "check": "Kontrola",
+        "code": "Kód",
+        "exercise": "Cvičení",
+        "explanation": "Vysvětlení",
+        "file": "Soubor/zdroj",
+        "heading": "Nadpis",
+        "image": "Obrázek",
+        "media": "Média",
+        "objective": "Cíl",
+        "quiz": "Kvíz/kontrola",
+        "reflection": "Reflexe",
+        "rich_text": "Bohatý text",
+        "summary": "Shrnutí"
+      },
+      "chapters": {
+        "add": "Přidat kapitolu",
+        "delete": "Smazat",
+        "description": "Popis",
+        "difficulty": {
+          "advanced": "Pokročilé",
+          "introductory": "Úvodní",
+          "intermediate": "Střední"
+        },
+        "generate": "Vygenerovat kapitoly",
+        "generateLesson": "Vygenerovat lekci",
+        "moveDown": "Posunout dolů",
+        "moveUp": "Posunout nahoru",
+        "name": "Název kapitoly",
+        "outcome": "Výsledek učení",
+        "regenerate": "Vygenerovat kapitoly znovu",
+        "regenerateLesson": "Vygenerovat lekci znovu",
+        "status": {
+          "confirmed": "Potvrzeno",
+          "draft": "Návrh"
+        },
+        "title": "Struktura kapitol"
+      },
+      "dashboard": {
+        "courseMeta": "{{mode}} · {{step}} · {{sources}} · {{chapters}} · {{lessons}}",
+        "counts": {
+          "chapters": {
+            "few": "{{count}} kapitoly",
+            "one": "{{count}} kapitola",
+            "other": "{{count}} kapitol"
+          },
+          "lessons": {
+            "few": "{{count}} lekce",
+            "one": "{{count}} lekce",
+            "other": "{{count}} lekcí"
+          },
+          "sources": {
+            "few": "{{count}} zdroje",
+            "one": "{{count}} zdroj",
+            "other": "{{count}} zdrojů"
+          }
+        },
+        "confirmDelete": "Potvrdit smazání",
+        "delete": "Smazat",
+        "edit": "Upravit",
+        "empty": "Zatím tu nejsou žádné kurzy. Vytvořte první kurz z této správy.",
+        "summary": "Spravujte hotové i rozpracované kurzy z jednoho místa.",
+        "title": "Kurzy"
+      },
+      "draft": {
+        "create": "Vytvořit kurz",
+        "current": "Aktuální",
+        "resume": "Pokračovat",
+        "saved": "Kurzy",
+        "summary": "{{sources}} zdrojů, {{lessons}} lekcí",
+        "title": "Název kurzu",
+        "titlePlaceholder": "Pojmenujte kurz"
+      },
+      "errors": {
+        "dismiss": "Zavřít",
+        "generic": "Zkontrolujte formulář a zkuste to znovu.",
+        "modeSaveRequired": "Režim generování kurzu se ještě ukládá. Zkuste to za chvíli znovu."
+      },
+      "eyebrow": "Generátor kurzu",
+      "knowledge": {
+        "add": "Přidat zdroj",
+        "adding": "Přidáváme zdroj...",
+        "binaryPayloadHidden": "Binární obsah souboru je skrytý.",
+        "characterCount": "{{count}} znaků",
+        "chooseFile": "Vybrat soubor",
+        "delete": "Smazat",
+        "deleting": "Mažeme...",
+        "dropFile": "Přetáhněte soubor sem",
+        "editorLoading": "Načítáme Markdown editor...",
+        "fileContent": "Čitelný text souboru",
+        "fileHelp": "URL používají postupně Firecrawl, Tavily a potom Exa jako záložní poskytovatele. PDF, prezentace a obrázky používají LlamaParse. Textové soubory se načtou přímo. Audio a video používají Deepgram.",
+        "fileNamePlaceholder": "Workbook, PDF, prezentace nebo přepis",
+        "filePlaceholder": "Vložte materiál, který soubor obsahuje.",
+        "fileReady": "Soubor je vybraný. Přidejte ho a zpracuje se původní nahraný soubor.",
+        "hidePreview": "Skrýt náhled",
+        "emptyCopy": "Přidejte zdrojový materiál, nebo pokračujte, pokud chcete výukové otázky vyplnit sami.",
+        "generateEmptyCopy": "Před vygenerováním kurzu přidejte zdrojový materiál.",
+        "incompleteWarning": "Některé zdroje se stále zpracovávají. AI návrhy mohou být neúplné, dokud zpracování neskončí.",
+        "notesContent": "Surové poznámky",
+        "notesNamePlaceholder": "Poznámky autora",
+        "notesPlaceholder": "Vložte materiál, který má kurz učit.",
+        "processingCopy": "Připravujeme zdrojový materiál.",
+        "preview": "Náhled",
+        "previewEmpty": "Není dostupný čitelný text.",
+        "previewTitle": "Náhled: {{name}}",
+        "preparing": "Připravujeme soubor...",
+        "providerMissing": "{{provider}} není nakonfigurovaný. Nastavte {{envVar}} a před přidáním tohoto zdroje restartujte vývojový server.",
+        "providerReady": "Zdroj je vybraný. {{provider}} ho po přidání zdroje převede.",
+        "readyCopy": "Zdroj je připravený. Pokračujte a vygenerujeme výukové otázky.",
+        "retry": "Zkusit znovu",
+        "retrying": "Zkoušíme znovu...",
+        "showPreview": "Zobrazit náhled",
+        "sourceName": "Název zdroje",
+        "sourceNameRequired": "Před přidáním zdroj pojmenujte.",
+        "title": "Zdroje",
+        "urlContent": "URL",
+        "urlNamePlaceholder": "Zdrojový web",
+        "urlPlaceholder": "Vložte adresu URL."
+      },
+      "lessons": {
+        "generate": "Vygenerovat lekce",
+        "regenerate": "Vygenerovat lekce znovu",
+        "title": "Lekce"
+      },
+      "loadingCourse": "Načítáme kurz...",
+      "modes": {
+        "assist": {
+          "body": "Průvodce s AI. AI z podkladů předvyplní každý krok, vy ho zkontrolujete a můžete upravit před pokračováním.",
+          "impact": "Hodí se, když chcete mít kontrolu nad každým krokem a AI má udělat první návrh.",
+          "label": "Pomoz mi kurz sestavit"
+        },
+        "generate": {
+          "action": "Vygenerovat kurz",
+          "body": "Plná tvorba. Přidáte zdrojový materiál a aplikace z něj vyplní výukové otázky, témata, cílového studenta, kapitoly i lekce.",
+          "building": "Generujeme kurz...",
+          "impact": "Aplikace plánovací kroky vyplní automaticky; pořád se k nim můžete vrátit jako k přeskočeným krokům.",
+          "label": "Vygeneruj kurz za mě"
+        },
+        "help": "Vyberte, zda má AI kurz vygenerovat předem, nebo vám pomáhat krok za krokem.",
+        "legend": "Režim tvorby kurzu",
+        "locked": "Režim je po vygenerování lekcí uzamčený."
+      },
+      "navigation": {
+        "back": "Zpět",
+        "blockedReasons": {
+          "blockingFinding": "Vyřešte blokující zjištění z kontroly: {{title}}",
+          "chaptersRequired": "Před pokračováním přidejte nebo vygenerujte kapitoly.",
+          "chapterConfirmationRequired": "Před pokračováním potvrďte strukturu kapitol.",
+          "fullCourseGenerationRequired": "Před kontrolou přeskočených plánovacích kroků vygenerujte kurz.",
+          "generatedTopicsRequired": "Před pokračováním vygenerujte témata.",
+          "lessonsRequired": "Před náhledem vygenerujte nebo přidejte lekci.",
+          "questionsRequired": "Před pokračováním zodpovězte povinné výukové otázky.",
+          "sourceRequired": "Před vygenerováním kurzu přidejte zdrojový materiál.",
+          "targetLearnerRequired": "Před pokračováním potvrďte použitelného cílového studenta.",
+          "topicsRequired": "Před pokračováním přidejte alespoň jedno téma."
+        },
+        "continue": "Pokračovat",
+        "completed": "Dokončeno",
+        "current": "Aktuální krok",
+        "label": "Navigace průvodcem",
+        "locked": "Zamčeno",
+        "next": "Další",
+        "skipped": "Přeskočeno",
+        "upcoming": "Další krok"
+      },
+      "questions": {
+        "audience": "Cílové publikum",
+        "avoid": "Čemu se má kurz vyhnout?",
+        "depth": "Hloubka kurzu",
+        "generateRequired": "Režim generování potřebuje před návrhem témat výsledek, publikum a praxi.",
+        "outcome": "Výsledek učení",
+        "practice": "Styl praxe",
+        "prior": "Vstupní znalosti",
+        "strict": "Používat jen tvrzení podložená zdroji",
+        "title": "Výukové otázky"
+      },
+      "review": {
+        "dismiss": "Zahodit",
+        "empty": "Zatím nejsou žádná zjištění z kontroly.",
+        "retryRun": "Zkusit běh znovu",
+        "resolve": "Vyřešit",
+        "severity": {
+          "blocking": "Blokující",
+          "info": "Informace",
+          "warning": "Varování"
+        },
+        "runStatuses": {
+          "applied": "Použito",
+          "cancelled": "Zrušeno",
+          "failed": "Selhalo",
+          "needs_review": "Ke kontrole",
+          "queued": "Ve frontě",
+          "running": "Probíhá"
+        },
+        "runs": {
+          "chapter_generation": "Kapitoly",
+          "lesson_generation": "Lekce",
+          "target_learner_generation": "Cílový student",
+          "teaching_quality_review": "Kontrola kvality",
+          "topic_generation": "Témata"
+        },
+        "status": {
+          "dismissed": "Zahozeno",
+          "open": "Otevřeno",
+          "resolved": "Vyřešeno"
+        },
+        "target": "{{target}} - {{step}}",
+        "targetTypes": {
+          "block": "Blok",
+          "chapter": "Kapitola",
+          "course": "Kurz",
+          "lesson": "Lekce",
+          "source": "Zdroj",
+          "topic": "Téma"
+        },
+        "title": "Kontrola"
+      },
+      "preview": {
+        "open": "Náhled kurzu",
+        "title": "Interní náhled"
+      },
+      "sourceTypes": {
+        "file": "Soubor",
+        "notes": "Poznámky",
+        "url": "URL"
+      },
+      "selected": "Vybráno",
+      "sourceStatuses": {
+        "deleted": "Smazáno",
+        "failed": "Vyžaduje opakování",
+        "partially_processed": "Částečně připraveno",
+        "processed": "Připraveno",
+        "processing": "Zpracovává se",
+        "queued": "Ve frontě",
+        "uploaded": "Nahráno",
+        "unsupported": "Vyžaduje text"
+      },
+      "steps": {
+        "builder": "Lekce",
+        "chapters": "Kapitoly",
+        "knowledge": "Zdroje",
+        "lessons": "Lekce",
+        "mode": "Režim",
+        "preview": "Náhled",
+        "questions": "Otázky",
+        "target": "Student",
+        "topics": "Témata"
+      },
+      "summary": "Vytvořte kurz ze zdrojového materiálu, zkontrolujte strukturu a vygenerujte lekce.",
+      "skipToStudio": "Přejít na studio kurzu",
+      "target": {
+        "constraints": "Omezení",
+        "currentKnowledge": "Aktuální znalosti",
+        "generate": "Vygenerovat profil studenta",
+        "motivation": "Motivace",
+        "outcome": "Požadovaný výsledek",
+        "pain": "Hlavní problém",
+        "practiceStyle": "Preferovaný styl praxe",
+        "profile": "Profil studenta",
+        "regenerate": "Vygenerovat profil studenta znovu",
+        "title": "Profil studenta"
+      },
+      "title": "Příprava kurzu",
+      "topics": {
+        "add": "Přidat téma",
+        "addFormLabel": "Přidat téma",
+        "cancel": "Zrušit",
+        "count": "{{count}} témat",
+        "delete": "Smazat",
+        "deleteFormLabel": "Smazat téma {{name}}",
+        "description": "Popis tématu",
+        "editFormLabel": "Upravit téma {{name}}",
+        "generate": "Vygenerovat témata",
+        "generating": "Generujeme témata...",
+        "importance": {
+          "critical": "Kritické",
+          "high": "Vysoké",
+          "low": "Nízké",
+          "medium": "Střední"
+        },
+        "name": "Název tématu",
+        "regenerate": "Vygenerovat témata znovu",
+        "title": "Kontrola témat"
+      }
+    },
+    "common": {
+      "productName": "Coursition"
+    },
+    "languages": {
+      "cs": "Čeština",
+      "en": "English",
+      "switcher": "Jazyk"
+    },
+    "meta": {
+      "description": "Coursition pomáhá autorům proměnit zdrojové materiály v ověřené kurzy.",
+      "title": "Generátor kurzů Coursition"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+expect-cli UX pass result
+
+Command:
+expect-cli -a codex --ci --verbose -u http://localhost:8080/en --target changes --timeout 600000 --output text -y -m "Run a bounded UX pass against this app as a user. Keep it focused enough to finish. Cover: dashboard basics, course creation, adding or using a source URL, adding or using a step URL, browser back/forward routing behavior, and localization basics on the /en route. Do not inspect source code. Report concrete issues only, with repro steps, current URL/path where relevant, observed vs expected behavior, and any visible console/network failures. Stop after the scoped pass is complete or when blocked."
+
+Observed outcome:
+- The command started and remained running silently.
+- No stdout or stderr was emitted to tee during the run.
+- It remained active past the requested internal timeout of 600000 ms.
+- The exec session eventually ended with code -1.
+- No UX findings were produced by expect-cli.

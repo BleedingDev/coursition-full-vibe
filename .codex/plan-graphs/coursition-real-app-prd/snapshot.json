@@ -1,0 +1,877 @@
+{
+  "generated_at": "2026-06-02T13:19:36.460992+00:00",
+  "graph_id": "coursition-real-app-prd",
+  "plan_set_hash": "ac0b810c0b",
+  "selection_hash": "172475c7b9",
+  "plan_count": 8,
+  "edge_count": 11,
+  "plans_root": ".codex/plans",
+  "selected_globs": ["*.plan.md"],
+  "selected_plan_paths": [
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/01-production-foundation.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/02-durable-domain-model.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/03-real-knowledge-ingestion.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/04-real-ai-generation.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/05-real-course-studio-ui.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/06-real-course-builder.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/07-real-ai-review-provenance.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/08-real-acceptance-and-operations.plan.md"
+  ],
+  "edges": [
+    {
+      "source": "01-production-foundation",
+      "target": "02-durable-domain-model"
+    },
+    {
+      "source": "02-durable-domain-model",
+      "target": "03-real-knowledge-ingestion"
+    },
+    {
+      "source": "02-durable-domain-model",
+      "target": "06-real-course-builder"
+    },
+    {
+      "source": "03-real-knowledge-ingestion",
+      "target": "04-real-ai-generation"
+    },
+    {
+      "source": "03-real-knowledge-ingestion",
+      "target": "05-real-course-studio-ui"
+    },
+    {
+      "source": "04-real-ai-generation",
+      "target": "05-real-course-studio-ui"
+    },
+    {
+      "source": "04-real-ai-generation",
+      "target": "07-real-ai-review-provenance"
+    },
+    {
+      "source": "06-real-course-builder",
+      "target": "07-real-ai-review-provenance"
+    },
+    {
+      "source": "05-real-course-studio-ui",
+      "target": "08-real-acceptance-and-operations"
+    },
+    {
+      "source": "06-real-course-builder",
+      "target": "08-real-acceptance-and-operations"
+    },
+    {
+      "source": "07-real-ai-review-provenance",
+      "target": "08-real-acceptance-and-operations"
+    }
+  ],
+  "plans": [
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/01-production-foundation.plan.md",
+      "slug": "01-production-foundation",
+      "name": "production-foundation",
+      "overview": "Replace the current prototype-only foundation with real UltraModern server capability, BetterAuth ownership, durable persistence, object storage, runtime schemas, Effect workflow services, and provider configuration required before any source, AI, or builder work can be considered real.",
+      "todos": [
+        {
+          "id": "install-production-dependencies",
+          "content": "Add and configure the real dependencies for BetterAuth, database access, object storage, runtime schemas, Effect workflows, provider HTTP clients, and Modern BFF routes.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "enable-bff-entrypoints",
+          "content": "Create Modern BFF or server action entrypoints for authenticated Coursition operations and wire them into the UltraModern app without bypassing SSR.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "configure-betterauth",
+          "content": "Implement BetterAuth login, session lookup, protected route behavior, and ownership checks for course drafts, source assets, AI runs, and previews.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "configure-durable-database",
+          "content": "Add the real database schema, migrations, connection management, and transaction boundaries for Coursition records.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "configure-object-storage",
+          "content": "Add real object storage for uploaded source assets, derived documents, transcripts, generated outputs, and previewable artifacts.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "add-runtime-schemas",
+          "content": "Define runtime schemas for API inputs, storage records, provider outputs, generated course patches, and Course Builder block payloads.",
+          "status": "pending",
+          "ordinal": 6
+        },
+        {
+          "id": "add-effect-service-layer",
+          "content": "Add Effect based services for auth context, draft repository, source repository, ingestion workflows, AI workflows, storage, provider calls, retries, and typed errors.",
+          "status": "pending",
+          "ordinal": 7
+        },
+        {
+          "id": "remove-prototype-data-contracts",
+          "content": "Remove demo records, internal mock provider values, translation-key generated content fields, local-only save timers, and sample source arrays from the production contract path.",
+          "status": "pending",
+          "ordinal": 8
+        },
+        {
+          "id": "add-foundation-gates",
+          "content": "Add quality gates proving auth, persistence, schemas, storage, and BFF endpoints are real and fail loudly when required provider or storage configuration is missing.",
+          "status": "pending",
+          "ordinal": 9
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/02-durable-domain-model.plan.md",
+      "slug": "02-durable-domain-model",
+      "name": "durable-domain-model",
+      "overview": "Convert the PRD-shaped TypeScript sketch into validated durable data contracts for Course Drafts, wizard sessions, sources, chunks, AI runs, topics, target learners, chapters, lessons, blocks, findings, provenance, and generated content patches.",
+      "todos": [
+        {
+          "id": "split-static-copy-from-content",
+          "content": "Replace TranslationKey fields for user and AI generated content with persisted localized content values while keeping translation keys only for static interface labels.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "model-course-draft-lifecycle",
+          "content": "Extend Course Draft records with owner user id, draft status, created and updated timestamps, versioning, autosave metadata, optional target learner, and current wizard session.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "model-wizard-session",
+          "content": "Persist wizard step state, AI involvement mode, guided question answers, mode-specific required input state, source processing caveats, and resume metadata.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "model-source-records",
+          "content": "Extend Source Asset, Derived Source Document, Knowledge Chunk, and Source Reference records with real content, storage keys, MIME data, byte sizes, checksums, offsets, provider job ids, retry data, and processing metadata.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "model-ai-run-records",
+          "content": "Extend AI Run records with structured inputs and outputs, provider request ids, prompt versions, selected chunks, lifecycle timestamps, validation errors, cost metadata, retry lineage, and application patches.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "model-builder-content",
+          "content": "Define durable Course Builder chapters, lessons, blocks, block ordering, media references, quiz data, exercise data, code blocks, reflections, summaries, manual edit markers, and save versions.",
+          "status": "pending",
+          "ordinal": 6
+        },
+        {
+          "id": "model-review-and-provenance",
+          "content": "Define AI Finding, source coverage, teaching quality, provenance classification, source reference, dismissed and resolved finding state, and recomputation trigger contracts.",
+          "status": "pending",
+          "ordinal": 7
+        },
+        {
+          "id": "implement-schema-validation",
+          "content": "Implement runtime validation for every persisted record and every inbound or outbound API payload used by the course generator.",
+          "status": "pending",
+          "ordinal": 8
+        },
+        {
+          "id": "add-contract-gates",
+          "content": "Add tests and validation commands that reject demo records, internal mock providers, generated content in locale files, missing ownership fields, and invalid AI output patches.",
+          "status": "pending",
+          "ordinal": 9
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/03-real-knowledge-ingestion.plan.md",
+      "slug": "03-real-knowledge-ingestion",
+      "name": "real-knowledge-ingestion",
+      "overview": "Implement real Knowledge Base ingestion for uploaded files, URLs, and raw notes using durable source records, object storage, asynchronous processing, LlamaParse, Deepgram, URL cleanup, chunking, retries, previews, and continue-without-waiting behavior.",
+      "todos": [
+        {
+          "id": "attach-sources-to-drafts",
+          "content": "Implement authenticated source intake that requires an existing Course Draft and stores uploaded files, URLs, and raw notes under the creator owned draft.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "implement-file-upload-storage",
+          "content": "Store original uploaded files in real object storage with MIME type, byte size, checksum, storage key, upload status, and ownership metadata.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "implement-llamaparse-documents",
+          "content": "Process PDFs and supported document or slide files through LlamaParse Cloud and store Markdown outputs with page or slide references when available.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "implement-deepgram-media",
+          "content": "Process audio and video files through Deepgram transcription and store timestamped transcript derived documents.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "implement-image-processing",
+          "content": "Process supported image files through the configured real document or vision extraction provider and store extracted text or description outputs with references.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "implement-url-ingestion",
+          "content": "Fetch real URLs, clean main content, convert it into Markdown like derived documents, and preserve URL metadata and retrieval errors.",
+          "status": "pending",
+          "ordinal": 6
+        },
+        {
+          "id": "implement-raw-note-ingestion",
+          "content": "Store raw pasted notes as source assets and derived source documents without treating them as static translation copy.",
+          "status": "pending",
+          "ordinal": 7
+        },
+        {
+          "id": "implement-async-processing",
+          "content": "Queue and run asynchronous source processing with queued, processing, processed, partially processed, failed, unsupported, deleted, retry, and failure metadata states.",
+          "status": "pending",
+          "ordinal": 8
+        },
+        {
+          "id": "implement-knowledge-chunking",
+          "content": "Chunk derived documents into real Knowledge Chunks containing content, offsets, page, slide, timestamp, heading path, quality, and chunking strategy metadata.",
+          "status": "pending",
+          "ordinal": 9
+        },
+        {
+          "id": "implement-source-actions",
+          "content": "Implement preview processed output, delete source, retry failed processing, view processing details, continue, and continue without waiting through real backend mutations.",
+          "status": "pending",
+          "ordinal": 10
+        },
+        {
+          "id": "add-real-ingestion-gates",
+          "content": "Add real provider and storage validation that proves ingestion calls configured providers and fails loudly rather than substituting provider fakes.",
+          "status": "pending",
+          "ordinal": 11
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/04-real-ai-generation.plan.md",
+      "slug": "04-real-ai-generation",
+      "name": "real-ai-generation",
+      "overview": "Implement durable real AI workflows for topics, target learner, chapters, lessons, checks, review, validation, retries, and safe application into Course Builder using actual configured model providers and processed Knowledge Chunks.",
+      "todos": [
+        {
+          "id": "configure-ai-provider",
+          "content": "Add real configurable AI provider access for generation and review with required credentials, model selection, request metadata, rate error handling, and no fallback mock provider.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "implement-ai-run-lifecycle",
+          "content": "Persist AI Run creation, queued, running, needs review, applied, failed, cancelled, retry, input selection, provider request ids, token or cost metadata, and failure reasons.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "generate-topics-from-chunks",
+          "content": "Generate structured topic suggestions from processed Knowledge Chunks with source support, difficulty, importance, related chunks, and suggested or accepted or rejected or manual states.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "generate-target-learner",
+          "content": "Generate and critique target learner profiles from accepted topics, source chunks, and guided question answers.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "generate-chapter-structure",
+          "content": "Generate chapter structures from accepted topics, confirmed target learner, and source chunks with outcomes, covered topics, source support, difficulty, lesson count, and structure checks.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "generate-lessons-as-blocks",
+          "content": "Generate full lesson drafts as validated Course Builder blocks including objective, explanation, worked example when appropriate, exercise or check, summary, next step, and source provenance.",
+          "status": "pending",
+          "ordinal": 6
+        },
+        {
+          "id": "generate-assessments-and-practice",
+          "content": "Generate quiz or check blocks, exercise tasks, reflection prompts, code blocks when appropriate, and practice feedback data tied to the target learner and source material.",
+          "status": "pending",
+          "ordinal": 7
+        },
+        {
+          "id": "validate-generated-output",
+          "content": "Validate every AI output against runtime schemas, lesson quality rules, source-only mode, provenance rules, and Course Builder block contracts before application.",
+          "status": "pending",
+          "ordinal": 8
+        },
+        {
+          "id": "apply-ai-patches-safely",
+          "content": "Apply approved AI outputs as durable patches to topics, target learner, chapters, lessons, and blocks without silently overwriting creator edits.",
+          "status": "pending",
+          "ordinal": 9
+        },
+        {
+          "id": "add-real-ai-gates",
+          "content": "Add real provider validation proving AI workflows use configured model providers, record durable AI Runs, validate outputs, and fail loudly if provider configuration is missing.",
+          "status": "pending",
+          "ordinal": 10
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/05-real-course-studio-ui.plan.md",
+      "slug": "05-real-course-studio-ui",
+      "name": "real-course-studio-ui",
+      "overview": "Replace local prototype wizard behavior with authenticated, server-backed AI Course Studio UI that creates and resumes real drafts, stores wizard state, controls mode-specific flow, manages real sources, runs AI workflows, and opens real Course Builder drafts.",
+      "todos": [
+        {
+          "id": "load-authenticated-draft",
+          "content": "Load the signed-in creator state and create or resume a real Course Draft before showing source upload or AI generation controls.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "wire-wizard-session",
+          "content": "Replace local active step and draft state with durable wizard session reads, autosave mutations, resume later behavior, disabled states, error states, and server validation.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "implement-ai-mode-workflow",
+          "content": "Persist AI involvement mode and make Generate course for me, Help me build it, and I'll build manually change required questions, AI panel behavior, and navigation.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "wire-knowledge-step",
+          "content": "Connect the Knowledge Base step to real source upload, link, notes, source list, status, preview, delete, retry, details, continue, and continue without waiting operations.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "implement-guided-questions",
+          "content": "Persist required and optional teaching questions including outcome, audience, prerequisites, depth, avoid list, practice style, tone, length, language, assessment, difficulty, examples, and source-only mode.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "implement-topic-review",
+          "content": "Display real generated topics and support manual add, edit, delete, accept, reject, selected count, source support, and AI findings.",
+          "status": "pending",
+          "ordinal": 6
+        },
+        {
+          "id": "implement-target-learner-review",
+          "content": "Display real generated target learner profile and critique, support creator editing, acceptance, confirmation, and findings for vague audience or missing prerequisites.",
+          "status": "pending",
+          "ordinal": 7
+        },
+        {
+          "id": "implement-chapter-review",
+          "content": "Display real generated chapters and support add, delete, rename, edit description, save, reorder, regenerate selected chapter, confirm, and structure warnings.",
+          "status": "pending",
+          "ordinal": 8
+        },
+        {
+          "id": "route-manual-mode",
+          "content": "Make manual mode create a blank durable Course Builder draft and open it without heavy AI generation while keeping passive review available.",
+          "status": "pending",
+          "ordinal": 9
+        },
+        {
+          "id": "remove-local-prototype-state",
+          "content": "Remove component-local duplicate enums, static steps pretending to be server state, absent callbacks, and UI-only status changes from the wizard path.",
+          "status": "pending",
+          "ordinal": 10
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/06-real-course-builder.plan.md",
+      "slug": "06-real-course-builder",
+      "name": "real-course-builder",
+      "overview": "Build the real editable Course Builder backed by persisted course drafts, chapters, lessons, blocks, manual edits, generated AI patches, reordering, save versions, media resources, and internal preview rendering.",
+      "todos": [
+        {
+          "id": "load-builder-draft",
+          "content": "Load generated or blank manual Course Builder drafts from durable storage with authentication and ownership checks.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "implement-course-editing",
+          "content": "Persist course title, language, strict source-only setting, save state, autosave versions, and manual edit metadata.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "implement-chapter-crud",
+          "content": "Add real chapter creation, editing, deletion, reordering, generated metadata display, and save behavior.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "implement-lesson-crud",
+          "content": "Add real lesson creation, editing, deletion, reordering, chapter organization, estimated effort, objective, next step, and save behavior.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "implement-block-editor",
+          "content": "Add persisted block creation, editing, deletion, reordering, and rendering for heading, rich text, callout, image, video or audio reference, file resource, quiz or check, exercise task, code block, reflection prompt, and summary.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "implement-media-resources",
+          "content": "Connect image, video, audio, and file resource blocks to real stored source assets or uploaded builder resources with preview and ownership checks.",
+          "status": "pending",
+          "ordinal": 6
+        },
+        {
+          "id": "preserve-manual-edits",
+          "content": "Track manual edits and prevent AI regeneration, source reanalysis, or review patches from silently overwriting creator changes.",
+          "status": "pending",
+          "ordinal": 7
+        },
+        {
+          "id": "apply-generated-patches",
+          "content": "Apply validated generated lessons and review suggestions into builder records through explicit creator approval.",
+          "status": "pending",
+          "ordinal": 8
+        },
+        {
+          "id": "implement-internal-preview",
+          "content": "Add creator-only preview routing that renders persisted chapters, lessons, and blocks in desktop and mobile layouts without public learner features.",
+          "status": "pending",
+          "ordinal": 9
+        },
+        {
+          "id": "remove-static-builder-seeds",
+          "content": "Remove static builderChapters, translation-key lesson bodies, simulated save timers, inert preview buttons, and local override maps from the production builder path.",
+          "status": "pending",
+          "ordinal": 10
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/07-real-ai-review-provenance.plan.md",
+      "slug": "07-real-ai-review-provenance",
+      "name": "real-ai-review-provenance",
+      "overview": "Implement the persistent AI Review Panel and provenance layer using real AI review runs, source coverage analysis, teaching-quality checks, actionable findings, dismissal and resolution state, and traceable references from generated blocks to source chunks.",
+      "todos": [
+        {
+          "id": "persist-findings",
+          "content": "Persist AI Findings with target step or entity, type, severity, actionable copy, status, source references, created time, resolved time, and recomputation markers.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "run-teaching-quality-review",
+          "content": "Run real teaching-quality review for weak outcomes, missing practice, passive content dumps, chapter sizing, prerequisite order, target learner mismatch, and difficulty mismatch.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "run-source-coverage-review",
+          "content": "Run real source coverage review for unsupported topics, unsupported claims, missing source support, incomplete processing caveats, strict source-only gaps, and AI-inferred content.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "attach-provenance",
+          "content": "Attach provenance classifications and source references to generated lessons and blocks including source asset, derived document, chunk, page, slide, timestamp, and heading path.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "build-review-panel-ui",
+          "content": "Show real findings, accepted and rejected suggestions, explanations, generation actions, regeneration actions, quality checks, and source coverage checks in the right-side panel.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "implement-finding-actions",
+          "content": "Let creators dismiss and resolve findings through backend mutations and prevent resolved findings from immediately reappearing unless underlying content changes.",
+          "status": "pending",
+          "ordinal": 6
+        },
+        {
+          "id": "recompute-after-edits",
+          "content": "Trigger real review recomputation after major source, topic, target learner, chapter, lesson, or block changes.",
+          "status": "pending",
+          "ordinal": 7
+        },
+        {
+          "id": "remove-static-review-state",
+          "content": "Remove static findings, static coverage values, static quality chips, inert resolve buttons, and review copy that implies analysis without a durable AI Run.",
+          "status": "pending",
+          "ordinal": 8
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/08-real-acceptance-and-operations.plan.md",
+      "slug": "08-real-acceptance-and-operations",
+      "name": "real-acceptance-and-operations",
+      "overview": "Prove the completed app through real end-to-end validation, provider configuration checks, production build verification, SSR and browser testing, operational failure handling, and explicit out-of-scope exclusion checks without substituting fixtures, mocks, fakes, or demo workflows.",
+      "todos": [
+        {
+          "id": "add-configuration-audit",
+          "content": "Add a startup or preflight audit that reports required database, auth, storage, LlamaParse, Deepgram, AI provider, and site URL configuration without falling back to fake services.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "add-real-golden-path-e2e",
+          "content": "Add an end-to-end browser test for a signed-in creator creating a course draft, adding real sources, waiting or continuing, generating topics, target learner, chapters, lessons, editing builder content, resolving findings, and opening preview.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "add-real-ingestion-validation",
+          "content": "Add validation that exercises real provider-backed ingestion paths for documents, media, images, URLs, raw notes, unsupported files, delete, retry, preview, and continue without waiting.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "add-real-ai-validation",
+          "content": "Add validation that exercises real AI runs for topics, target learner, chapters, lessons, checks, review, retry, failure handling, safe application, and no silent overwrite.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "add-builder-validation",
+          "content": "Add validation for persisted Course Builder chapter, lesson, block, media, quiz, exercise, code, reflection, summary, reorder, save, preview, and manual edit preservation behavior.",
+          "status": "pending",
+          "ordinal": 5
+        },
+        {
+          "id": "add-ssr-and-browser-validation",
+          "content": "Validate SSR HTML contains real authenticated or unauthenticated states, app routes render with styles, browser console has no runtime errors, and language switching stays native i18n.",
+          "status": "pending",
+          "ordinal": 6
+        },
+        {
+          "id": "add-operational-failure-validation",
+          "content": "Validate missing provider keys, provider errors, failed uploads, failed processing, failed AI runs, and storage errors surface as real product states rather than fake success.",
+          "status": "pending",
+          "ordinal": 7
+        },
+        {
+          "id": "verify-out-of-scope-boundaries",
+          "content": "Verify the implementation did not add sales pages, checkout, public publishing, learner management, certificates, analytics dashboards, public APIs, importers, mobile apps, or enterprise self-host features.",
+          "status": "pending",
+          "ordinal": 8
+        },
+        {
+          "id": "publish-readiness-report",
+          "content": "Produce a concise readiness report with commands run, real provider validations completed, screenshots, remaining blocked configuration if any, and exact product gaps if any remain.",
+          "status": "pending",
+          "ordinal": 9
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "frontier": [
+    {
+      "plan_slug": "01-production-foundation",
+      "plan_name": "production-foundation",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/01-production-foundation.plan.md",
+      "plan_status": "pending",
+      "state": "ready",
+      "blocked_by": [],
+      "active": [
+        {
+          "id": "install-production-dependencies",
+          "content": "Add and configure the real dependencies for BetterAuth, database access, object storage, runtime schemas, Effect workflows, provider HTTP clients, and Modern BFF routes.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "enable-bff-entrypoints",
+          "content": "Create Modern BFF or server action entrypoints for authenticated Coursition operations and wire them into the UltraModern app without bypassing SSR.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "configure-betterauth",
+          "content": "Implement BetterAuth login, session lookup, protected route behavior, and ownership checks for course drafts, source assets, AI runs, and previews.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 9
+    },
+    {
+      "plan_slug": "02-durable-domain-model",
+      "plan_name": "durable-domain-model",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/02-durable-domain-model.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["01-production-foundation"],
+      "active": [
+        {
+          "id": "split-static-copy-from-content",
+          "content": "Replace TranslationKey fields for user and AI generated content with persisted localized content values while keeping translation keys only for static interface labels.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "model-course-draft-lifecycle",
+          "content": "Extend Course Draft records with owner user id, draft status, created and updated timestamps, versioning, autosave metadata, optional target learner, and current wizard session.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "model-wizard-session",
+          "content": "Persist wizard step state, AI involvement mode, guided question answers, mode-specific required input state, source processing caveats, and resume metadata.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 9
+    },
+    {
+      "plan_slug": "08-real-acceptance-and-operations",
+      "plan_name": "real-acceptance-and-operations",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/08-real-acceptance-and-operations.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": [
+        "05-real-course-studio-ui",
+        "06-real-course-builder",
+        "07-real-ai-review-provenance"
+      ],
+      "active": [
+        {
+          "id": "add-configuration-audit",
+          "content": "Add a startup or preflight audit that reports required database, auth, storage, LlamaParse, Deepgram, AI provider, and site URL configuration without falling back to fake services.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "add-real-golden-path-e2e",
+          "content": "Add an end-to-end browser test for a signed-in creator creating a course draft, adding real sources, waiting or continuing, generating topics, target learner, chapters, lessons, editing builder content, resolving findings, and opening preview.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "add-real-ingestion-validation",
+          "content": "Add validation that exercises real provider-backed ingestion paths for documents, media, images, URLs, raw notes, unsupported files, delete, retry, preview, and continue without waiting.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 9
+    },
+    {
+      "plan_slug": "04-real-ai-generation",
+      "plan_name": "real-ai-generation",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/04-real-ai-generation.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["03-real-knowledge-ingestion"],
+      "active": [
+        {
+          "id": "configure-ai-provider",
+          "content": "Add real configurable AI provider access for generation and review with required credentials, model selection, request metadata, rate error handling, and no fallback mock provider.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "implement-ai-run-lifecycle",
+          "content": "Persist AI Run creation, queued, running, needs review, applied, failed, cancelled, retry, input selection, provider request ids, token or cost metadata, and failure reasons.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "generate-topics-from-chunks",
+          "content": "Generate structured topic suggestions from processed Knowledge Chunks with source support, difficulty, importance, related chunks, and suggested or accepted or rejected or manual states.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 10
+    },
+    {
+      "plan_slug": "07-real-ai-review-provenance",
+      "plan_name": "real-ai-review-provenance",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/07-real-ai-review-provenance.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["04-real-ai-generation", "06-real-course-builder"],
+      "active": [
+        {
+          "id": "persist-findings",
+          "content": "Persist AI Findings with target step or entity, type, severity, actionable copy, status, source references, created time, resolved time, and recomputation markers.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "run-teaching-quality-review",
+          "content": "Run real teaching-quality review for weak outcomes, missing practice, passive content dumps, chapter sizing, prerequisite order, target learner mismatch, and difficulty mismatch.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "run-source-coverage-review",
+          "content": "Run real source coverage review for unsupported topics, unsupported claims, missing source support, incomplete processing caveats, strict source-only gaps, and AI-inferred content.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 8
+    },
+    {
+      "plan_slug": "06-real-course-builder",
+      "plan_name": "real-course-builder",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/06-real-course-builder.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["02-durable-domain-model"],
+      "active": [
+        {
+          "id": "load-builder-draft",
+          "content": "Load generated or blank manual Course Builder drafts from durable storage with authentication and ownership checks.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "implement-course-editing",
+          "content": "Persist course title, language, strict source-only setting, save state, autosave versions, and manual edit metadata.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "implement-chapter-crud",
+          "content": "Add real chapter creation, editing, deletion, reordering, generated metadata display, and save behavior.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 10
+    },
+    {
+      "plan_slug": "05-real-course-studio-ui",
+      "plan_name": "real-course-studio-ui",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/05-real-course-studio-ui.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["03-real-knowledge-ingestion", "04-real-ai-generation"],
+      "active": [
+        {
+          "id": "load-authenticated-draft",
+          "content": "Load the signed-in creator state and create or resume a real Course Draft before showing source upload or AI generation controls.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "wire-wizard-session",
+          "content": "Replace local active step and draft state with durable wizard session reads, autosave mutations, resume later behavior, disabled states, error states, and server validation.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "implement-ai-mode-workflow",
+          "content": "Persist AI involvement mode and make Generate course for me, Help me build it, and I'll build manually change required questions, AI panel behavior, and navigation.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 10
+    },
+    {
+      "plan_slug": "03-real-knowledge-ingestion",
+      "plan_name": "real-knowledge-ingestion",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/03-real-knowledge-ingestion.plan.md",
+      "plan_status": "pending",
+      "state": "blocked",
+      "blocked_by": ["02-durable-domain-model"],
+      "active": [
+        {
+          "id": "attach-sources-to-drafts",
+          "content": "Implement authenticated source intake that requires an existing Course Draft and stores uploaded files, URLs, and raw notes under the creator owned draft.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "implement-file-upload-storage",
+          "content": "Store original uploaded files in real object storage with MIME type, byte size, checksum, storage key, upload status, and ownership metadata.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "implement-llamaparse-documents",
+          "content": "Process PDFs and supported document or slide files through LlamaParse Cloud and store Markdown outputs with page or slide references when available.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "completed": 0,
+      "total": 11
+    }
+  ],
+  "errors": [],
+  "warnings": [],
+  "graph_source": "explicit"
+}

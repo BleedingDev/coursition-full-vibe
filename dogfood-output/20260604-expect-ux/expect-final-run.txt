@@ -1,0 +1,4 @@
+expect-cli was invoked against http://localhost:8080/en with a 12 minute outer timeout and
+--timeout 600000. It produced zero bytes of stdout/stderr before the wrapper ended.
+
+No expect-cli UX findings were generated in this run.

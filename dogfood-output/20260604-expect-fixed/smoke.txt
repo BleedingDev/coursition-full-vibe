@@ -1,0 +1,8 @@
+
+ expect v0.0.23  CI · codex · timeout 2m
+
+ Open the app and report whether the dashboard/auth first screen loads. Keep it short.
+ http://localhost:8080
+ Still running… (2m elapsed)
+
+ ✘ Timeout Execution timed out after 2m

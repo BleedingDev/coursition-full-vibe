@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "preset": "presetUltramodern",
+  "strategy": "install",
+  "modernPackages": {
+    "specifier": "3.2.0-ultramodern.83",
+    "packages": [
+      "@modern-js/runtime",
+      "@modern-js/app-tools",
+      "@modern-js/tsconfig",
+      "@modern-js/plugin-i18n",
+      "@modern-js/plugin-tanstack",
+      "@modern-js/plugin-bff",
+      "@modern-js/adapter-rstest"
+    ],
+    "aliases": {
+      "@modern-js/runtime": "@bleedingdev/modern-js-runtime",
+      "@modern-js/app-tools": "@bleedingdev/modern-js-app-tools",
+      "@modern-js/tsconfig": "@bleedingdev/modern-js-tsconfig",
+      "@modern-js/plugin-i18n": "@bleedingdev/modern-js-plugin-i18n",
+      "@modern-js/plugin-tanstack": "@bleedingdev/modern-js-plugin-tanstack",
+      "@modern-js/plugin-bff": "@bleedingdev/modern-js-plugin-bff",
+      "@modern-js/adapter-rstest": "@bleedingdev/modern-js-adapter-rstest"
+    }
+  }
+}

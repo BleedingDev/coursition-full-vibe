@@ -1,0 +1,19 @@
+minimumReleaseAge: 0
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+trustPolicy: no-downgrade
+trustPolicyIgnoreAfter: 1440
+blockExoticSubdeps: true
+engineStrict: true
+pmOnFail: error
+verifyDepsBeforeRun: error
+strictDepBuilds: true
+
+allowBuilds:
+  '@swc/core': true
+  core-js: true
+  esbuild: true
+  lefthook: true
+  msgpackr-extract: true
+  sharp: true
+  workerd: true

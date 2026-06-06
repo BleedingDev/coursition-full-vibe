@@ -1,0 +1,351 @@
+{
+  "coursition": {
+    "app": {
+      "auth": {
+        "createAccount": "Create account",
+        "creatingAccount": "Creating account...",
+        "email": "Email",
+        "emailPlaceholder": "creator@example.com",
+        "modeLabel": "Authentication mode",
+        "name": "Name",
+        "password": "Password",
+        "passwordPlaceholder": "At least 8 characters",
+        "signIn": "Sign in",
+        "signingIn": "Signing in...",
+        "signOut": "Sign out",
+        "signUp": "Sign up",
+        "validation": {
+          "emailInvalid": "Enter a valid email address.",
+          "emailRequired": "Email is required.",
+          "errorPrefix": "Error:",
+          "nameRequired": "Name is required.",
+          "passwordLength": "Use at least 8 characters.",
+          "passwordRequired": "Password is required."
+        }
+      },
+      "builder": {
+        "addBlock": "Add block",
+        "addLesson": "Add lesson",
+        "blockBody": "Block body",
+        "blockTitle": "Block title",
+        "blockType": "Block type",
+        "chapter": "Chapter",
+        "chooseChapter": "Choose chapter",
+        "chooseLesson": "Choose lesson",
+        "deleteBlock": "Delete block",
+        "deleteLesson": "Delete lesson",
+        "empty": "Generate chapters and lessons to edit the course content.",
+        "lesson": "Lesson",
+        "lessonDuration": "Minutes",
+        "lessonTitle": "Lesson title",
+        "moveDown": "Move down",
+        "moveUp": "Move up",
+        "provenance": {
+          "AI-inferred": "AI inferred",
+          "manual": "Manual",
+          "mixed": "Mixed",
+          "source-backed": "Source backed"
+        },
+        "regenerateLesson": "Regenerate lesson",
+        "title": "Lesson content"
+      },
+      "blockTypes": {
+        "callout": "Callout",
+        "check": "Check",
+        "code": "Code",
+        "exercise": "Exercise",
+        "explanation": "Explanation",
+        "file": "File/resource",
+        "heading": "Heading",
+        "image": "Image",
+        "media": "Media",
+        "objective": "Objective",
+        "quiz": "Quiz/check",
+        "reflection": "Reflection",
+        "rich_text": "Rich text",
+        "summary": "Summary"
+      },
+      "chapters": {
+        "add": "Add chapter",
+        "delete": "Delete",
+        "description": "Description",
+        "difficulty": {
+          "advanced": "Advanced",
+          "introductory": "Introductory",
+          "intermediate": "Intermediate"
+        },
+        "generate": "Generate chapters",
+        "generateLesson": "Generate lesson",
+        "moveDown": "Move down",
+        "moveUp": "Move up",
+        "name": "Chapter name",
+        "outcome": "Learning outcome",
+        "regenerate": "Regenerate chapters",
+        "regenerateLesson": "Regenerate lesson",
+        "status": {
+          "confirmed": "Confirmed",
+          "draft": "Draft"
+        },
+        "title": "Chapter structure"
+      },
+      "dashboard": {
+        "courseMeta": "{{mode}} · {{step}} · {{sources}} · {{chapters}} · {{lessons}}",
+        "counts": {
+          "chapters": {
+            "few": "{{count}} chapters",
+            "one": "{{count}} chapter",
+            "other": "{{count}} chapters"
+          },
+          "lessons": {
+            "few": "{{count}} lessons",
+            "one": "{{count}} lesson",
+            "other": "{{count}} lessons"
+          },
+          "sources": {
+            "few": "{{count}} sources",
+            "one": "{{count}} source",
+            "other": "{{count}} sources"
+          }
+        },
+        "confirmDelete": "Confirm delete",
+        "delete": "Delete",
+        "edit": "Edit",
+        "empty": "No courses yet. Create the first course from this dashboard.",
+        "summary": "Manage all ready and in-progress courses from one place.",
+        "title": "Courses"
+      },
+      "draft": {
+        "create": "Create course",
+        "current": "Current",
+        "resume": "Resume",
+        "saved": "Courses",
+        "summary": "{{sources}} sources, {{lessons}} lessons",
+        "title": "Course title",
+        "titlePlaceholder": "Name the course"
+      },
+      "errors": {
+        "dismiss": "Dismiss",
+        "generic": "Check the form and try again.",
+        "modeSaveRequired": "Course generation mode is still saving. Try again in a moment."
+      },
+      "eyebrow": "Course generator",
+      "knowledge": {
+        "add": "Add source",
+        "adding": "Adding source...",
+        "binaryPayloadHidden": "Binary file payload is hidden.",
+        "characterCount": "{{count}} characters",
+        "chooseFile": "Choose file",
+        "delete": "Delete",
+        "deleting": "Deleting...",
+        "dropFile": "Drop a file here",
+        "editorLoading": "Loading Markdown editor...",
+        "fileContent": "Readable file text",
+        "fileHelp": "URLs use Firecrawl, Tavily, then Exa as fallbacks. PDFs, decks, and images use LlamaParse. Text files are read directly. Audio and video use Deepgram.",
+        "fileNamePlaceholder": "Workbook, PDF, deck, or transcript",
+        "filePlaceholder": "Paste the material this file contains.",
+        "fileReady": "File selected. Add it to process the original upload.",
+        "hidePreview": "Hide preview",
+        "emptyCopy": "Add source material, or continue if you want to answer the teaching questions yourself.",
+        "generateEmptyCopy": "Add source material before generating the course.",
+        "incompleteWarning": "Some sources are still processing. AI suggestions may be incomplete until processing finishes.",
+        "notesContent": "Raw notes",
+        "notesNamePlaceholder": "Creator notes",
+        "notesPlaceholder": "Paste the material this course should teach from.",
+        "processingCopy": "We are preparing your source material.",
+        "preview": "Preview",
+        "previewEmpty": "No readable text is available.",
+        "previewTitle": "{{name}} preview",
+        "preparing": "Preparing file...",
+        "providerMissing": "{{provider}} is not configured. Set {{envVar}} and restart the dev server before adding this source.",
+        "providerReady": "Source selected. {{provider}} will convert it after you add the source.",
+        "readyCopy": "Your source is ready. Continue to generate the teaching questions.",
+        "retry": "Retry",
+        "retrying": "Retrying...",
+        "showPreview": "Show preview",
+        "sourceName": "Source name",
+        "sourceNameRequired": "Name the source before adding it.",
+        "title": "Sources",
+        "urlContent": "URL",
+        "urlNamePlaceholder": "Source website",
+        "urlPlaceholder": "Paste the source URL."
+      },
+      "lessons": {
+        "generate": "Generate lessons",
+        "regenerate": "Regenerate lessons",
+        "title": "Lessons"
+      },
+      "loadingCourse": "Loading course...",
+      "modes": {
+        "assist": {
+          "body": "Guided build. AI prefills each step from the source material, then you review and edit before continuing.",
+          "impact": "Use this when you want control over every step while AI does the first pass.",
+          "label": "Help me build it"
+        },
+        "generate": {
+          "action": "Generate course",
+          "body": "Full build. Add source material and the app fills the teaching questions, topics, learner profile, chapters, and lessons from it.",
+          "building": "Generating course...",
+          "impact": "The app fills the planning steps automatically; you can still revisit them as skipped steps.",
+          "label": "Generate course for me"
+        },
+        "help": "Choose whether AI should generate the course upfront or help you step by step.",
+        "legend": "Course creation mode",
+        "locked": "Mode is locked after lessons are generated."
+      },
+      "navigation": {
+        "back": "Back",
+        "blockedReasons": {
+          "blockingFinding": "Resolve blocking review finding: {{title}}",
+          "chaptersRequired": "Add or generate chapters before continuing.",
+          "chapterConfirmationRequired": "Confirm the chapter structure before continuing.",
+          "fullCourseGenerationRequired": "Generate the course before reviewing skipped planning steps.",
+          "generatedTopicsRequired": "Generate topics before continuing.",
+          "lessonsRequired": "Generate or add a lesson before opening preview.",
+          "questionsRequired": "Answer the required teaching questions before continuing.",
+          "sourceRequired": "Add source material before generating the course.",
+          "targetLearnerRequired": "Confirm a usable target learner before continuing.",
+          "topicsRequired": "Add at least one topic before continuing."
+        },
+        "continue": "Continue",
+        "completed": "Completed",
+        "current": "Current step",
+        "label": "Wizard navigation",
+        "locked": "Locked",
+        "next": "Next",
+        "skipped": "Skipped",
+        "upcoming": "Next"
+      },
+      "questions": {
+        "audience": "Target audience",
+        "avoid": "What should the course avoid?",
+        "depth": "Course depth",
+        "generateRequired": "Generate mode needs outcome, audience, and practice before topic generation.",
+        "outcome": "Learning outcome",
+        "practice": "Practice style",
+        "prior": "Prior knowledge",
+        "strict": "Use only source-backed claims",
+        "title": "Teaching questions"
+      },
+      "review": {
+        "dismiss": "Dismiss",
+        "empty": "No review findings yet.",
+        "retryRun": "Retry run",
+        "resolve": "Resolve",
+        "severity": {
+          "blocking": "Blocking",
+          "info": "Info",
+          "warning": "Warning"
+        },
+        "runStatuses": {
+          "applied": "Applied",
+          "cancelled": "Cancelled",
+          "failed": "Failed",
+          "needs_review": "Review",
+          "queued": "Queued",
+          "running": "Running"
+        },
+        "runs": {
+          "chapter_generation": "Chapters",
+          "lesson_generation": "Lessons",
+          "target_learner_generation": "Target learner",
+          "teaching_quality_review": "Quality review",
+          "topic_generation": "Topics"
+        },
+        "status": {
+          "dismissed": "Dismissed",
+          "open": "Open",
+          "resolved": "Resolved"
+        },
+        "target": "{{target}} - {{step}}",
+        "targetTypes": {
+          "block": "Block",
+          "chapter": "Chapter",
+          "course": "Course",
+          "lesson": "Lesson",
+          "source": "Source",
+          "topic": "Topic"
+        },
+        "title": "Review"
+      },
+      "preview": {
+        "open": "Preview course",
+        "title": "Internal preview"
+      },
+      "sourceTypes": {
+        "file": "File",
+        "notes": "Notes",
+        "url": "URL"
+      },
+      "selected": "Selected",
+      "sourceStatuses": {
+        "deleted": "Deleted",
+        "failed": "Needs retry",
+        "partially_processed": "Partially ready",
+        "processed": "Ready",
+        "processing": "Processing",
+        "queued": "Queued",
+        "uploaded": "Uploaded",
+        "unsupported": "Needs text"
+      },
+      "steps": {
+        "builder": "Lessons",
+        "chapters": "Chapters",
+        "knowledge": "Sources",
+        "lessons": "Lessons",
+        "mode": "Mode",
+        "preview": "Preview",
+        "questions": "Questions",
+        "target": "Learner",
+        "topics": "Topics"
+      },
+      "summary": "Create a course from source material, review the structure, and generate lessons.",
+      "skipToStudio": "Skip to course studio",
+      "target": {
+        "constraints": "Constraints",
+        "currentKnowledge": "Current knowledge",
+        "generate": "Generate learner profile",
+        "motivation": "Motivation",
+        "outcome": "Desired outcome",
+        "pain": "Main pain/problem",
+        "practiceStyle": "Preferred practice style",
+        "profile": "Learner profile",
+        "regenerate": "Regenerate learner profile",
+        "title": "Learner profile"
+      },
+      "title": "Course preparation flow",
+      "topics": {
+        "add": "Add topic",
+        "addFormLabel": "Add a topic",
+        "cancel": "Cancel",
+        "count": "{{count}} topics",
+        "delete": "Delete",
+        "deleteFormLabel": "Delete topic {{name}}",
+        "description": "Topic description",
+        "editFormLabel": "Edit topic {{name}}",
+        "generate": "Generate topics",
+        "generating": "Generating topics...",
+        "importance": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium"
+        },
+        "name": "Topic name",
+        "regenerate": "Regenerate topics",
+        "title": "Topic review"
+      }
+    },
+    "common": {
+      "productName": "Coursition"
+    },
+    "languages": {
+      "cs": "Čeština",
+      "en": "English",
+      "switcher": "Language"
+    },
+    "meta": {
+      "description": "Coursition helps creators turn source material into reviewed courses.",
+      "title": "Coursition course generator"
+    }
+  }
+}
