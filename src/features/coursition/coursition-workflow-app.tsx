@@ -1,4 +1,5 @@
 import { Link, useNavigate } from '@modern-js/plugin-tanstack/runtime';
+import { Badge } from '@techsio/ui-kit/atoms/badge';
 import { Button } from '@techsio/ui-kit/atoms/button';
 import { Icon } from '@techsio/ui-kit/atoms/icon';
 import { Input } from '@techsio/ui-kit/atoms/input';
@@ -82,12 +83,47 @@ interface MarkdownEditorClientProps {
   value: string;
 }
 
+interface SourceMarkdownToolbarComponents {
+  BlockTypeSelect: ComponentType;
+  BoldItalicUnderlineToggles: ComponentType;
+  CreateLink: ComponentType;
+  InsertThematicBreak: ComponentType;
+  ListsToggle: ComponentType;
+  Separator: ComponentType;
+  UndoRedo: ComponentType;
+}
+
+const SourceMarkdownToolbarContents = ({
+  BlockTypeSelect,
+  BoldItalicUnderlineToggles,
+  CreateLink,
+  InsertThematicBreak,
+  ListsToggle,
+  Separator,
+  UndoRedo,
+}: SourceMarkdownToolbarComponents) => (
+  <>
+    <UndoRedo />
+    <Separator />
+    <BlockTypeSelect />
+    <BoldItalicUnderlineToggles />
+    <ListsToggle />
+    <CreateLink />
+    <InsertThematicBreak />
+  </>
+);
+
+const createSourceMarkdownToolbarContents = (components: SourceMarkdownToolbarComponents) =>
+  SourceMarkdownToolbarContents.bind(null, components);
+
 interface NavigationStepVisualState {
   isComplete: boolean;
   isCurrent: boolean;
   isReady: boolean;
   isStale: boolean;
 }
+
+type FileReaderResume = (effect: Effect.Effect<string, CoursitionUiEffectError>) => void;
 
 const workflowApiPath = '/api/coursition/workflow';
 const sourceTypes = ['notes', 'url', 'file'] as const satisfies readonly SourceType[];
@@ -98,19 +134,6 @@ const languagePreferences = [
   'cs',
 ] as const satisfies readonly CourseLanguagePreference[];
 const sourceDataUrlPattern = /^data:[^,]+;base64,/u;
-const readableFileExtensions = new Set([
-  'csv',
-  'json',
-  'md',
-  'mdx',
-  'rtf',
-  'text',
-  'tsv',
-  'txt',
-  'xml',
-  'yaml',
-  'yml',
-]);
 
 const labelClass = 'text-sm font-semibold text-fg-primary';
 const mutedTextClass = 'text-sm text-fg-secondary';
@@ -118,11 +141,6 @@ const tinyMetaClass = 'text-xs font-medium tracking-normal text-fg-secondary';
 const errorTextClass = 'text-sm font-semibold text-button-bg-danger-active';
 const cardClass = 'rounded-md bg-base p-3';
 const panelClass = 'grid gap-3';
-
-const fileExtension = (name: string) => {
-  const extension = name.split('.').pop();
-  return typeof extension === 'string' ? extension.toLowerCase() : '';
-};
 
 const formString = (formData: FormData, field: string) => {
   const value = formData.get(field);
@@ -149,6 +167,30 @@ const shouldShowSourcePreview = (content: string) =>
 const canPreviewSource = (source: SourceAsset) =>
   (source.status === 'processed' || source.status === 'partially_processed') &&
   shouldShowSourcePreview(source.content);
+
+const sourceStatusBadgeVariant = (status: SourceAsset['status']) => {
+  switch (status) {
+    case 'processed': {
+      return 'success';
+    }
+    case 'partially_processed':
+    case 'queued':
+    case 'processing':
+    case 'uploaded': {
+      return 'warning';
+    }
+    case 'failed':
+    case 'unsupported': {
+      return 'danger';
+    }
+    case 'deleted': {
+      return 'secondary';
+    }
+    default: {
+      return 'info';
+    }
+  }
+};
 
 const isAiMode = (value: string): value is AiMode => value === 'generate' || value === 'assist';
 
@@ -376,41 +418,40 @@ const workflowRequestEffect = (
     return yield* foreignPromise(() => response.json() as Promise<WorkflowSnapshot>);
   });
 
-const base64FromArrayBuffer = (buffer: ArrayBuffer) => {
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 32_768;
-  let binary = '';
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    const chunk = bytes.subarray(index, index + chunkSize);
-    binary += String.fromCodePoint(...chunk);
-  }
-  return globalThis.btoa(binary);
-};
+const fileReadFailureMessage = 'Unable to read selected file.';
 
-const readFileAsDataUrlEffect = (file: File) =>
-  Effect.gen(function* readFileAsDataUrlProgram() {
-    const buffer = yield* foreignPromise(() => file.arrayBuffer());
-    const mimeType = file.type.length > 0 ? file.type : 'application/octet-stream';
-    return `data:${mimeType};base64,${base64FromArrayBuffer(buffer)}`;
+const fileReadFailure = (cause: unknown) =>
+  new CoursitionUiEffectError({
+    cause,
+    message: errorMessageFrom(cause, fileReadFailureMessage),
   });
 
-const filePayloadFromEffect = (file: File) => {
-  const extension = fileExtension(file.name);
-  if (readableFileExtensions.has(extension)) {
-    return foreignPromise(() => file.text()).pipe(
-      Effect.map((content) => ({
-        content,
-        sizeLabel: `${content.length} chars`,
-      })),
-    );
-  }
-  return readFileAsDataUrlEffect(file).pipe(
+const readFileAsDataUrlEffect = (file: File) =>
+  Effect.callback((resume: FileReaderResume) => {
+    const reader = new FileReader();
+    const fail = (cause: unknown) => resume(Effect.fail(fileReadFailure(cause)));
+    reader.addEventListener('error', () => fail(reader.error ?? new Error(fileReadFailureMessage)));
+    reader.addEventListener('load', () => {
+      if (typeof reader.result === 'string') {
+        resume(Effect.succeed(reader.result));
+        return;
+      }
+      fail(new Error(fileReadFailureMessage));
+    });
+    reader.readAsDataURL(file);
+    return Effect.sync(() => {
+      if (reader.readyState === FileReader.LOADING) {
+        reader.abort();
+      }
+    });
+  }).pipe(
     Effect.map((content) => ({
       content,
       sizeLabel: `${file.size} bytes`,
     })),
   );
-};
+
+const filePayloadFromEffect = readFileAsDataUrlEffect;
 
 const TextInputField = ({
   id,
@@ -499,6 +540,16 @@ const MarkdownEditorClient = lazy(() =>
           thematicBreakPlugin,
           toolbarPlugin,
         }): MarkdownEditorModule => {
+          const sourceMarkdownToolbarContents = createSourceMarkdownToolbarContents({
+            BlockTypeSelect,
+            BoldItalicUnderlineToggles,
+            CreateLink,
+            InsertThematicBreak,
+            ListsToggle,
+            Separator,
+            UndoRedo,
+          });
+
           const SourceMarkdownEditor = ({
             onChange,
             placeholder,
@@ -531,17 +582,7 @@ const MarkdownEditorClient = lazy(() =>
                 ? []
                 : [
                     toolbarPlugin({
-                      toolbarContents: () => (
-                        <>
-                          <UndoRedo />
-                          <Separator />
-                          <BlockTypeSelect />
-                          <BoldItalicUnderlineToggles />
-                          <ListsToggle />
-                          <CreateLink />
-                          <InsertThematicBreak />
-                        </>
-                      ),
+                      toolbarContents: sourceMarkdownToolbarContents,
                     }),
                   ]),
             ];
@@ -670,10 +711,7 @@ type PracticeTaskActivity = Extract<GeneratedActivity, { type: 'practice_task' }
 type ScenarioDecisionActivity = Extract<GeneratedActivity, { type: 'scenario_decision' }>;
 type OrderingMatchingActivity = Extract<GeneratedActivity, { type: 'ordering_matching' }>;
 type RubricAnswerActivity = Extract<GeneratedActivity, { type: 'rubric_answer' }>;
-type NotPlayableActivity = Extract<GeneratedActivity, { type: 'not_playable' }>;
-type NotPlayableActivity = Extract<GeneratedActivity, { type: 'not_playable' }>;
 
-// i18n-ignore -- The simple JSX text scanner can mistake this generic interface for rendered text.
 interface ActivityEngineProps<Activity> {
   activity: Activity;
   showPrompt?: boolean;
@@ -714,11 +752,11 @@ const hasText = (value: string) => value.trim().length > 0;
 const hasValidOrderingPositions = (
   items: OrderingMatchingActivity['interaction']['items'],
 ): boolean => {
-  const positions = items.flatMap(function itemCorrectPosition(item) {
-    return typeof item.correctPosition === 'number' && Number.isFinite(item.correctPosition)
+  const positions = items.flatMap((item) =>
+    typeof item.correctPosition === 'number' && Number.isFinite(item.correctPosition)
       ? [item.correctPosition]
-      : [];
-  });
+      : [],
+  );
   if (positions.length !== items.length || positions.length <= 1) {
     return false;
   }
@@ -790,7 +828,7 @@ const incompleteActivityReasonFor = (
       return activity.interaction.criteria.some(hasText) ? null : 'criteria';
     }
     case 'not_playable': {
-      return null;
+      return 'notPlayable';
     }
     default: {
       const unsupportedActivity: never = activity;
@@ -1087,12 +1125,10 @@ const OrderingMatchingEngine = ({
 
   if (interaction.mode === 'matching') {
     const matchLabels = matchLabelsFrom(interaction.items);
-    const allMatched = interaction.items.every(function itemHasSelectedMatch(item) {
-      return (matches[item.id] ?? '') !== '';
-    });
-    const correctMatchCount = interaction.items.filter(function itemHasCorrectMatch(item) {
-      return matches[item.id] === item.matchLabel;
-    }).length;
+    const allMatched = interaction.items.every((item) => (matches[item.id] ?? '') !== '');
+    const correctMatchCount = interaction.items.filter(
+      (item) => matches[item.id] === item.matchLabel,
+    ).length;
 
     return (
       <div className="grid gap-3">
@@ -1197,9 +1233,9 @@ const OrderingMatchingEngine = ({
     const item = itemsById.get(itemId);
     return item === undefined ? [] : [item];
   });
-  const correctOrderCount = orderedItems.filter(function itemHasCorrectPosition(item, index) {
-    return item.correctPosition === index + 1;
-  }).length;
+  const correctOrderCount = orderedItems.filter(
+    (item, index) => item.correctPosition === index + 1,
+  ).length;
 
   return (
     <div className="grid gap-3">
@@ -1369,16 +1405,6 @@ const RubricAnswerEngine = ({
   );
 };
 
-const NotPlayableEngine = ({ activity, t }: ActivityEngineProps<NotPlayableActivity>) => (
-  <div className="grid gap-3">
-    <FeedbackPanel
-      body={`${activity.interaction.reason}\n\n${activity.interaction.feedback}`}
-      title={t('coursition.app.preview.incompleteActivity')}
-      tone="warning"
-    />
-  </div>
-);
-
 const activityPromptFor = (activity: GeneratedActivity): string => {
   switch (activity.type) {
     case 'retrieval_check': {
@@ -1397,7 +1423,13 @@ const activityPromptFor = (activity: GeneratedActivity): string => {
       return activity.interaction.prompt;
     }
     case 'not_playable': {
-      return activity.interaction.prompt;
+      return [
+        activity.interaction.prompt,
+        activity.interaction.reason,
+        activity.interaction.feedback,
+      ]
+        .filter(hasText)
+        .join('\n\n');
     }
     default: {
       const unsupportedActivity: never = activity;
@@ -1441,7 +1473,7 @@ const ActivityPreviewCard = ({
         return <RubricAnswerEngine activity={activity} showPrompt={false} t={t} />;
       }
       case 'not_playable': {
-        return <NotPlayableEngine activity={activity} showPrompt={false} t={t} />;
+        return null;
       }
       default: {
         const unsupportedActivity: never = activity;
@@ -2617,7 +2649,15 @@ export const CoursitionWorkflowApp = ({
                     return (
                       <li className="grid gap-2 rounded-md bg-fill-base p-3" key={source.id}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="text-base font-bold text-fg-primary">{source.name}</h3>
+                          <div className="grid gap-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-base font-bold text-fg-primary">{source.name}</h3>
+                              <Badge size="sm" variant={sourceStatusBadgeVariant(source.status)}>
+                                {t(`coursition.app.sources.statuses.${source.status}`)}
+                              </Badge>
+                            </div>
+                            <p className={tinyMetaClass}>{source.sizeLabel}</p>
+                          </div>
                           <div className="flex flex-wrap gap-2">
                             {canPreview ? (
                               <Button
@@ -2667,6 +2707,11 @@ export const CoursitionWorkflowApp = ({
                             </Button>
                           </div>
                         </div>
+                        {source.failureReason === undefined ? null : (
+                          <p className="rounded-md bg-badge-bg-danger p-2 text-sm font-semibold text-badge-fg-danger">
+                            {source.failureReason}
+                          </p>
+                        )}
                         {canPreview && isPreviewExpanded ? (
                           <div id={previewId}>
                             <SourceMarkdownPreview

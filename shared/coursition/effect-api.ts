@@ -68,11 +68,11 @@ const aiRunTypeSchema = Schema.Literals([
 
 export const sourceReferenceSchema = Schema.Struct({
   heading: Schema.optional(Schema.String),
-  page: Schema.optional(Schema.Number),
+  page: Schema.optional(Schema.Finite),
   position: Schema.String,
-  slide: Schema.optional(Schema.Number),
+  slide: Schema.optional(Schema.Finite),
   sourceAssetId: Schema.String,
-  timestampSeconds: Schema.optional(Schema.Number),
+  timestampSeconds: Schema.optional(Schema.Finite),
 });
 
 export const sourceAssetSchema = Schema.Struct({
@@ -197,7 +197,7 @@ const scenarioDecisionInteractionSchema = Schema.Struct({
 });
 
 const orderingMatchingItemSchema = Schema.Struct({
-  correctPosition: Schema.optional(Schema.Number),
+  correctPosition: Schema.optional(Schema.Finite),
   id: Schema.String,
   matchLabel: Schema.optional(Schema.String),
   text: Schema.String,
@@ -369,13 +369,13 @@ export const courseDraftSchema = Schema.Struct({
 });
 
 export const courseDraftSummarySchema = Schema.Struct({
-  activityCount: Schema.Number,
+  activityCount: Schema.Finite,
   id: Schema.String,
   language: Schema.Literals(['en', 'cs']),
   mode: aiModeSchema,
-  objectiveCount: Schema.Number,
-  sectionCount: Schema.Number,
-  sourceCount: Schema.Number,
+  objectiveCount: Schema.Finite,
+  sectionCount: Schema.Finite,
+  sourceCount: Schema.Finite,
   step: draftStepSchema,
   title: Schema.String,
   updatedAt: Schema.String,

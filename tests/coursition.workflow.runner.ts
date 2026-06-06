@@ -4,6 +4,10 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import effectBff from '../api/effect/index.ts';
+import {
+  generatedActivityFromAxSpec,
+  generateCourseContentWithAi,
+} from '../server/coursition/ai-provider.ts';
 import * as workflowStore from '../server/coursition/store.ts';
 
 const root = process.cwd();
@@ -121,11 +125,213 @@ const czechSourceMaterial = [
   'Účastníci mají procvičit rozhodnutí v modelové situaci, vybavení bezpečnostních pravidel a krátkou zpětnou vazbu.',
 ].join('\n\n');
 
+const wavFixture = Buffer.from(
+  '524946462400000057415645666d74201000000001000100401f0000803e0000020010006461746100000000',
+  'hex',
+);
+
+const dataUrlFor = (mimeType, bytes) => `data:${mimeType};base64,${bytes.toString('base64')}`;
+
+const pdfFixtureFor = (label) => Buffer.from(`%PDF-1.4\n${label}\n%%EOF\n`);
+
 const blueprintFor = (draft) => {
   if (!draft.learningBlueprint) {
     throw new Error('Expected draft.learningBlueprint to be present.');
   }
   return draft.learningBlueprint;
+};
+
+const storePath = () => path.join(process.cwd(), '.coursition-data', 'workflow.json');
+
+const readWorkflowFile = async () => JSON.parse(await fs.readFile(storePath(), 'utf-8'));
+
+const writeWorkflowFile = (storeFile) =>
+  fs.writeFile(storePath(), `${JSON.stringify(storeFile, null, 2)}\n`, 'utf-8');
+
+const courseLanguageFor = (draft) => {
+  const preparation = blueprintFor(draft).coursePreparation;
+  return preparation.languagePreference === 'source'
+    ? preparation.language
+    : preparation.languagePreference;
+};
+
+const firstSourceReferenceFor = (draft) =>
+  draft.knowledgeChunks[0]?.reference ?? {
+    heading: draft.sources.find((source) => source.status === 'processed')?.name ?? draft.title,
+    position: 'source-1',
+    sourceAssetId: draft.sources.find((source) => source.status === 'processed')?.id ?? draft.id,
+  };
+
+const seedAxBlueprint = async (store, ownerId, draftId) => {
+  const snapshot = await store.applyWorkflowAction(ownerId, {
+    action: 'selectDraft',
+    draftId,
+  });
+  const draft = requiredDraft(snapshot.draft);
+  const timestamp = new Date().toISOString();
+  const language = courseLanguageFor(draft);
+  const sourceReference = firstSourceReferenceFor(draft);
+  const objective = {
+    capability:
+      language === 'cs'
+        ? 'Účastník umí použít pravidlo ze zdroje v konkrétním rozhodnutí.'
+        : 'Learner can apply the source rule in a concrete workflow decision.',
+    id: `objective_${draft.id}_seeded_1`,
+    sourceConfidence: 'high',
+    sourceReferences: [sourceReference],
+    sourceSupport: 'source_backed',
+    status: 'generated',
+    title: language === 'cs' ? 'Rozhodnutí podle zdroje' : 'Source-backed decision',
+    topicName: language === 'cs' ? 'Zdrojové pravidlo' : 'Source rule',
+    updatedAt: timestamp,
+  };
+  const brief = {
+    feedbackGuidance:
+      language === 'cs'
+        ? 'Zpětná vazba musí navázat volbu na konkrétní zdrojový signál.'
+        : 'Feedback must connect the choice to a concrete source signal.',
+    id: `activity_brief_${draft.id}_seeded_1`,
+    instructions:
+      language === 'cs'
+        ? 'Vyber nejlepší rozhodnutí pro modelovou situaci.'
+        : 'Choose the best decision for the scenario.',
+    learnerAction:
+      language === 'cs'
+        ? 'Rozpoznat správný krok a krátce ho zdůvodnit.'
+        : 'Recognize the right move and explain it briefly.',
+    objectiveId: objective.id,
+    objectiveIds: [objective.id],
+    sourceConfidence: 'high',
+    sourceReferences: [sourceReference],
+    status: 'generated',
+    successCriteria:
+      language === 'cs'
+        ? 'Odpověď volí zdrojově podložený krok a uvádí důvod.'
+        : 'The answer selects a source-backed move and gives the reason.',
+    title: language === 'cs' ? 'Kontrola rozhodnutí' : 'Decision check',
+    type: 'retrieval_check',
+    updatedAt: timestamp,
+  };
+  const activity = generatedActivityFromAxSpec(brief, {
+    choices:
+      language === 'cs'
+        ? [
+            {
+              feedback: 'Správně: volba nejdřív ukotví odpovědnost a důkaz.',
+              isCorrect: true,
+              text: 'Zachytit důkaz, určit vlastníka a pak rozhodnout další krok.',
+            },
+            {
+              feedback: 'Tahle volba přeskočí zdrojový signál a ztratí odpovědnost.',
+              isCorrect: false,
+              text: 'Přejít rovnou k eskalaci a důkaz doplnit později.',
+            },
+          ]
+        : [
+            {
+              feedback: 'Correct: this preserves ownership and evidence before escalation.',
+              isCorrect: true,
+              text: 'Capture evidence, name the owner, and then choose the next step.',
+            },
+            {
+              feedback: 'This skips the source signal and loses the ownership handoff.',
+              isCorrect: false,
+              text: 'Escalate first and reconstruct the evidence later.',
+            },
+          ],
+    explanationPrompt:
+      language === 'cs'
+        ? 'Vysvětli jednou větou, který zdrojový signál rozhodl.'
+        : 'Explain in one sentence which source signal decided it.',
+    feedback:
+      language === 'cs'
+        ? 'Porovnej volbu se zdrojovým pravidlem.'
+        : 'Compare the choice with the source-backed rule.',
+    objectiveTitle: objective.title,
+    question:
+      language === 'cs'
+        ? 'Který krok nejlépe navazuje na zdrojové pravidlo?'
+        : 'Which move best follows the source rule?',
+    type: 'retrieval_check',
+  });
+  const nextBlueprint = {
+    activityBriefs: [brief],
+    assumptions: [],
+    coursePreparation: {
+      ...draft.learningBlueprint.coursePreparation,
+      language,
+    },
+    createdAt: timestamp,
+    generatedActivities: [activity],
+    objectives: [objective],
+    sourceCoverage: 'source_backed',
+    updatedAt: timestamp,
+  };
+  const storeFile = await readWorkflowFile();
+  const draftIndex = storeFile.drafts.findIndex(
+    (candidate) => candidate.id === draft.id && candidate.ownerId === ownerId,
+  );
+  if (draftIndex === -1) {
+    throw new Error('Expected draft in workflow store.');
+  }
+  storeFile.drafts[draftIndex] = {
+    ...storeFile.drafts[draftIndex],
+    courseContent: {
+      ...storeFile.drafts[draftIndex].courseContent,
+      status: 'stale',
+      updatedAt: timestamp,
+    },
+    findings: [],
+    learningBlueprint: nextBlueprint,
+    step: 'activityPlan',
+    updatedAt: timestamp,
+  };
+  await writeWorkflowFile(storeFile);
+  const nextSnapshot = await store.applyWorkflowAction(ownerId, { action: 'selectDraft', draftId });
+  return requiredDraft(nextSnapshot.draft);
+};
+
+const seedCourseContent = async (store, ownerId, draftId, step = 'courseContent') => {
+  const snapshot = await store.applyWorkflowAction(ownerId, {
+    action: 'selectDraft',
+    draftId,
+  });
+  const draft = requiredDraft(snapshot.draft);
+  const result = await generateCourseContentWithAi(draft);
+  const timestamp = new Date().toISOString();
+  const storeFile = await readWorkflowFile();
+  const draftIndex = storeFile.drafts.findIndex(
+    (candidate) => candidate.id === draft.id && candidate.ownerId === ownerId,
+  );
+  if (draftIndex === -1) {
+    throw new Error('Expected draft in workflow store.');
+  }
+  storeFile.drafts[draftIndex] = {
+    ...storeFile.drafts[draftIndex],
+    aiRuns: [
+      ...(storeFile.drafts[draftIndex].aiRuns ?? []),
+      {
+        appliedAt: timestamp,
+        createdAt: timestamp,
+        draftId: draft.id,
+        id: `airun_${draft.id}_seeded_content`,
+        inputSummary: `course_content_generation for ${draft.title}`,
+        model: result.model,
+        outputText: result.text,
+        provider: result.provider,
+        status: 'applied',
+        type: 'course_content_generation',
+        updatedAt: timestamp,
+      },
+    ],
+    courseContent: result.value,
+    findings: [],
+    step,
+    updatedAt: timestamp,
+  };
+  await writeWorkflowFile(storeFile);
+  const nextSnapshot = await store.applyWorkflowAction(ownerId, { action: 'selectDraft', draftId });
+  return requiredDraft(nextSnapshot.draft);
 };
 
 const openBlockingFindingCount = (draft) =>
@@ -242,10 +448,7 @@ const sourceGrounded = (draft) => {
 };
 
 const generateLearningBlueprint = (store, ownerId, draftId) =>
-  workflow(store, ownerId, {
-    action: 'generateLearningBlueprint',
-    draftId,
-  });
+  seedAxBlueprint(store, ownerId, draftId);
 
 const generateCourseContent = (store, ownerId, draftId) =>
   workflow(store, ownerId, {
@@ -464,10 +667,28 @@ const scenarios = {
         draftId: draft.id,
         mode: 'generate',
       });
-      await addNotesSource(store, 'owner-source-first-generate', draft.id, sourceMaterial);
+      const sourcedDraft = await addNotesSource(
+        store,
+        'owner-source-first-generate',
+        draft.id,
+        sourceMaterial,
+      );
+      await updatePreparation(
+        store,
+        'owner-source-first-generate',
+        sourcedDraft.id,
+        sourceFirstPreparation(),
+      );
+      await seedAxBlueprint(store, 'owner-source-first-generate', sourcedDraft.id);
+      await seedCourseContent(
+        store,
+        'owner-source-first-generate',
+        sourcedDraft.id,
+        'courseContent',
+      );
       const generatedDraft = await workflow(store, 'owner-source-first-generate', {
-        action: 'generateCourse',
-        draftId: draft.id,
+        action: 'openPreview',
+        draftId: sourcedDraft.id,
       });
       const blueprint = blueprintFor(generatedDraft);
       return {
@@ -533,6 +754,7 @@ const scenarios = {
         title: firstBrief.title,
         type: firstBrief.type,
       });
+      await seedAxBlueprint(store, ownerId, draft.id);
       const activityPlanDraft = await goToStep(store, ownerId, draft.id, 'activityPlan');
       await generateCourseContent(store, ownerId, draft.id);
       const courseContentDraft = await goToStep(store, ownerId, draft.id, 'courseContent');
@@ -638,10 +860,8 @@ const scenarios = {
             action: 'addSource',
             draftId: draft.id,
             source: {
-              content: `data:application/pdf;base64,${Buffer.from(
-                '%PDF-1.4 source fixture',
-              ).toString('base64')}`,
-              name: 'Provider document.pdf',
+              content: dataUrlFor('application/pdf', pdfFixtureFor('source fixture')),
+              name: 'Provider document',
               sizeLabel: '1 KB',
               type: 'file',
             },
@@ -650,8 +870,18 @@ const scenarios = {
             action: 'addSource',
             draftId: draft.id,
             source: {
-              content: `data:audio/mpeg;base64,${Buffer.from('audio fixture').toString('base64')}`,
-              name: 'Provider narration.mp3',
+              content: dataUrlFor('audio/wav', wavFixture),
+              name: 'Provider narration',
+              sizeLabel: '1 KB',
+              type: 'file',
+            },
+          });
+          const spoofedDraft = await workflow(store, ownerId, {
+            action: 'addSource',
+            draftId: draft.id,
+            source: {
+              content: dataUrlFor('application/pdf', Buffer.from('not a pdf')),
+              name: 'Spoofed document',
               sizeLabel: '1 KB',
               type: 'file',
             },
@@ -660,9 +890,7 @@ const scenarios = {
             action: 'addSource',
             draftId: draft.id,
             source: {
-              content: `data:application/octet-stream;base64,${Buffer.from('unknown').toString(
-                'base64',
-              )}`,
+              content: dataUrlFor('application/octet-stream', Buffer.from('unknown')),
               name: 'Unknown binary.bin',
               sizeLabel: '1 KB',
               type: 'file',
@@ -677,9 +905,8 @@ const scenarios = {
               (source) => source.name === 'Deleted notes',
             )?.status,
             fileProcessors: [
-              pdfDraft.sources.find((source) => source.name === 'Provider document.pdf')?.processor,
-              audioDraft.sources.find((source) => source.name === 'Provider narration.mp3')
-                ?.processor,
+              pdfDraft.sources.find((source) => source.name === 'Provider document')?.processor,
+              audioDraft.sources.find((source) => source.name === 'Provider narration')?.processor,
               finalSourceDraft.sources.find((source) => source.name === 'Unknown binary.bin')
                 ?.processor,
             ],
@@ -691,6 +918,11 @@ const scenarios = {
             )?.status,
             sourceNames: activeSources.map((source) => source.name),
             sourceTypes: activeSources.map((source) => source.type),
+            spoofedProcessor: spoofedDraft.sources.find(
+              (source) => source.name === 'Spoofed document',
+            )?.processor,
+            spoofedStatus: spoofedDraft.sources.find((source) => source.name === 'Spoofed document')
+              ?.status,
             urlProcessor: urlDraft.sources.find((source) => source.name === 'Lifecycle URL')
               ?.processor,
             urlStatus: urlDraft.sources.find((source) => source.name === 'Lifecycle URL')?.status,
@@ -721,21 +953,22 @@ const scenarios = {
         try {
           const ownerId = 'owner-llamaparse-pdf';
           const draft = await createDraft(store, ownerId, 'PDF parse lifecycle');
-          const pdfContent = `data:application/pdf;base64,${Buffer.from(
-            '%PDF-1.4 parse and retry fixture',
-          ).toString('base64')}`;
+          const pdfContent = dataUrlFor(
+            'application/pdf',
+            pdfFixtureFor('parse and retry fixture'),
+          );
           const parsedDraft = await workflow(store, ownerId, {
             action: 'addSource',
             draftId: draft.id,
             source: {
               content: pdfContent,
-              name: 'Provider document.pdf',
+              name: 'Provider document',
               sizeLabel: '1 KB',
               type: 'file',
             },
           });
           const parsedSource = parsedDraft.sources.find(
-            (source) => source.name === 'Provider document.pdf',
+            (source) => source.name === 'Provider document',
           );
           if (!parsedSource) {
             throw new Error('Expected parsed PDF source.');

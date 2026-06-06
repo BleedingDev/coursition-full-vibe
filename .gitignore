@@ -3,6 +3,7 @@
 .pnp
 .pnp.js
 .env.local
+.env
 .env.*.local
 .history
 *.log*
@@ -12,6 +13,7 @@ node_modules/
 .pnpm-store/
 *.tsbuildinfo
 .changeset/pre.json
+.agents/skills/
 
 dist/
 coverage/

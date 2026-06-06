@@ -44,6 +44,7 @@
         "title": "Activity plan",
         "type": "Activity type",
         "types": {
+          "not_playable": "Not playable",
           "ordering_matching": "Ordering / matching",
           "practice_task": "Practice task",
           "retrieval_check": "Retrieval check",
@@ -286,6 +287,16 @@
         "showPreview": "Show preview",
         "sourceName": "Source name",
         "sourceNameRequired": "Name the source before adding it.",
+        "statuses": {
+          "deleted": "Deleted",
+          "failed": "Failed",
+          "partially_processed": "Partial",
+          "processed": "Processed",
+          "processing": "Processing",
+          "queued": "Queued",
+          "unsupported": "Unsupported",
+          "uploaded": "Uploaded"
+        },
         "title": "Sources",
         "urlContent": "URL",
         "urlNamePlaceholder": "MDN CSS Grid guide",

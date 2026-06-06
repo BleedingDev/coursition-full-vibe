@@ -3,7 +3,6 @@ import type {
   ActivityBrief,
   CourseDraft,
   CoursePreparation,
-  GeneratedActivity,
 } from '../shared/coursition/workflow.ts';
 import {
   aiProviderConfig,
@@ -108,7 +107,7 @@ const activityBrief = (overrides: Partial<ActivityBrief>): ActivityBrief => {
   };
 };
 
-const expectNotPlayableActivity = (activity: GeneratedActivity) => {
+const expectNotPlayableActivity = (activity: ReturnType<typeof generatedActivityFromAxSpec>) => {
   expect(activity.type).toBe('not_playable');
   if (activity.type !== 'not_playable') {
     throw new Error(`Expected not_playable, received ${activity.type}`);
@@ -211,7 +210,7 @@ describe('Coursition AI provider', () => {
       type: 'retrieval_check',
     });
 
-    const activity = generatedActivityFromAxSpec(brief, undefined);
+    const activity = generatedActivityFromAxSpec(brief, null);
 
     expectNotPlayableActivity(activity);
     expect(JSON.stringify(activity)).not.toContain(brief.instructions);

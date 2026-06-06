@@ -44,6 +44,7 @@
         "title": "Plán aktivit",
         "type": "Typ aktivity",
         "types": {
+          "not_playable": "Nehratelné",
           "ordering_matching": "Řazení / přiřazování",
           "practice_task": "Praktický úkol",
           "retrieval_check": "Vybavovací kontrola",
@@ -286,6 +287,16 @@
         "showPreview": "Zobrazit náhled",
         "sourceName": "Název zdroje",
         "sourceNameRequired": "Před přidáním zdroj pojmenujte.",
+        "statuses": {
+          "deleted": "Smazáno",
+          "failed": "Selhalo",
+          "partially_processed": "Částečné",
+          "processed": "Zpracováno",
+          "processing": "Zpracovává se",
+          "queued": "Ve frontě",
+          "unsupported": "Nepodporováno",
+          "uploaded": "Nahráno"
+        },
         "title": "Zdroje",
         "urlContent": "URL",
         "urlNamePlaceholder": "MDN průvodce CSS Grid",

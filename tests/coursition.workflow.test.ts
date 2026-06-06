@@ -106,6 +106,8 @@ describe.sequential('source-first Coursition workflow contract', () => {
       retriedSourceStatus?: string;
       sourceNames: string[];
       sourceTypes: string[];
+      spoofedProcessor?: string;
+      spoofedStatus?: string;
       urlProcessor?: string;
       urlStatus?: string;
     }>('sourceLifecycle');
@@ -119,6 +121,8 @@ describe.sequential('source-first Coursition workflow contract', () => {
       'deepgram_audio',
       'unsupported_file',
     ]);
+    expect(result.spoofedProcessor).toBe('unsupported_file');
+    expect(result.spoofedStatus).toBe('unsupported');
     expect(result.deletedSourceStatus).toBe('deleted');
     expect(result.retriedSourceStatus).toBe('processed');
     expect(result.sourceTypes).toEqual(expect.arrayContaining(['notes', 'url', 'file']));

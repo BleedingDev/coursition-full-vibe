@@ -19,7 +19,7 @@ const readPnpmConfig = (key) => {
   return output ? JSON.parse(output) : undefined;
 };
 const enableTailwind = true;
-const expectedPnpmVersion = '11.5.1';
+const expectedPnpmVersion = '11.5.2';
 const activePnpmVersion = execFileSync('pnpm', ['--version'], {
   cwd: process.cwd(),
   encoding: 'utf-8',
@@ -406,6 +406,7 @@ const expectedModernPackages = [
   '@modern-js/plugin-tanstack',
   '@modern-js/plugin-bff',
   '@modern-js/adapter-rstest',
+  '@modern-js/code-tools',
 ];
 
 for (const packageName of expectedModernPackages) {
@@ -445,6 +446,7 @@ for (const packageName of [
 for (const packageName of [
   '@modern-js/app-tools',
   '@modern-js/adapter-rstest',
+  '@modern-js/code-tools',
   '@modern-js/tsconfig',
   '@modern-js/plugin-bff',
 ]) {
@@ -467,6 +469,7 @@ for (const dependency of ['@modern-js/plugin-i18n', 'i18next']) {
 for (const dependency of [
   '@effect/tsgo',
   '@modern-js/adapter-rstest',
+  '@modern-js/code-tools',
   '@rstest/core',
   '@typescript/native-preview',
   'happy-dom',

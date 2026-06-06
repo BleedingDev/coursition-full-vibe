@@ -505,8 +505,26 @@ export const hasActivityPlan = (draft: CourseDraft) =>
       brief.successCriteria.trim().length > 0,
   );
 
+export const isPlayableGeneratedActivity = (activity: GeneratedActivity) =>
+  activity.status !== 'empty' && activity.status !== 'stale';
+
 export const hasGeneratedActivities = (draft: CourseDraft) =>
-  draft.learningBlueprint.generatedActivities.length > 0;
+  draft.learningBlueprint.generatedActivities.some(isPlayableGeneratedActivity);
+
+export const missingPlayableActivityBriefIds = (draft: CourseDraft) => {
+  const playableBriefIds = new Set(
+    draft.learningBlueprint.generatedActivities
+      .filter(isPlayableGeneratedActivity)
+      .map((activity) => activity.briefId),
+  );
+  return draft.learningBlueprint.activityBriefs
+    .filter((brief) => brief.status !== 'empty')
+    .map((brief) => brief.id)
+    .filter((briefId) => !playableBriefIds.has(briefId));
+};
+
+export const hasPlayableGeneratedActivityCoverage = (draft: CourseDraft) =>
+  hasActivityPlan(draft) && missingPlayableActivityBriefIds(draft).length === 0;
 
 export const hasCourseContent = (draft: CourseDraft) =>
   draft.courseContent.sections.some((section) =>
@@ -517,7 +535,8 @@ export const hasGeneratedCourse = (draft: CourseDraft) =>
   hasCoursePreparation(draft) &&
   hasObjectiveMap(draft) &&
   hasActivityPlan(draft) &&
-  (hasCourseContent(draft) || hasGeneratedActivities(draft));
+  hasPlayableGeneratedActivityCoverage(draft) &&
+  hasCourseContent(draft);
 
 export type WorkflowGateReason =
   | 'sourceRequired'
@@ -599,6 +618,12 @@ export const getWorkflowPrerequisiteGate = (
   }
   if (targetIndex > workflowStepIndex('courseContent') && !hasCourseContent(draft)) {
     return { allowed: false, blockedStep: 'courseContent', reason: 'courseContentRequired' };
+  }
+  if (
+    targetIndex > workflowStepIndex('courseContent') &&
+    !hasPlayableGeneratedActivityCoverage(draft)
+  ) {
+    return { allowed: false, blockedStep: 'activityPlan', reason: 'activityPlanRequired' };
   }
 
   return { allowed: true };
@@ -707,16 +732,13 @@ export const buildFindings = (draft: CourseDraft): ReviewFinding[] => {
     );
   }
 
-  if (
-    hasActivityPlan(draft) &&
-    draft.learningBlueprint.generatedActivities.length <
-      draft.learningBlueprint.activityBriefs.length
-  ) {
+  const missingActivityBriefIds = missingPlayableActivityBriefIds(draft);
+  if (hasActivityPlan(draft) && missingActivityBriefIds.length > 0) {
     findings.push(
       findingWithPreservedStatus(draft, {
         detail:
           'Every activity brief should have a generated learner interaction before the preview is validated with users.',
-        fingerprint: `${draft.id}:missing-generated-activities`,
+        fingerprint: `${draft.id}:missing-generated-activities:${missingActivityBriefIds.join(',')}`,
         id: `finding_${draft.id}_missing_generated_activities`,
         severity: 'warning',
         step: 'activityPlan',

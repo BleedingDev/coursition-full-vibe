@@ -674,6 +674,18 @@ const generatedActivityBaseFromBrief = (brief: ActivityBrief) => ({
   status: brief.status === 'stale' ? ('stale' as const) : ('generated' as const),
 });
 
+const notPlayableActivityFromBrief = (brief: ActivityBrief): GeneratedActivity => ({
+  ...generatedActivityBaseFromBrief(brief),
+  interaction: {
+    feedback: 'Regenerate the activity plan through Ax so it produces a real playable interaction.',
+    kind: 'not_playable',
+    prompt: 'The playable activity was not generated.',
+    reason: 'The Ax-generated playable activity is missing or failed the validation contract.',
+  },
+  status: 'stale',
+  type: 'not_playable',
+});
+
 const lineItemsFrom = (value: unknown): string[] => {
   if (Array.isArray(value)) {
     return value.map(asText).filter((item) => item.length > 0);
@@ -752,7 +764,7 @@ const normalizeGeneratedOrderingMatchingActivity = (
   if (generated.mode !== 'matching' && generated.mode !== 'ordering') {
     return null;
   }
-  const mode = generated.mode;
+  const { mode } = generated;
   const prompt = asText(generated.prompt);
   const feedback = asText(generated.feedback);
   const items = asArray(generated.items)
@@ -919,7 +931,7 @@ const normalizeGeneratedRubricActivity = (
   };
 };
 
-export const normalizeGeneratedPlayableActivity = (
+const normalizeGeneratedPlayableActivity = (
   brief: ActivityBrief,
   generated: unknown,
 ): GeneratedActivity | null => {
@@ -968,20 +980,17 @@ const normalizeGeneratedPlayableActivities = (
     const generated =
       byObjectiveTitle.get(objectives[index]?.title.toLowerCase() ?? '') ??
       generatedActivities[index];
-    const activity = normalizeGeneratedPlayableActivity(brief, generated);
-    if (activity === null) {
-      throw new Error(
-        `Ax generatedActivities is missing a valid playable spec for activity brief "${brief.title}" (${brief.id}).`,
-      );
-    }
-    return activity;
+    return (
+      normalizeGeneratedPlayableActivity(brief, generated) ?? notPlayableActivityFromBrief(brief)
+    );
   });
 };
 
-export const generatedActivityFromPlayableSpec = (
+export const generatedActivityFromAxSpec = (
   brief: ActivityBrief,
   generated: unknown,
-): GeneratedActivity | null => normalizeGeneratedPlayableActivity(brief, generated);
+): GeneratedActivity =>
+  normalizeGeneratedPlayableActivity(brief, generated) ?? notPlayableActivityFromBrief(brief);
 
 const sourceCoverageFor = (objectives: readonly LearningObjective[]): SourceSupport => {
   if (objectives.length === 0) {
@@ -1078,7 +1087,7 @@ const activityPrompt = (activity: GeneratedActivity | undefined, fallback: strin
   if (activity === undefined) {
     return fallback;
   }
-  switch (activity.interaction.kind) {
+  switch (activity.type) {
     case 'retrieval_check': {
       return activity.interaction.question;
     }
@@ -1094,8 +1103,8 @@ const activityPrompt = (activity: GeneratedActivity | undefined, fallback: strin
       return activity.interaction.prompt;
     }
     default: {
-      const unsupportedInteraction: never = activity.interaction;
-      return unsupportedInteraction;
+      const unsupportedActivity: never = activity;
+      return unsupportedActivity;
     }
   }
 };

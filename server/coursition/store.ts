@@ -1,6 +1,9 @@
 import * as NodeCrypto from '@effect/platform-node/NodeCrypto';
 import { Crypto, DateTime, Effect } from 'effect';
 import * as ManagedRuntime from 'effect/ManagedRuntime';
+import parseDataUrl from 'data-urls';
+import { fileTypeFromBuffer } from 'file-type';
+import { lookup as lookupMimeType } from 'mime-types';
 import {
   buildFindings,
   emptyCourseContent,
@@ -90,30 +93,17 @@ const waitFor = function* waitFor<Value>(
 ): Generator<PromiseLike<unknown>, Value, unknown> {
   return (yield promise) as Value;
 };
-const fileExtension = (name: string) => {
-  const basename = name.split(/[\\/]/u).at(-1) ?? name;
-  const index = basename.lastIndexOf('.');
-  return index > 0 ? basename.slice(index).toLowerCase() : '';
-};
-const textLikeFileExtensions = new Set([
-  '.csv',
-  '.json',
-  '.md',
-  '.mdx',
-  '.rtf',
-  '.text',
-  '.tsv',
-  '.txt',
-  '.xml',
-  '.yaml',
-  '.yml',
-]);
 const llamaParseMarkdownTiers = ['cost_effective', 'agentic', 'agentic_plus'] as const;
 type LlamaParseMarkdownTier = (typeof llamaParseMarkdownTiers)[number];
 
 interface BinarySourcePayload {
   bytes: Uint8Array;
   mimeType: string;
+}
+
+interface FileSourcePayload {
+  bytes: Uint8Array;
+  declaredMimeType: string;
 }
 
 interface ProviderProcessingResult {
@@ -340,13 +330,17 @@ const isValidGeneratedInteraction = (
 
 const generatedActivityFor = (value: unknown): GeneratedActivity | null => {
   const activity = recordFor(value);
+  if (activity === null) {
+    return null;
+  }
+  const activityType = activity['type'];
   if (
-    activity === null ||
-    !generatedActivityTypes.has(activity['type'] as GeneratedActivity['type'])
+    typeof activityType !== 'string' ||
+    !generatedActivityTypes.has(activityType as GeneratedActivity['type'])
   ) {
     return null;
   }
-  const type = activity['type'] as GeneratedActivity['type'];
+  const type = activityType as GeneratedActivity['type'];
   return hasValidGeneratedActivityBase(activity) &&
     isValidGeneratedInteraction(type, activity['interaction'])
     ? (activity as unknown as GeneratedActivity)
@@ -810,25 +804,61 @@ const processorFor = (sourceType: SourceAsset['type']) => {
   return 'local_text';
 };
 
-const processorForFileName = (name: string, hasReadableText: boolean) => {
-  const extension = fileExtension(name);
-  if (hasReadableText && textLikeFileExtensions.has(extension)) {
+const localTextMimeTypes = new Set([
+  'application/json',
+  'application/ld+json',
+  'application/rtf',
+  'application/xhtml+xml',
+  'application/xml',
+  'application/yaml',
+]);
+
+const llamaParseMimeTypes = new Set([
+  'application/msword',
+  'application/pdf',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+const sourceProcessorForMimeType = (mimeType: string | undefined, allowLocalText: boolean) => {
+  if (typeof mimeType !== 'string' || mimeType.length === 0) {
+    return 'unsupported_file';
+  }
+  if (allowLocalText && (mimeType.startsWith('text/') || localTextMimeTypes.has(mimeType))) {
     return 'local_text';
   }
-  if (['.pdf', '.doc', '.docx', '.odt', '.ppt', '.pptx'].includes(extension)) {
+  if (llamaParseMimeTypes.has(mimeType)) {
     return 'llamaparse_document';
   }
-  if (['.mp3', '.wav', '.m4a'].includes(extension)) {
+  if (mimeType.startsWith('audio/')) {
     return 'deepgram_audio';
   }
-  if (['.mp4', '.mov', '.webm'].includes(extension)) {
+  if (mimeType.startsWith('video/')) {
     return 'deepgram_video';
   }
-  if (['.png', '.jpg', '.jpeg', '.webp'].includes(extension)) {
+  if (mimeType.startsWith('image/')) {
     return 'image_text_extractor';
   }
   return 'unsupported_file';
 };
+
+const mimeTypeFromFileName = (name: string) => {
+  const mimeType = lookupMimeType(name);
+  return typeof mimeType === 'string' ? mimeType : undefined;
+};
+
+const processorForVerifiedBinary = (verifiedMimeType: string | undefined) => {
+  const processor = sourceProcessorForMimeType(verifiedMimeType, false);
+  return processor === 'local_text' ? 'unsupported_file' : processor;
+};
+
+const detectBinaryMimeType = (bytes: Uint8Array) =>
+  runPromiseGenerator(function* detectBinaryMimeTypeProgram() {
+    const result = yield* waitFor(fileTypeFromBuffer(bytes));
+    return result?.mime;
+  });
 
 const sourceProcessingIncomplete = (sources: SourceAsset[]) =>
   sources.some((source) => source.status === 'queued' || source.status === 'processing');
@@ -842,26 +872,14 @@ const parseHttpUrl = (value: string) => {
   }
 };
 
-const isReadableFileName = (name: string) => textLikeFileExtensions.has(fileExtension(name));
-
-const dataUrlPrefix = /^data:([^;,]+)?(?:;[^,]*)?;base64,(.*)$/su;
-
-const decodeDataUrl = (value: string): BinarySourcePayload | null => {
-  const match = dataUrlPrefix.exec(value.trim());
-  if (match === null) {
-    return null;
-  }
-  const [, rawMimeType, data] = match;
-  const mimeType =
-    typeof rawMimeType === 'string' && rawMimeType.length > 0
-      ? rawMimeType
-      : 'application/octet-stream';
-  if (typeof data !== 'string' || data.length === 0) {
+const decodeFileDataUrl = (value: string): FileSourcePayload | null => {
+  const parsed = parseDataUrl(value.trim());
+  if (parsed === null) {
     return null;
   }
   return {
-    bytes: Uint8Array.from(Buffer.from(data, 'base64')),
-    mimeType,
+    bytes: parsed.body,
+    declaredMimeType: parsed.mimeType.essence,
   };
 };
 
@@ -1253,80 +1271,124 @@ const processSource = (
         }
       }
     }
+    const filePayload = sourceType === 'file' ? decodeFileDataUrl(trimmedContent) : null;
+    const detectedMimeType =
+      filePayload === null ? undefined : yield* waitFor(detectBinaryMimeType(filePayload.bytes));
+    const declaredMimeType = filePayload?.declaredMimeType;
+    const fileNameMimeType = sourceType === 'file' ? mimeTypeFromFileName(sourceName) : undefined;
+    const verifiedBinaryProcessor = processorForVerifiedBinary(detectedMimeType);
+    const declaredTextProcessor = sourceProcessorForMimeType(declaredMimeType, true);
+    const fileNameTextProcessor = sourceProcessorForMimeType(fileNameMimeType, true);
+    let fileProcessor: string | null = null;
+    if (sourceType === 'file') {
+      if (filePayload === null) {
+        fileProcessor = fileNameTextProcessor;
+      } else if (
+        verifiedBinaryProcessor === 'unsupported_file' &&
+        declaredTextProcessor === 'local_text'
+      ) {
+        fileProcessor = 'local_text';
+      } else {
+        fileProcessor = verifiedBinaryProcessor;
+      }
+    }
+    const binary =
+      filePayload !== null && detectedMimeType !== undefined
+        ? { bytes: filePayload.bytes, mimeType: detectedMimeType }
+        : null;
     const isSupported =
       sourceType === 'notes' ||
       sourceType === 'url' ||
-      (trimmedContent.length > 0 && isReadableFileName(sourceName));
-    const fileProcessor =
-      sourceType === 'file' ? processorForFileName(sourceName, trimmedContent.length > 0) : null;
+      (sourceType === 'file' && trimmedContent.length > 0 && fileProcessor === 'local_text');
     const isProviderBackedFile =
       fileProcessor !== null &&
       fileProcessor !== 'local_text' &&
-      fileProcessor !== 'unsupported_file' &&
-      processorForFileName(sourceName, false) !== 'unsupported_file';
-    if (sourceType === 'file' && isProviderBackedFile && fileProcessor !== null) {
-      const binary = decodeDataUrl(trimmedContent);
-      if (binary !== null) {
-        try {
-          const providerResult = fileProcessor.includes('deepgram')
-            ? yield* waitFor(transcribeWithDeepgram(sourceName, binary))
-            : yield* waitFor(parseLlamaDocument(sourceName, binary));
-          return {
-            content: providerResult.content,
-            createdAt,
-            id: createId(`source_${draftId}`),
-            name: sourceName,
-            originalInput: trimmedContent,
-            processor: fileProcessor,
-            sizeLabel: source.sizeLabel ?? `${providerResult.content.length} chars`,
-            status: providerResult.content.length > 0 ? 'processed' : 'failed',
-            type: source.type,
-            ...(typeof providerResult.mimeType === 'string'
-              ? { mimeType: providerResult.mimeType }
-              : {}),
-            ...(typeof providerResult.providerJobId === 'string'
-              ? { providerJobId: providerResult.providerJobId }
-              : {}),
-            ...(typeof providerResult.storageReference === 'string'
-              ? { storageReference: providerResult.storageReference }
-              : {}),
-            ...(providerResult.content.length === 0
-              ? { failureReason: 'The provider did not return readable content.' }
-              : {}),
-          };
-        } catch (error) {
-          return {
-            content: '',
-            createdAt,
-            failureReason:
-              error instanceof Error
-                ? error.message
-                : 'The source provider could not process this file.',
-            id: createId(`source_${draftId}`),
-            mimeType: binary.mimeType,
-            name: sourceName,
-            originalInput: trimmedContent,
-            processor: fileProcessor,
-            sizeLabel: source.sizeLabel ?? `${binary.bytes.byteLength} bytes`,
-            status: 'failed',
-            type: source.type,
-          };
-        }
-      }
-      if (trimmedContent.length > 0) {
+      fileProcessor !== 'unsupported_file';
+    if (
+      sourceType === 'file' &&
+      isProviderBackedFile &&
+      fileProcessor !== null &&
+      binary !== null
+    ) {
+      try {
+        const providerResult = fileProcessor.includes('deepgram')
+          ? yield* waitFor(transcribeWithDeepgram(sourceName, binary))
+          : yield* waitFor(parseLlamaDocument(sourceName, binary));
         return {
-          content: trimmedContent,
+          content: providerResult.content,
           createdAt,
-          failureReason: 'Upload the original binary file so the provider can process it.',
           id: createId(`source_${draftId}`),
           name: sourceName,
           originalInput: trimmedContent,
           processor: fileProcessor,
-          sizeLabel: source.sizeLabel ?? `${trimmedContent.length} chars`,
+          sizeLabel: source.sizeLabel ?? `${providerResult.content.length} chars`,
+          status: providerResult.content.length > 0 ? 'processed' : 'failed',
+          type: source.type,
+          ...(typeof providerResult.mimeType === 'string'
+            ? { mimeType: providerResult.mimeType }
+            : {}),
+          ...(typeof providerResult.providerJobId === 'string'
+            ? { providerJobId: providerResult.providerJobId }
+            : {}),
+          ...(typeof providerResult.storageReference === 'string'
+            ? { storageReference: providerResult.storageReference }
+            : {}),
+          ...(providerResult.content.length === 0
+            ? { failureReason: 'The provider did not return readable content.' }
+            : {}),
+        };
+      } catch (error) {
+        return {
+          content: '',
+          createdAt,
+          failureReason:
+            error instanceof Error
+              ? error.message
+              : 'The source provider could not process this file.',
+          id: createId(`source_${draftId}`),
+          mimeType: binary.mimeType,
+          name: sourceName,
+          originalInput: trimmedContent,
+          processor: fileProcessor,
+          sizeLabel: source.sizeLabel ?? `${binary.bytes.byteLength} bytes`,
           status: 'failed',
           type: source.type,
         };
       }
+    }
+    if (sourceType === 'file' && fileProcessor === 'local_text') {
+      const textContent =
+        filePayload === null ? trimmedContent : new TextDecoder().decode(filePayload.bytes).trim();
+      return {
+        content: textContent,
+        createdAt,
+        id: createId(`source_${draftId}`),
+        name: sourceName,
+        originalInput: trimmedContent,
+        processor: 'local_text',
+        sizeLabel: source.sizeLabel ?? `${textContent.length} chars`,
+        status: textContent.length > 0 ? 'processed' : 'unsupported',
+        type: source.type,
+        ...(declaredMimeType === undefined && fileNameMimeType === undefined
+          ? {}
+          : { mimeType: declaredMimeType ?? fileNameMimeType }),
+        ...(textContent.length > 0 ? {} : { failureReason: 'No readable content was supplied.' }),
+      };
+    }
+    if (sourceType === 'file' && filePayload !== null && fileProcessor === 'unsupported_file') {
+      return {
+        content: '',
+        createdAt,
+        failureReason: 'File type could not be verified from uploaded bytes.',
+        id: createId(`source_${draftId}`),
+        mimeType: detectedMimeType ?? declaredMimeType,
+        name: sourceName,
+        originalInput: trimmedContent,
+        processor: 'unsupported_file',
+        sizeLabel: source.sizeLabel ?? `${filePayload.bytes.byteLength} bytes`,
+        status: 'unsupported',
+        type: source.type,
+      };
     }
     return {
       content: trimmedContent,
