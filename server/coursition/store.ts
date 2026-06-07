@@ -53,7 +53,7 @@ import {
   SourceProcessingError,
 } from './source-processing.ts';
 import type { SourceProcessorDeps } from './source-processing.ts';
-import defaultSeedStoreJson from './default-seed.json';
+import defaultSeedStoreJson from './default-seed.json' with { type: 'json' };
 
 interface StoreFile {
   defaultSeededOwnerIds?: string[];
