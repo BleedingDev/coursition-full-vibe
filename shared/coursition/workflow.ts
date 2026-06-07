@@ -1,13 +1,70 @@
-export type AiMode = 'generate' | 'assist';
+/*
+ * Coursition domain model.
+ *
+ * The domain types are defined once as Effect schemas in ./effect-api and
+ * re-exported here so the wire contract, runtime validation, and these
+ * TypeScript types share a single source of truth. This module layers the
+ * workflow ordering, prerequisite gates, findings, and staleness rules on top
+ * of that model.
+ */
+import type {
+  ActivityType,
+  CourseContent,
+  CourseDraft,
+  CourseLanguage,
+  CoursePreparation,
+  DraftStep,
+  GeneratedActivity,
+  LearningBlueprint,
+  ReviewFinding,
+} from './effect-api';
 
-export type DraftStep =
-  | 'mode'
-  | 'sources'
-  | 'preparation'
-  | 'objectives'
-  | 'activityPlan'
-  | 'courseContent'
-  | 'preview';
+export type {
+  ActivityEvaluationCriterion,
+  ActivityEvaluationRequest,
+  ActivityEvaluationResponse,
+  ActivityBrief,
+  ActivityInteraction,
+  ActivityType,
+  AiMode,
+  AiRun,
+  AiRunStatus,
+  AiRunType,
+  ContentBlockType,
+  CourseContent,
+  CourseContentBlock,
+  CourseDraft,
+  CourseDraftSummary,
+  CourseLanguage,
+  CourseLanguagePreference,
+  CoursePreparation,
+  CourseSection,
+  DerivedSourceDocument,
+  DraftStep,
+  GeneratedActivity,
+  GeneratedStatus,
+  KnowledgeChunk,
+  LearningBlueprint,
+  LearningObjective,
+  NotPlayableInteraction,
+  OrderingMatchingInteraction,
+  OrderingMatchingItem,
+  PracticeTaskInteraction,
+  RetrievalCheckInteraction,
+  RetrievalChoice,
+  ReviewFinding,
+  RubricAnswerInteraction,
+  ScenarioChoice,
+  ScenarioDecisionInteraction,
+  SourceAsset,
+  SourceConfidence,
+  SourceReference,
+  SourceStatus,
+  SourceSupport,
+  SourceType,
+  WorkflowAction,
+  WorkflowSnapshot,
+} from './effect-api';
 
 export const workflowSteps = [
   'mode',
@@ -20,74 +77,6 @@ export const workflowSteps = [
 
 export type WorkflowStep = (typeof workflowSteps)[number];
 
-export type SourceStatus =
-  | 'uploaded'
-  | 'queued'
-  | 'processing'
-  | 'processed'
-  | 'partially_processed'
-  | 'failed'
-  | 'unsupported'
-  | 'deleted';
-export type SourceType = 'file' | 'url' | 'notes';
-
-export interface SourceAsset {
-  id: string;
-  type: SourceType;
-  name: string;
-  sizeLabel: string;
-  status: SourceStatus;
-  processor: string;
-  content: string;
-  originalInput?: string | undefined;
-  failureReason?: string | undefined;
-  createdAt?: string | undefined;
-  deletedAt?: string | undefined;
-  storageReference?: string | undefined;
-  mimeType?: string | undefined;
-  providerJobId?: string | undefined;
-}
-
-export interface SourceReference {
-  sourceAssetId: string;
-  position: string;
-  heading?: string | undefined;
-  page?: number | undefined;
-  slide?: number | undefined;
-  timestampSeconds?: number | undefined;
-}
-
-export interface DerivedSourceDocument {
-  id: string;
-  sourceAssetId: string;
-  processor: string;
-  processorVersion: string;
-  outputType: 'markdown' | 'transcript' | 'text';
-  content: string;
-  quality: 'high' | 'medium' | 'low';
-  createdAt: string;
-}
-
-export interface KnowledgeChunk {
-  id: string;
-  derivedSourceDocumentId: string;
-  sourceAssetId: string;
-  content: string;
-  reference: SourceReference;
-  confidence: 'high' | 'medium' | 'low';
-  createdAt: string;
-}
-
-export type SourceSupport = 'source_backed' | 'partially_source_backed' | 'inferred';
-export type SourceConfidence = 'high' | 'medium' | 'low' | 'none';
-export type GeneratedStatus = 'empty' | 'generated' | 'edited' | 'stale';
-export type ActivityType =
-  | 'retrieval_check'
-  | 'practice_task'
-  | 'scenario_decision'
-  | 'ordering_matching'
-  | 'rubric_answer';
-
 export const activityTypes = [
   'retrieval_check',
   'practice_task',
@@ -95,343 +84,6 @@ export const activityTypes = [
   'ordering_matching',
   'rubric_answer',
 ] as const satisfies readonly ActivityType[];
-
-export type CourseLanguage = 'en' | 'cs';
-export type CourseLanguagePreference = 'source' | CourseLanguage;
-
-export interface CoursePreparation {
-  activityMixPreference: string;
-  audience: string;
-  constraints: string;
-  depth: string;
-  desiredOutcome: string;
-  language: CourseLanguage;
-  languagePreference: CourseLanguagePreference;
-  priorKnowledge: string;
-  sourceStrictness: 'standard' | 'strict';
-  tone: string;
-}
-
-export interface LearningObjective {
-  id: string;
-  title: string;
-  capability: string;
-  topicName: string;
-  sourceSupport: SourceSupport;
-  sourceConfidence: SourceConfidence;
-  sourceReferences?: readonly SourceReference[] | undefined;
-  status: GeneratedStatus;
-  updatedAt: string;
-}
-
-export interface ActivityBrief {
-  id: string;
-  objectiveId: string;
-  objectiveIds: readonly string[];
-  type: ActivityType;
-  title: string;
-  instructions: string;
-  learnerAction: string;
-  successCriteria: string;
-  feedbackGuidance: string;
-  sourceConfidence: SourceConfidence;
-  sourceReferences?: readonly SourceReference[] | undefined;
-  status: GeneratedStatus;
-  updatedAt: string;
-}
-
-export interface RetrievalChoice {
-  id: string;
-  text: string;
-  isCorrect: boolean;
-  feedback: string;
-}
-
-export interface RetrievalCheckInteraction {
-  kind: 'retrieval_check';
-  question: string;
-  choices: readonly RetrievalChoice[];
-  explanationPrompt: string;
-  feedback: string;
-}
-
-export interface PracticeTaskInteraction {
-  kind: 'practice_task';
-  prompt: string;
-  submissionLabel: string;
-  checklist: readonly string[];
-  feedback: string;
-}
-
-export interface ScenarioChoice {
-  id: string;
-  text: string;
-  isPreferred: boolean;
-  consequence: string;
-  feedback: string;
-}
-
-export interface ScenarioDecisionInteraction {
-  kind: 'scenario_decision';
-  scenario: string;
-  choices: readonly ScenarioChoice[];
-  justificationPrompt: string;
-  feedback: string;
-}
-
-export interface OrderingMatchingItem {
-  id: string;
-  text: string;
-  correctPosition?: number | undefined;
-  matchLabel?: string | undefined;
-}
-
-export interface OrderingMatchingInteraction {
-  kind: 'ordering_matching';
-  mode: 'matching' | 'ordering';
-  prompt: string;
-  items: readonly OrderingMatchingItem[];
-  feedback: string;
-}
-
-export interface RubricAnswerInteraction {
-  kind: 'rubric_answer';
-  prompt: string;
-  criteria: readonly string[];
-  feedback: string;
-}
-
-export interface NotPlayableInteraction {
-  kind: 'not_playable';
-  prompt: string;
-  reason: string;
-  feedback: string;
-}
-
-export type ActivityInteraction =
-  | RetrievalCheckInteraction
-  | PracticeTaskInteraction
-  | ScenarioDecisionInteraction
-  | OrderingMatchingInteraction
-  | RubricAnswerInteraction
-  | NotPlayableInteraction;
-
-interface GeneratedActivityBase {
-  id: string;
-  briefId: string;
-  objectiveIds: readonly string[];
-  sourceConfidence: SourceConfidence;
-  status: GeneratedStatus;
-  sourceReferences?: readonly SourceReference[] | undefined;
-}
-
-export type GeneratedActivity =
-  | (GeneratedActivityBase & {
-      interaction: RetrievalCheckInteraction;
-      type: 'retrieval_check';
-    })
-  | (GeneratedActivityBase & {
-      interaction: PracticeTaskInteraction;
-      type: 'practice_task';
-    })
-  | (GeneratedActivityBase & {
-      interaction: ScenarioDecisionInteraction;
-      type: 'scenario_decision';
-    })
-  | (GeneratedActivityBase & {
-      interaction: OrderingMatchingInteraction;
-      type: 'ordering_matching';
-    })
-  | (GeneratedActivityBase & {
-      interaction: RubricAnswerInteraction;
-      type: 'rubric_answer';
-    })
-  | (GeneratedActivityBase & {
-      interaction: NotPlayableInteraction;
-      type: 'not_playable';
-    });
-
-export interface LearningBlueprint {
-  coursePreparation: CoursePreparation;
-  assumptions: readonly string[];
-  objectives: readonly LearningObjective[];
-  activityBriefs: readonly ActivityBrief[];
-  generatedActivities: readonly GeneratedActivity[];
-  sourceCoverage: SourceSupport;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type ContentBlockType =
-  | 'objective'
-  | 'source_explanation'
-  | 'worked_example'
-  | 'interactive_activity'
-  | 'reflection'
-  | 'summary';
-
-export interface CourseContentBlock {
-  id: string;
-  type: ContentBlockType;
-  title: string;
-  body: string;
-  objectiveIds: readonly string[];
-  sourceConfidence: SourceConfidence;
-  status: GeneratedStatus;
-  activityId?: string | undefined;
-  sourceReferences?: readonly SourceReference[] | undefined;
-}
-
-export interface CourseSection {
-  id: string;
-  title: string;
-  summary: string;
-  objectiveIds: readonly string[];
-  blocks: readonly CourseContentBlock[];
-  sourceConfidence: SourceConfidence;
-  status: GeneratedStatus;
-  sourceReferences?: readonly SourceReference[] | undefined;
-}
-
-export interface CourseContent {
-  sections: readonly CourseSection[];
-  createdAt: string;
-  updatedAt: string;
-  status: GeneratedStatus;
-}
-
-export interface ReviewFinding {
-  id: string;
-  severity: 'info' | 'warning' | 'blocking';
-  title: string;
-  detail: string;
-  status: 'open' | 'resolved' | 'dismissed';
-  fingerprint: string;
-  step: DraftStep;
-  targetId: string;
-  targetType: 'activity' | 'block' | 'course' | 'objective' | 'preparation' | 'section' | 'source';
-}
-
-export type AiRunStatus =
-  | 'queued'
-  | 'running'
-  | 'needs_review'
-  | 'applied'
-  | 'failed'
-  | 'cancelled';
-
-export type AiRunType =
-  | 'course_generation'
-  | 'learning_blueprint_generation'
-  | 'course_content_generation'
-  | 'teaching_quality_review';
-
-export interface AiRun {
-  id: string;
-  draftId: string;
-  type: AiRunType;
-  status: AiRunStatus;
-  provider: string;
-  model: string;
-  inputSummary: string;
-  outputText?: string | undefined;
-  failureReason?: string | undefined;
-  providerRequestId?: string | undefined;
-  createdAt: string;
-  updatedAt: string;
-  appliedAt?: string | undefined;
-}
-
-export interface CourseDraft {
-  id: string;
-  ownerId: string;
-  title: string;
-  mode: AiMode;
-  step: DraftStep;
-  language: CourseLanguage;
-  sources: readonly SourceAsset[];
-  derivedSourceDocuments: readonly DerivedSourceDocument[];
-  knowledgeChunks: readonly KnowledgeChunk[];
-  sourceProcessingIncomplete: boolean;
-  learningBlueprint: LearningBlueprint;
-  courseContent: CourseContent;
-  findings: readonly ReviewFinding[];
-  aiRuns: readonly AiRun[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CourseDraftSummary {
-  id: string;
-  title: string;
-  mode: AiMode;
-  step: DraftStep;
-  language: CourseLanguage;
-  sourceCount: number;
-  objectiveCount: number;
-  activityCount: number;
-  sectionCount: number;
-  updatedAt: string;
-}
-
-export interface WorkflowSnapshot {
-  config: {
-    aiProviderConfigured: boolean;
-    auth: 'better-auth';
-    deepgramConfigured: boolean;
-    llamaParseConfigured: boolean;
-    storage: 'json-file';
-    webExtractionConfigured: boolean;
-  };
-  draft: CourseDraft | null;
-  drafts: readonly CourseDraftSummary[];
-}
-
-export type WorkflowAction =
-  | { action: 'getState' }
-  | { action: 'createDraft'; title: string; language: CourseLanguage }
-  | { action: 'selectDraft'; draftId: string }
-  | { action: 'deleteDraft'; confirm: true; draftId: string }
-  | { action: 'updateDraftTitle'; draftId: string; title: string }
-  | { action: 'goToStep'; draftId: string; step: DraftStep }
-  | { action: 'setMode'; draftId: string; mode: AiMode }
-  | { action: 'generateCourse'; draftId: string }
-  | {
-      action: 'addSource';
-      draftId: string;
-      source: { type: SourceType; name: string; content: string; sizeLabel?: string | undefined };
-    }
-  | { action: 'deleteSource'; draftId: string; sourceId: string }
-  | { action: 'retrySource'; draftId: string; sourceId: string }
-  | { action: 'retryAiRun'; draftId: string; runId: string }
-  | { action: 'updateCoursePreparation'; draftId: string; preparation: CoursePreparation }
-  | { action: 'generateLearningBlueprint'; draftId: string }
-  | {
-      action: 'updateLearningObjective';
-      draftId: string;
-      objectiveId: string;
-      title: string;
-      capability: string;
-    }
-  | {
-      action: 'updateActivityBrief';
-      draftId: string;
-      briefId: string;
-      type: ActivityType;
-      title: string;
-      instructions: string;
-      learnerAction: string;
-      successCriteria: string;
-      feedbackGuidance: string;
-    }
-  | { action: 'generateCourseContent'; draftId: string }
-  | {
-      action: 'setFindingStatus';
-      draftId: string;
-      findingId: string;
-      status: 'resolved' | 'dismissed';
-    }
-  | { action: 'openPreview'; draftId: string };
 
 export const emptyCoursePreparation = (language: CourseLanguage): CoursePreparation => ({
   activityMixPreference: '',
@@ -506,7 +158,7 @@ export const hasActivityPlan = (draft: CourseDraft) =>
   );
 
 export const isPlayableGeneratedActivity = (activity: GeneratedActivity) =>
-  activity.status !== 'empty' && activity.status !== 'stale';
+  activity.type !== 'not_playable' && activity.status !== 'empty' && activity.status !== 'stale';
 
 export const hasGeneratedActivities = (draft: CourseDraft) =>
   draft.learningBlueprint.generatedActivities.some(isPlayableGeneratedActivity);
@@ -562,7 +214,7 @@ export const workflowStepIndex = (step: DraftStep) => {
   if (step === 'preview') {
     return workflowSteps.length;
   }
-  return workflowSteps.indexOf(step as WorkflowStep);
+  return workflowSteps.indexOf(step);
 };
 
 const firstOpenBlockingFinding = (draft: CourseDraft, targetStep: DraftStep) => {
@@ -616,14 +268,14 @@ export const getWorkflowPrerequisiteGate = (
   if (targetIndex > workflowStepIndex('activityPlan') && !hasActivityPlan(draft)) {
     return { allowed: false, blockedStep: 'activityPlan', reason: 'activityPlanRequired' };
   }
-  if (targetIndex > workflowStepIndex('courseContent') && !hasCourseContent(draft)) {
-    return { allowed: false, blockedStep: 'courseContent', reason: 'courseContentRequired' };
-  }
   if (
-    targetIndex > workflowStepIndex('courseContent') &&
+    targetIndex >= workflowStepIndex('courseContent') &&
     !hasPlayableGeneratedActivityCoverage(draft)
   ) {
     return { allowed: false, blockedStep: 'activityPlan', reason: 'activityPlanRequired' };
+  }
+  if (targetIndex > workflowStepIndex('courseContent') && !hasCourseContent(draft)) {
+    return { allowed: false, blockedStep: 'courseContent', reason: 'courseContentRequired' };
   }
 
   return { allowed: true };

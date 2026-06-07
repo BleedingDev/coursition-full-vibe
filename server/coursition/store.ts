@@ -1,60 +1,113 @@
 import * as NodeCrypto from '@effect/platform-node/NodeCrypto';
-import { Crypto, DateTime, Effect } from 'effect';
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import { Crypto, Data, DateTime, Effect, FileSystem, Option, Schema, Semaphore } from 'effect';
 import * as ManagedRuntime from 'effect/ManagedRuntime';
-import parseDataUrl from 'data-urls';
-import { fileTypeFromBuffer } from 'file-type';
-import { lookup as lookupMimeType } from 'mime-types';
+import { FetchHttpClient } from 'effect/unstable/http';
+import {
+  courseContentSchema,
+  courseDraftSchema,
+  learningBlueprintSchema,
+} from '../../shared/coursition/effect-api.ts';
 import {
   buildFindings,
   emptyCourseContent,
   emptyLearningBlueprint,
   getWorkflowPreviewGate,
   getWorkflowStepGate,
+  hasActivityPlan,
+  hasCourseContent,
+  hasCoursePreparation,
+  hasObjectiveMap,
+  hasPlayableGeneratedActivityCoverage,
   hasUsableSourceMaterial,
+  isPlayableGeneratedActivity,
   staleCourseContent,
   staleLearningBlueprint,
 } from '../../shared/coursition/workflow.ts';
 import type {
   ActivityBrief,
-  ActivityType,
   AiRun,
   AiRunType,
-  ContentBlockType,
-  CourseContent,
-  CourseContentBlock,
-  CoursePreparation,
   CourseDraft,
   CourseDraftSummary,
-  CourseSection,
   DerivedSourceDocument,
   GeneratedActivity,
   KnowledgeChunk,
-  LearningBlueprint,
   LearningObjective,
-  SourceConfidence,
   SourceAsset,
-  SourceSupport,
   WorkflowAction,
   WorkflowSnapshot,
 } from '../../shared/coursition/workflow.ts';
 import {
+  failedActivityFromBrief,
+  generateActivityWithAi,
   generateCourseContentWithAi,
-  generateLearningBlueprintWithAi,
+  generateCoursePreparationWithAi,
+  generateLearningPlanWithAi,
   isAiProviderConfigured,
 } from './ai-provider.ts';
-import { loadCoursitionSourceProviderConfig } from './config.ts';
+import { loadCoursitionSourceProviderConfig, providerKeyConfigured } from './config.ts';
+import {
+  isWebExtractionConfigured,
+  processSource,
+  SourceProcessingError,
+} from './source-processing.ts';
+import type { SourceProcessorDeps } from './source-processing.ts';
+import defaultSeedStoreJson from './default-seed.json';
 
 interface StoreFile {
+  defaultSeededOwnerIds?: string[];
+  defaultSeedVersion?: string;
   drafts: CourseDraft[];
 }
 
-const dataDirectory = '.coursition-data';
-const dataPath = `${dataDirectory}/workflow.json`;
-let storeMutationQueue: Promise<void> = Promise.resolve();
-const completeStoreMutation = () => Promise.resolve();
+const storeFileSchema = Schema.Struct({
+  defaultSeedVersion: Schema.optional(Schema.String),
+  defaultSeededOwnerIds: Schema.optional(Schema.Array(Schema.String)),
+  drafts: Schema.Array(courseDraftSchema),
+});
+const storeFileJsonSchema = Schema.fromJsonString(storeFileSchema);
+const activityRunSummaryJsonSchema = Schema.fromJsonString(
+  Schema.Struct({
+    failedCount: Schema.Finite,
+    generatedCount: Schema.Finite,
+    totalCount: Schema.Finite,
+  }),
+);
+const courseGenerationSummaryJsonSchema = Schema.fromJsonString(
+  Schema.Struct({
+    content: courseContentSchema,
+    learningBlueprint: learningBlueprintSchema,
+  }),
+);
+const unknownRecordOptionFromUnknown = Schema.decodeUnknownOption(
+  Schema.Record(Schema.String, Schema.Unknown),
+);
+
+class CoursitionStoreError extends Data.TaggedError('CoursitionStoreError')<{
+  readonly message: string;
+  readonly schemaError?: Schema.SchemaError;
+}> {}
+
+type StoreError = CoursitionStoreError;
+
+const toStoreError = (cause: unknown): CoursitionStoreError =>
+  cause instanceof CoursitionStoreError
+    ? cause
+    : new CoursitionStoreError({
+        message:
+          cause instanceof Error && cause.message.trim().length > 0
+            ? cause.message.trim()
+            : 'Course draft storage failed.',
+      });
+
+// One permit serializes all store writes, replacing the hand-rolled promise queue.
+const storeMutationSemaphore = Semaphore.makeUnsafe(1);
 
 const now = () => DateTime.formatIso(DateTime.nowUnsafe());
 const cryptoRuntime = ManagedRuntime.make(NodeCrypto.layer);
+const sourceProcessingRuntime = ManagedRuntime.make(FetchHttpClient.layer);
+const storeRuntime = ManagedRuntime.make(NodeFileSystem.layer);
 const randomUuidV4 = () =>
   cryptoRuntime.runSync(
     Effect.gen(function* randomUuidV4Program() {
@@ -63,494 +116,260 @@ const randomUuidV4 = () =>
     }),
   );
 const createId = (prefix: string) => `${prefix}_${randomUuidV4()}`;
-const nodeFs = () => import('node:fs/promises');
 const sourceProviderConfig = () => loadCoursitionSourceProviderConfig();
-const providerKeyConfigured = (value: string | undefined): value is string =>
-  typeof value === 'string' && value.length > 0;
-const sleep = (milliseconds: number) => Effect.runPromise(Effect.sleep(milliseconds));
-const providerFetch = (url: string, init: RequestInit) =>
-  Effect.runPromise(Effect.promise(() => globalThis['fetch'](url, init)));
-/* eslint-disable promise/prefer-await-to-callbacks, promise/prefer-await-to-then */
-const runPromiseGenerator = <Value>(
-  operation: () => Generator<PromiseLike<unknown>, Value, unknown>,
-): Promise<Value> => {
-  const iterator = operation();
-  const step = (result: IteratorResult<PromiseLike<unknown>, Value>): Promise<Value> => {
-    if (result.done === true) {
-      return Promise.resolve(result.value);
-    }
-    return Promise.resolve(result.value).then(
-      (value) => step(iterator.next(value)),
-      (error: unknown) => step(iterator.throw(error)),
+
+/*
+ * Persistence seam. All durable state for the Course Draft store lives behind a
+ * StoreBackend: the JSON-file adapter is used in production, and the in-memory
+ * adapter lets callers and tests exercise the full workflow with no disk and no
+ * process.chdir. Two adapters, one interface.
+ */
+interface StoreBackend {
+  read(): Effect.Effect<StoreFile, StoreError, FileSystem.FileSystem>;
+  readSourceBlob(
+    reference: string | undefined,
+  ): Effect.Effect<Option.Option<Uint8Array>, CoursitionStoreError, FileSystem.FileSystem>;
+  write(store: StoreFile): Effect.Effect<void, StoreError, FileSystem.FileSystem>;
+  writeSourceBlob(
+    draftId: string,
+    sourceId: string,
+    bytes: Uint8Array,
+  ): Effect.Effect<string, CoursitionStoreError, FileSystem.FileSystem>;
+}
+
+const emptyStoreFile = (): StoreFile => ({ drafts: [] });
+
+const storeFileFromSchema = (store: Schema.Schema.Type<typeof storeFileSchema>): StoreFile => ({
+  ...('defaultSeededOwnerIds' in store && Array.isArray(store.defaultSeededOwnerIds)
+    ? { defaultSeededOwnerIds: [...store.defaultSeededOwnerIds] }
+    : {}),
+  ...('defaultSeedVersion' in store && typeof store.defaultSeedVersion === 'string'
+    ? { defaultSeedVersion: store.defaultSeedVersion }
+    : {}),
+  drafts: [...store.drafts],
+});
+
+const defaultSeedVersion = '2026-06-07-pdf-showcase-v1';
+
+const defaultSeedStore = storeFileFromSchema(
+  Schema.decodeUnknownSync(storeFileSchema)(defaultSeedStoreJson),
+);
+
+const decodeStoreFile = (content: string) =>
+  Schema.decodeUnknownEffect(storeFileJsonSchema)(content).pipe(
+    Effect.mapError(
+      (schemaError) =>
+        new CoursitionStoreError({
+          message: 'Stored course draft data does not match the current schema.',
+          schemaError,
+        }),
+    ),
+    Effect.map(storeFileFromSchema),
+  );
+
+const serializeStoreFile = (store: StoreFile) =>
+  Schema.encodeEffect(storeFileJsonSchema)(store).pipe(
+    Effect.mapError(
+      (schemaError) =>
+        new CoursitionStoreError({
+          message: 'Course draft data cannot be encoded with the current schema.',
+          schemaError,
+        }),
+    ),
+  );
+
+const sourceAssetStorageReferencePrefix = 'json-file:source-assets/';
+
+const sourceAssetStorageReferenceFor = (draftId: string, sourceId: string) =>
+  `${sourceAssetStorageReferencePrefix}${draftId}/${sourceId}.bin`;
+
+const sourceAssetRelativePath = (reference: string | undefined) => {
+  if (typeof reference !== 'string' || !reference.startsWith(sourceAssetStorageReferencePrefix)) {
+    return null;
+  }
+  const relativePath = reference.slice('json-file:'.length);
+  return /^[\w-]+\/[\w-]+\.bin$/u.test(relativePath.replace(/^source-assets\//u, ''))
+    ? relativePath
+    : null;
+};
+
+export const jsonFileStoreBackend = (rootDirectory: string): StoreBackend => {
+  const storeFilePath = `${rootDirectory}/workflow.json`;
+  return {
+    read: () =>
+      Effect.gen(function* readStoreProgram() {
+        const fs = yield* FileSystem.FileSystem;
+        const exists = yield* fs.exists(storeFilePath).pipe(Effect.mapError(toStoreError));
+        if (!exists) {
+          return emptyStoreFile();
+        }
+        const content = yield* fs.readFileString(storeFilePath).pipe(Effect.mapError(toStoreError));
+        return yield* decodeStoreFile(content);
+      }),
+    readSourceBlob: (reference) =>
+      Effect.gen(function* readSourceBlobProgram() {
+        const relativePath = sourceAssetRelativePath(reference);
+        if (relativePath === null) {
+          return Option.none();
+        }
+        const fs = yield* FileSystem.FileSystem;
+        const bytes = yield* fs.readFile(`${rootDirectory}/${relativePath}`);
+        return Option.some(bytes);
+      }).pipe(Effect.mapError(toStoreError)),
+    write: (store) =>
+      Effect.gen(function* writeStoreProgram() {
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs
+          .makeDirectory(rootDirectory, { recursive: true })
+          .pipe(Effect.mapError(toStoreError));
+        const temporaryPath = `${storeFilePath}.${randomUuidV4()}.tmp`;
+        const content = yield* serializeStoreFile(store);
+        yield* fs.writeFileString(temporaryPath, content).pipe(Effect.mapError(toStoreError));
+        yield* fs.rename(temporaryPath, storeFilePath).pipe(Effect.mapError(toStoreError));
+      }),
+    writeSourceBlob: (draftId, sourceId, bytes) =>
+      Effect.gen(function* writeSourceBlobProgram() {
+        const reference = sourceAssetStorageReferenceFor(draftId, sourceId);
+        const relativePath = sourceAssetRelativePath(reference);
+        if (relativePath === null) {
+          return yield* new CoursitionStoreError({
+            message: 'Invalid source asset storage reference.',
+          });
+        }
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.makeDirectory(`${rootDirectory}/source-assets/${draftId}`, { recursive: true });
+        yield* fs.writeFile(`${rootDirectory}/${relativePath}`, bytes);
+        return reference;
+      }).pipe(Effect.mapError(toStoreError)),
+  };
+};
+
+const cloneStoreFile = (store: StoreFile): StoreFile => structuredClone(store);
+
+const inMemoryStoreBackend = (): StoreBackend => {
+  const blobs = new Map<string, Uint8Array>();
+  let storeFile: StoreFile = { drafts: [] };
+  return {
+    read: () => Effect.sync(() => cloneStoreFile(storeFile)),
+    readSourceBlob: (reference) =>
+      Effect.sync(() =>
+        typeof reference === 'string' ? Option.fromNullishOr(blobs.get(reference)) : Option.none(),
+      ),
+    write: (store) =>
+      Effect.sync(() => {
+        storeFile = cloneStoreFile(store);
+      }),
+    writeSourceBlob: (draftId, sourceId, bytes) =>
+      Effect.sync(() => {
+        const reference = sourceAssetStorageReferenceFor(draftId, sourceId);
+        blobs.set(reference, bytes);
+        return reference;
+      }),
+  };
+};
+
+const configuredDataDirectory = () => {
+  const value = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env?.['COURSITION_DATA_DIR'];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '.coursition-data';
+};
+
+let activeBackend: StoreBackend = jsonFileStoreBackend(configuredDataDirectory());
+let activeBackendSeedsDefaults = true;
+
+export const setStoreBackend = (backend: StoreBackend) => {
+  activeBackend = backend;
+  activeBackendSeedsDefaults = false;
+};
+
+export const resetStoreBackend = () => {
+  activeBackend = jsonFileStoreBackend(configuredDataDirectory());
+  activeBackendSeedsDefaults = true;
+};
+
+export { inMemoryStoreBackend };
+export type { StoreBackend };
+
+const readStore = () => activeBackend.read();
+
+const writeStore = (store: StoreFile) => activeBackend.write(store);
+
+const seedOwnerIdToken = '__coursition_seed_owner__';
+
+const seedOwnerKey = (ownerId: string) => {
+  const key = ownerId.replaceAll(/[^\w-]+/gu, '_').slice(0, 48);
+  return key.length > 0 ? key : 'owner';
+};
+
+const replaceSeedString = (
+  value: string,
+  sourceDraftId: string,
+  seededDraftId: string,
+  ownerId: string,
+) => value.replaceAll(sourceDraftId, seededDraftId).replaceAll(seedOwnerIdToken, ownerId);
+
+const replaceSeedValues = (
+  value: unknown,
+  sourceDraftId: string,
+  seededDraftId: string,
+  ownerId: string,
+): unknown => {
+  if (typeof value === 'string') {
+    return replaceSeedString(value, sourceDraftId, seededDraftId, ownerId);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => replaceSeedValues(item, sourceDraftId, seededDraftId, ownerId));
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        replaceSeedValues(entry, sourceDraftId, seededDraftId, ownerId),
+      ]),
     );
-  };
-
-  return Effect.runPromise(Effect.promise(() => step(iterator.next())));
+  }
+  return value;
 };
-/* eslint-enable promise/prefer-await-to-callbacks, promise/prefer-await-to-then */
-const waitFor = function* waitFor<Value>(
-  promise: PromiseLike<Value>,
-): Generator<PromiseLike<unknown>, Value, unknown> {
-  return (yield promise) as Value;
-};
-const llamaParseMarkdownTiers = ['cost_effective', 'agentic', 'agentic_plus'] as const;
-type LlamaParseMarkdownTier = (typeof llamaParseMarkdownTiers)[number];
 
-interface BinarySourcePayload {
-  bytes: Uint8Array;
-  mimeType: string;
-}
-
-interface FileSourcePayload {
-  bytes: Uint8Array;
-  declaredMimeType: string;
-}
-
-interface ProviderProcessingResult {
-  content: string;
-  mimeType?: string;
-  providerJobId?: string;
-  storageReference?: string;
-}
-
-interface WebExtractionResult extends ProviderProcessingResult {
-  processor: string;
-  providerName: string;
-}
-
-interface WebExtractionProvider {
-  apiKey: string | undefined;
-  extract: (targetUrl: URL) => Promise<WebExtractionResult>;
-  name: string;
-}
-
-const readStore = (): Promise<StoreFile> =>
-  runPromiseGenerator(function* storeProgram() {
-    try {
-      const fs = yield* waitFor(nodeFs());
-      const content = yield* waitFor(fs.readFile(dataPath, 'utf-8'));
-      return JSON.parse(content) as StoreFile;
-    } catch {
-      return { drafts: [] };
-    }
+const seedDraftsForOwner = (ownerId: string): CourseDraft[] =>
+  defaultSeedStore.drafts.map((draft, index) => {
+    const seededDraftId = `${draft.id}_seed_${seedOwnerKey(ownerId)}_${index + 1}`;
+    const seededDraft = Schema.decodeUnknownSync(courseDraftSchema)(
+      replaceSeedValues(draft, draft.id, seededDraftId, ownerId),
+    );
+    return {
+      ...seededDraft,
+      ownerId,
+    };
   });
 
-const writeStore = (store: StoreFile) =>
-  runPromiseGenerator(function* storeProgram() {
-    const fs = yield* waitFor(nodeFs());
-    yield* waitFor(fs.mkdir(dataDirectory, { recursive: true }));
-    const temporaryPath = `${dataPath}.${randomUuidV4()}.tmp`;
-    yield* waitFor(fs.writeFile(temporaryPath, JSON.stringify(store, null, 2)));
-    yield* waitFor(fs.rename(temporaryPath, dataPath));
-  });
-
-const activityTypes = new Set<ActivityType>([
-  'retrieval_check',
-  'practice_task',
-  'scenario_decision',
-  'ordering_matching',
-  'rubric_answer',
-]);
-const generatedActivityTypes = new Set<GeneratedActivity['type']>([
-  'retrieval_check',
-  'practice_task',
-  'scenario_decision',
-  'ordering_matching',
-  'rubric_answer',
-  'not_playable',
-]);
-const contentBlockTypes = new Set<ContentBlockType>([
-  'objective',
-  'source_explanation',
-  'worked_example',
-  'interactive_activity',
-  'reflection',
-  'summary',
-]);
-const sourceSupports = new Set(['source_backed', 'partially_source_backed', 'inferred'] as const);
-const sourceConfidences = new Set(['high', 'medium', 'low', 'none'] as const);
-const generatedStatuses = new Set(['empty', 'generated', 'edited', 'stale'] as const);
-
-const sourceSupportFor = (value: unknown): SourceSupport =>
-  sourceSupports.has(value as SourceSupport) ? (value as SourceSupport) : 'inferred';
-
-const sourceConfidenceFor = (value: unknown): SourceConfidence =>
-  sourceConfidences.has(value as SourceConfidence) ? (value as SourceConfidence) : 'none';
-
-const generatedStatusFor = (value: unknown) =>
-  generatedStatuses.has(value as LearningObjective['status'])
-    ? (value as LearningObjective['status'])
-    : 'empty';
-
-const activityTypeFor = (value: unknown): ActivityType =>
-  activityTypes.has(value as ActivityType) ? (value as ActivityType) : 'retrieval_check';
-
-const contentBlockTypeFor = (value: unknown): ContentBlockType =>
-  contentBlockTypes.has(value as ContentBlockType)
-    ? (value as ContentBlockType)
-    : 'source_explanation';
-
-const stringFor = (value: unknown, fallback = '') => (typeof value === 'string' ? value : fallback);
-
-const stringArrayFor = (value: unknown) =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-
-const recordFor = (value: unknown): Record<string, unknown> | null =>
-  value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-
-const nonEmptyStringFor = (value: unknown): value is string =>
-  typeof value === 'string' && value.length > 0;
-
-const booleanFor = (value: unknown): value is boolean => typeof value === 'boolean';
-
-const numberFor = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
-
-const validStringArrayFor = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every(nonEmptyStringFor);
-
-const hasValidGeneratedActivityBase = (activity: Record<string, unknown>) =>
-  nonEmptyStringFor(activity['id']) &&
-  nonEmptyStringFor(activity['briefId']) &&
-  validStringArrayFor(activity['objectiveIds']) &&
-  sourceConfidences.has(activity['sourceConfidence'] as SourceConfidence) &&
-  generatedStatuses.has(activity['status'] as LearningObjective['status']);
-
-const isValidRetrievalChoice = (value: unknown) => {
-  const choice = recordFor(value);
-  return (
-    choice !== null &&
-    nonEmptyStringFor(choice['id']) &&
-    nonEmptyStringFor(choice['text']) &&
-    booleanFor(choice['isCorrect']) &&
-    nonEmptyStringFor(choice['feedback'])
-  );
-};
-
-const isValidScenarioChoice = (value: unknown) => {
-  const choice = recordFor(value);
-  return (
-    choice !== null &&
-    nonEmptyStringFor(choice['id']) &&
-    nonEmptyStringFor(choice['text']) &&
-    booleanFor(choice['isPreferred']) &&
-    nonEmptyStringFor(choice['consequence']) &&
-    nonEmptyStringFor(choice['feedback'])
-  );
-};
-
-const isValidOrderingMatchingItem = (value: unknown) => {
-  const item = recordFor(value);
-  return (
-    item !== null &&
-    nonEmptyStringFor(item['id']) &&
-    nonEmptyStringFor(item['text']) &&
-    (item['correctPosition'] === undefined || numberFor(item['correctPosition'])) &&
-    (item['matchLabel'] === undefined || nonEmptyStringFor(item['matchLabel']))
-  );
-};
-
-const isValidRetrievalInteraction = (interaction: Record<string, unknown>) =>
-  nonEmptyStringFor(interaction['question']) &&
-  Array.isArray(interaction['choices']) &&
-  interaction['choices'].length > 0 &&
-  interaction['choices'].every(isValidRetrievalChoice) &&
-  nonEmptyStringFor(interaction['explanationPrompt']) &&
-  nonEmptyStringFor(interaction['feedback']);
-
-const isValidPracticeInteraction = (interaction: Record<string, unknown>) =>
-  nonEmptyStringFor(interaction['prompt']) &&
-  nonEmptyStringFor(interaction['submissionLabel']) &&
-  validStringArrayFor(interaction['checklist']) &&
-  interaction['checklist'].length > 0 &&
-  nonEmptyStringFor(interaction['feedback']);
-
-const isValidScenarioInteraction = (interaction: Record<string, unknown>) =>
-  nonEmptyStringFor(interaction['scenario']) &&
-  Array.isArray(interaction['choices']) &&
-  interaction['choices'].length > 0 &&
-  interaction['choices'].every(isValidScenarioChoice) &&
-  nonEmptyStringFor(interaction['justificationPrompt']) &&
-  nonEmptyStringFor(interaction['feedback']);
-
-const isValidOrderingMatchingInteraction = (interaction: Record<string, unknown>) =>
-  (interaction['mode'] === 'matching' || interaction['mode'] === 'ordering') &&
-  nonEmptyStringFor(interaction['prompt']) &&
-  Array.isArray(interaction['items']) &&
-  interaction['items'].length > 0 &&
-  interaction['items'].every(isValidOrderingMatchingItem) &&
-  nonEmptyStringFor(interaction['feedback']);
-
-const isValidRubricInteraction = (interaction: Record<string, unknown>) =>
-  nonEmptyStringFor(interaction['prompt']) &&
-  validStringArrayFor(interaction['criteria']) &&
-  interaction['criteria'].length > 0 &&
-  nonEmptyStringFor(interaction['feedback']);
-
-const isValidNotPlayableInteraction = (interaction: Record<string, unknown>) =>
-  nonEmptyStringFor(interaction['prompt']) &&
-  nonEmptyStringFor(interaction['reason']) &&
-  nonEmptyStringFor(interaction['feedback']);
-
-const isValidGeneratedInteraction = (
-  type: GeneratedActivity['type'],
-  interactionValue: unknown,
-) => {
-  const interaction = recordFor(interactionValue);
-  if (interaction === null || interaction['kind'] !== type) {
-    return false;
-  }
-  switch (type) {
-    case 'retrieval_check': {
-      return isValidRetrievalInteraction(interaction);
-    }
-    case 'practice_task': {
-      return isValidPracticeInteraction(interaction);
-    }
-    case 'scenario_decision': {
-      return isValidScenarioInteraction(interaction);
-    }
-    case 'ordering_matching': {
-      return isValidOrderingMatchingInteraction(interaction);
-    }
-    case 'rubric_answer': {
-      return isValidRubricInteraction(interaction);
-    }
-    case 'not_playable': {
-      return isValidNotPlayableInteraction(interaction);
-    }
-    default: {
-      const unsupportedType: never = type;
-      return unsupportedType;
-    }
-  }
-};
-
-const generatedActivityFor = (value: unknown): GeneratedActivity | null => {
-  const activity = recordFor(value);
-  if (activity === null) {
-    return null;
-  }
-  const activityType = activity['type'];
-  if (
-    typeof activityType !== 'string' ||
-    !generatedActivityTypes.has(activityType as GeneratedActivity['type'])
-  ) {
-    return null;
-  }
-  const type = activityType as GeneratedActivity['type'];
-  return hasValidGeneratedActivityBase(activity) &&
-    isValidGeneratedInteraction(type, activity['interaction'])
-    ? (activity as unknown as GeneratedActivity)
-    : null;
-};
-
-const generatedActivitiesFor = (value: unknown) =>
-  Array.isArray(value)
-    ? value.flatMap((activity) => {
-        const generatedActivity = generatedActivityFor(activity);
-        return generatedActivity === null ? [] : [generatedActivity];
-      })
-    : [];
-
-const sourceReferencesFor = (value: unknown): NonNullable<LearningObjective['sourceReferences']> =>
-  Array.isArray(value)
-    ? value
-        .filter(
-          (reference): reference is NonNullable<LearningObjective['sourceReferences']>[number] =>
-            Boolean(
-              reference &&
-              typeof reference === 'object' &&
-              typeof (reference as { sourceAssetId?: unknown }).sourceAssetId === 'string' &&
-              typeof (reference as { position?: unknown }).position === 'string',
-            ),
-        )
-        .map((reference) => ({
-          ...reference,
-          heading: stringFor(reference.heading),
-        }))
-    : [];
-
-const coursePreparationField = (
-  preparation: Partial<CoursePreparation> | undefined,
-  field: keyof Pick<
-    CoursePreparation,
-    | 'activityMixPreference'
-    | 'audience'
-    | 'constraints'
-    | 'depth'
-    | 'desiredOutcome'
-    | 'priorKnowledge'
-    | 'tone'
-  >,
-  fallback = '',
-) => stringFor(preparation?.[field], fallback);
-
-const coursePreparationStrictness = (
-  preparation: Partial<CoursePreparation> | undefined,
-): CoursePreparation['sourceStrictness'] => {
-  if (preparation?.sourceStrictness === 'strict') {
-    return 'strict';
-  }
-  return 'standard';
-};
-
-const isCourseLanguage = (value: unknown): value is CoursePreparation['language'] =>
-  value === 'en' || value === 'cs';
-
-const coursePreparationLanguagePreference = (
-  preparation: Partial<CoursePreparation> | undefined,
-): CoursePreparation['languagePreference'] => {
-  const preference = (preparation as Partial<CoursePreparation> | undefined)?.languagePreference;
-  if (preference === 'source' || isCourseLanguage(preference)) {
-    return preference;
-  }
-  return 'source';
-};
-
-const czechSignalPattern = /[áčďéěíňóřšťúůýž]/giu;
-const czechWordPattern =
-  /\b(a|aby|ale|bez|bude|by|byl|byla|co|do|jak|jako|je|jsou|když|kter[ýáé]|má|na|nebo|od|po|podle|pro|při|se|si|tak|tento|to|ve|v|že)\b/giu;
-const englishWordPattern =
-  /\b(and|apply|are|as|can|course|for|from|how|in|is|learn|learners|of|practice|source|the|they|this|to|with|you)\b/giu;
-
-const matchCount = (value: string, pattern: RegExp) => [...value.matchAll(pattern)].length;
-
-const inferLanguageFromText = (value: string): CoursePreparation['language'] | null => {
-  const sample = value.slice(0, 30_000);
-  if (sample.trim().length === 0) {
-    return null;
-  }
-  const czechScore =
-    matchCount(sample, czechSignalPattern) * 3 + matchCount(sample, czechWordPattern);
-  const englishScore = matchCount(sample, englishWordPattern);
-  if (czechScore >= 3 && czechScore >= englishScore) {
-    return 'cs';
-  }
-  if (englishScore >= 5 && englishScore > czechScore * 1.4) {
-    return 'en';
-  }
-  return null;
-};
-
-const inferCourseSourceLanguage = (draft: CourseDraft): CoursePreparation['language'] | null =>
-  inferLanguageFromText(
-    [
-      draft.sources
-        .filter((source) => source.status !== 'deleted')
-        .map((source) => `${source.name}\n${source.content}`)
-        .join('\n\n'),
-      draft.derivedSourceDocuments.map((document) => document.content).join('\n\n'),
-      draft.knowledgeChunks.map((chunk) => chunk.content).join('\n\n'),
-    ].join('\n\n'),
+const loadFileSourcePayload = (source: SourceAsset) =>
+  activeBackend.readSourceBlob(source.storageReference).pipe(
+    Effect.map(
+      Option.map((bytes) => ({
+        bytes,
+        declaredMimeType: source.mimeType ?? 'application/octet-stream',
+      })),
+    ),
   );
 
-const coursePreparationLanguage = (
-  draft: CourseDraft,
-  preparation: Partial<CoursePreparation> | undefined,
-): CoursePreparation['language'] => {
-  const preference = coursePreparationLanguagePreference(preparation);
-  if (isCourseLanguage(preference)) {
-    return preference;
-  }
-  return (
-    inferCourseSourceLanguage(draft) ??
-    (isCourseLanguage(preparation?.language) ? preparation.language : draft.language)
-  );
-};
-
-const normalizeCoursePreparation = (
-  draft: CourseDraft,
-  preparation: Partial<CoursePreparation> | undefined,
-): CoursePreparation => ({
-  activityMixPreference: coursePreparationField(preparation, 'activityMixPreference'),
-  audience: coursePreparationField(preparation, 'audience'),
-  constraints: coursePreparationField(preparation, 'constraints'),
-  depth: coursePreparationField(preparation, 'depth', 'practical'),
-  desiredOutcome: coursePreparationField(preparation, 'desiredOutcome'),
-  language: coursePreparationLanguage(draft, preparation),
-  languagePreference: coursePreparationLanguagePreference(preparation),
-  priorKnowledge: coursePreparationField(preparation, 'priorKnowledge'),
-  sourceStrictness: coursePreparationStrictness(preparation),
-  tone: coursePreparationField(preparation, 'tone'),
-});
-
-const normalizeLearningObjective = (
-  draft: CourseDraft,
-  objective: Partial<LearningObjective>,
-  index: number,
-): LearningObjective => ({
-  capability: stringFor(objective.capability, stringFor(objective.title, draft.title)),
-  id: stringFor(objective.id, `objective_${draft.id}_${index + 1}`),
-  sourceConfidence: sourceConfidenceFor(objective.sourceConfidence),
-  sourceReferences: sourceReferencesFor(objective.sourceReferences),
-  sourceSupport: sourceSupportFor(objective.sourceSupport),
-  status: generatedStatusFor(objective.status),
-  title: stringFor(objective.title, `Objective ${index + 1}`),
-  topicName: stringFor(objective.topicName, stringFor(objective.title, draft.title)),
-  updatedAt: stringFor(objective.updatedAt, draft.updatedAt),
-});
-
-const normalizeActivityBrief = (
-  draft: CourseDraft,
-  brief: Partial<ActivityBrief>,
-  objectives: readonly LearningObjective[],
-  index: number,
-): ActivityBrief => {
-  const objectiveId = stringFor(
-    brief.objectiveId,
-    objectives[index]?.id ?? objectives[0]?.id ?? '',
-  );
-  const objectiveIds =
-    Array.isArray(brief.objectiveIds) && brief.objectiveIds.length > 0
-      ? brief.objectiveIds.filter((id): id is string => typeof id === 'string')
-      : [objectiveId].filter(Boolean);
-  return {
-    feedbackGuidance: stringFor(brief.feedbackGuidance),
-    id: stringFor(brief.id, `activity_brief_${draft.id}_${index + 1}`),
-    instructions: stringFor(brief.instructions, stringFor(brief.learnerAction)),
-    learnerAction: stringFor(brief.learnerAction),
-    objectiveId,
-    objectiveIds,
-    sourceConfidence: sourceConfidenceFor(brief.sourceConfidence),
-    sourceReferences: sourceReferencesFor(brief.sourceReferences),
-    status: generatedStatusFor(brief.status),
-    successCriteria: stringFor(brief.successCriteria),
-    title: stringFor(brief.title, `Activity ${index + 1}`),
-    type: activityTypeFor(brief.type),
-    updatedAt: stringFor(brief.updatedAt, draft.updatedAt),
-  };
-};
-
-const normalizeLearningBlueprint = (draft: CourseDraft): LearningBlueprint => {
-  const fallback = emptyLearningBlueprint(draft.language);
-  const candidate = (draft as CourseDraft & { learningBlueprint?: Partial<LearningBlueprint> })
-    .learningBlueprint;
-  const coursePreparation = candidate?.coursePreparation;
-  const createdAt = stringFor(candidate?.createdAt, draft.createdAt);
-  const updatedAt = stringFor(candidate?.updatedAt, draft.updatedAt);
-  const objectives = Array.isArray(candidate?.objectives)
-    ? candidate.objectives.map((objective, index) =>
-        normalizeLearningObjective(draft, objective, index),
-      )
-    : fallback.objectives;
-  const activityBriefs = Array.isArray(candidate?.activityBriefs)
-    ? candidate.activityBriefs.map((brief, index) =>
-        normalizeActivityBrief(draft, brief, objectives, index),
-      )
-    : fallback.activityBriefs;
-  return {
-    activityBriefs,
-    assumptions: stringArrayFor(candidate?.assumptions),
-    coursePreparation: normalizeCoursePreparation(draft, coursePreparation),
-    createdAt,
-    generatedActivities: generatedActivitiesFor(candidate?.generatedActivities),
-    objectives,
-    sourceCoverage: sourceSupportFor(candidate?.sourceCoverage),
-    updatedAt,
-  };
+/*
+ * Source Material processing lives in its own module with its own HttpClient
+ * runtime. The store supplies the persistence dependency by running the
+ * FileSystem-backed blob write through the store runtime and surfacing failures
+ * as the module's tagged error.
+ */
+const sourceProcessorDeps: SourceProcessorDeps = {
+  newSourceId: (draftId) => createId(`source_${draftId}`),
+  now,
+  writeSourceBlob: (draftId, sourceId, bytes) =>
+    Effect.tryPromise({
+      catch: (cause) =>
+        new SourceProcessingError({
+          message: cause instanceof Error ? cause.message : 'Failed to store source asset bytes.',
+        }),
+      try: () => storeRuntime.runPromise(activeBackend.writeSourceBlob(draftId, sourceId, bytes)),
+    }),
 };
 
 const staleStatusFor = (status: LearningObjective['status']): LearningObjective['status'] =>
@@ -618,158 +437,92 @@ const documentsAndChunksForSource = (source: SourceAsset, createdAt: string) => 
   };
 };
 
-const normalizeCourseContentBlock = (
-  block: Partial<CourseContentBlock>,
-  fallbackId: string,
-): CourseContentBlock => ({
-  body: stringFor(block.body),
-  id: stringFor(block.id, fallbackId),
-  objectiveIds: stringArrayFor(block.objectiveIds),
-  sourceConfidence: sourceConfidenceFor(block.sourceConfidence),
-  sourceReferences: sourceReferencesFor(block.sourceReferences),
-  status: generatedStatusFor(block.status),
-  title: stringFor(block.title, 'Course content'),
-  type: contentBlockTypeFor(block.type),
-  ...(typeof block.activityId === 'string' && block.activityId.length > 0
-    ? { activityId: block.activityId }
-    : {}),
-});
+const withStoreMutation = storeMutationSemaphore.withPermits(1);
 
-const normalizeCourseSection = (
-  section: Partial<CourseSection>,
-  draft: CourseDraft,
-  index: number,
-): CourseSection => {
-  const fallbackId = `section_${draft.id}_${index + 1}`;
-  const rawBlocks = Array.isArray(section.blocks) ? section.blocks : [];
-  return {
-    blocks: rawBlocks.map((block, blockIndex) =>
-      normalizeCourseContentBlock(block, `block_${fallbackId}_${blockIndex + 1}`),
-    ),
-    id: stringFor(section.id, fallbackId),
-    objectiveIds: stringArrayFor(section.objectiveIds),
-    sourceConfidence: sourceConfidenceFor(section.sourceConfidence),
-    sourceReferences: sourceReferencesFor(section.sourceReferences),
-    status: generatedStatusFor(section.status),
-    summary: stringFor(section.summary),
-    title: stringFor(section.title, `Section ${index + 1}`),
-  };
-};
-
-const normalizeCourseContent = (draft: CourseDraft): CourseContent => {
-  const fallback = emptyCourseContent();
-  const candidate = (draft as CourseDraft & { courseContent?: Partial<CourseContent> })
-    .courseContent;
-  return {
-    createdAt: stringFor(candidate?.createdAt, draft.createdAt),
-    sections: Array.isArray(candidate?.sections)
-      ? candidate.sections.map((section, index) => normalizeCourseSection(section, draft, index))
-      : fallback.sections,
-    status: generatedStatusFor(candidate?.status),
-    updatedAt: stringFor(candidate?.updatedAt, draft.updatedAt),
-  };
-};
-
-const normalizeDraft = (draft: CourseDraft): CourseDraft => {
-  const createdAt = now();
-  const generatedSourceData = draft.sources.flatMap((source) => {
-    const result = documentsAndChunksForSource(source, source.createdAt ?? createdAt);
-    return result.derivedSourceDocuments.map((document) => ({
-      chunks: result.knowledgeChunks.filter(
-        (chunk) => chunk.derivedSourceDocumentId === document.id,
-      ),
-      document,
-    }));
-  });
-  const fallbackDocuments = generatedSourceData.map((entry) => entry.document);
-  const fallbackChunks = generatedSourceData.flatMap((entry) => entry.chunks);
-  return {
-    ...draft,
-    aiRuns: Array.isArray(draft.aiRuns) ? draft.aiRuns : [],
-    courseContent: normalizeCourseContent(draft),
-    derivedSourceDocuments: Array.isArray(draft.derivedSourceDocuments)
-      ? draft.derivedSourceDocuments
-      : fallbackDocuments,
-    findings: Array.isArray(draft.findings)
-      ? draft.findings.map((finding) => ({
-          ...finding,
-          fingerprint: finding.fingerprint ?? finding.id,
-          status: finding.status ?? 'open',
-          step: finding.step ?? 'courseContent',
-          targetId: finding.targetId ?? draft.id,
-          targetType: finding.targetType ?? 'course',
-        }))
-      : [],
-    knowledgeChunks: Array.isArray(draft.knowledgeChunks) ? draft.knowledgeChunks : fallbackChunks,
-    learningBlueprint: normalizeLearningBlueprint(draft),
-    mode: draft.mode === 'generate' ? 'generate' : 'assist',
-    sourceProcessingIncomplete: draft.sources.some(
-      (source) => source.status === 'queued' || source.status === 'processing',
-    ),
-  };
-};
-
-const withStoreMutation = <Value>(operation: () => Promise<Value>) => {
-  // Promise chaining is intentional here: this is the low-level queue that serializes JSON writes.
-  // eslint-disable-next-line promise/prefer-await-to-then
-  const mutation = storeMutationQueue.then(operation, operation);
-  // eslint-disable-next-line promise/prefer-await-to-then
-  storeMutationQueue = mutation.then(completeStoreMutation, completeStoreMutation);
-  return mutation;
+const ensureDefaultDraftsForOwner = (ownerId: string) => {
+  if (!activeBackendSeedsDefaults) {
+    return Effect.void;
+  }
+  return withStoreMutation(
+    Effect.gen(function* ensureDefaultDraftsProgram() {
+      const store = yield* readStore();
+      const seededOwnerIds = store.defaultSeededOwnerIds ?? [];
+      if (
+        seededOwnerIds.includes(ownerId) ||
+        store.drafts.some((draft) => draft.ownerId === ownerId)
+      ) {
+        return;
+      }
+      yield* writeStore({
+        ...store,
+        defaultSeedVersion,
+        defaultSeededOwnerIds: [...seededOwnerIds, ownerId],
+        drafts: [...store.drafts, ...seedDraftsForOwner(ownerId)],
+      });
+    }),
+  );
 };
 
 const saveDraft = (draft: CourseDraft) =>
-  withStoreMutation(() =>
-    runPromiseGenerator(function* storeProgram() {
-      const store = yield* waitFor(readStore());
-      const nextDraft = normalizeDraft({ ...draft, updatedAt: now() });
+  withStoreMutation(
+    Effect.gen(function* saveDraftProgram() {
+      const store = yield* readStore();
+      const nextDraft = { ...draft, updatedAt: now() };
       const draftIndex = store.drafts.findIndex((candidate) => candidate.id === draft.id);
       if (draftIndex === -1) {
         store.drafts.push(nextDraft);
       } else {
         store.drafts[draftIndex] = nextDraft;
       }
-      yield* waitFor(writeStore(store));
+      yield* writeStore(store);
       return nextDraft;
     }),
   );
 
 const requireDraft = (ownerId: string, draftId: string) =>
-  runPromiseGenerator(function* storeProgram() {
-    const store = yield* waitFor(readStore());
+  Effect.gen(function* requireDraftProgram() {
+    const store = yield* readStore();
     const draft = store.drafts.find(
       (candidate) => candidate.id === draftId && candidate.ownerId === ownerId,
     );
     if (draft === undefined) {
-      throw new Error('Course draft not found for signed-in creator.');
+      return yield* new CoursitionStoreError({
+        message: 'Course draft not found for signed-in creator.',
+      });
     }
-    return normalizeDraft(draft);
+    return draft;
   });
 
+export const draftForOwner = (ownerId: string, draftId: string): Promise<CourseDraft> =>
+  storeRuntime.runPromise(requireDraft(ownerId, draftId));
+
 const deleteDraft = (ownerId: string, draftId: string) =>
-  withStoreMutation(() =>
-    runPromiseGenerator(function* storeProgram() {
-      const store = yield* waitFor(readStore());
+  withStoreMutation(
+    Effect.gen(function* deleteDraftProgram() {
+      const store = yield* readStore();
       const draftIndex = store.drafts.findIndex(
         (candidate) => candidate.id === draftId && candidate.ownerId === ownerId,
       );
       if (draftIndex === -1) {
-        throw new Error('Course draft not found for signed-in creator.');
+        return yield* new CoursitionStoreError({
+          message: 'Course draft not found for signed-in creator.',
+        });
       }
       store.drafts.splice(draftIndex, 1);
-      yield* waitFor(writeStore(store));
+      yield* writeStore(store);
     }),
   );
 
 const latestDraft = (ownerId: string) =>
-  runPromiseGenerator(function* storeProgram() {
-    const store = yield* waitFor(readStore());
-    const draft =
-      store.drafts
-        .filter((candidate) => candidate.ownerId === ownerId)
-        .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null;
-    return draft === null ? null : normalizeDraft(draft);
-  });
+  readStore().pipe(
+    Effect.map((store) =>
+      Option.fromNullishOr(
+        store.drafts
+          .filter((candidate) => candidate.ownerId === ownerId)
+          .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0],
+      ),
+    ),
+  );
 
 const draftSummaryFor = (draft: CourseDraft): CourseDraftSummary => ({
   activityCount: draft.learningBlueprint.generatedActivities.length,
@@ -785,624 +538,43 @@ const draftSummaryFor = (draft: CourseDraft): CourseDraftSummary => ({
 });
 
 const draftSummariesFor = (ownerId: string) =>
-  runPromiseGenerator(function* storeProgram() {
-    const store = yield* waitFor(readStore());
+  Effect.gen(function* draftSummariesForProgram() {
+    const store = yield* readStore();
     return store.drafts
       .filter((candidate) => candidate.ownerId === ownerId)
-      .map(normalizeDraft)
       .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))
       .map(draftSummaryFor);
-  });
-
-const processorFor = (sourceType: SourceAsset['type']) => {
-  if (sourceType === 'url') {
-    return 'url_cleaner';
-  }
-  if (sourceType === 'notes') {
-    return 'raw_text';
-  }
-  return 'local_text';
-};
-
-const localTextMimeTypes = new Set([
-  'application/json',
-  'application/ld+json',
-  'application/rtf',
-  'application/xhtml+xml',
-  'application/xml',
-  'application/yaml',
-]);
-
-const llamaParseMimeTypes = new Set([
-  'application/msword',
-  'application/pdf',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.oasis.opendocument.text',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-]);
-
-const sourceProcessorForMimeType = (mimeType: string | undefined, allowLocalText: boolean) => {
-  if (typeof mimeType !== 'string' || mimeType.length === 0) {
-    return 'unsupported_file';
-  }
-  if (allowLocalText && (mimeType.startsWith('text/') || localTextMimeTypes.has(mimeType))) {
-    return 'local_text';
-  }
-  if (llamaParseMimeTypes.has(mimeType)) {
-    return 'llamaparse_document';
-  }
-  if (mimeType.startsWith('audio/')) {
-    return 'deepgram_audio';
-  }
-  if (mimeType.startsWith('video/')) {
-    return 'deepgram_video';
-  }
-  if (mimeType.startsWith('image/')) {
-    return 'image_text_extractor';
-  }
-  return 'unsupported_file';
-};
-
-const mimeTypeFromFileName = (name: string) => {
-  const mimeType = lookupMimeType(name);
-  return typeof mimeType === 'string' ? mimeType : undefined;
-};
-
-const processorForVerifiedBinary = (verifiedMimeType: string | undefined) => {
-  const processor = sourceProcessorForMimeType(verifiedMimeType, false);
-  return processor === 'local_text' ? 'unsupported_file' : processor;
-};
-
-const detectBinaryMimeType = (bytes: Uint8Array) =>
-  runPromiseGenerator(function* detectBinaryMimeTypeProgram() {
-    const result = yield* waitFor(fileTypeFromBuffer(bytes));
-    return result?.mime;
   });
 
 const sourceProcessingIncomplete = (sources: SourceAsset[]) =>
   sources.some((source) => source.status === 'queued' || source.status === 'processing');
 
-const parseHttpUrl = (value: string) => {
-  try {
-    const url = new URL(value.trim());
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url : null;
-  } catch {
+const errorMessageFromUnknown = (error: unknown, depth = 0): string | null => {
+  if (depth > 4) {
     return null;
   }
-};
-
-const decodeFileDataUrl = (value: string): FileSourcePayload | null => {
-  const parsed = parseDataUrl(value.trim());
-  if (parsed === null) {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return error.trim();
+  }
+  if (typeof error !== 'object' || error === null) {
     return null;
   }
-  return {
-    bytes: parsed.body,
-    declaredMimeType: parsed.mimeType.essence,
-  };
+  const record = unknownRecordOptionFromUnknown(error);
+  if (Option.isNone(record)) {
+    return null;
+  }
+  const { message } = record.value;
+  if (typeof message === 'string' && message.trim().length > 0) {
+    return message.trim();
+  }
+  return errorMessageFromUnknown(record.value['cause'], depth + 1);
 };
 
-const arrayBufferFor = (bytes: Uint8Array) =>
-  bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-
-const textFromUnknownJson = (value: unknown, preferredKeys: string[]): string => {
-  if (typeof value === 'string') {
-    return value.trim();
-  }
-  if (value === null || value === undefined || typeof value !== 'object') {
-    return '';
-  }
-  for (const key of preferredKeys) {
-    const record = value as Record<string, unknown>;
-    const direct = textFromUnknownJson(record[key], preferredKeys);
-    if (direct.length > 0) {
-      return direct;
-    }
-  }
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => textFromUnknownJson(entry, preferredKeys))
-      .filter(Boolean)
-      .join('\n\n');
-  }
-  return '';
-};
-
-const requireProviderKey = (value: string | undefined, providerName: string) => {
-  if (!providerKeyConfigured(value)) {
-    throw new Error(`${providerName} API key is not configured.`);
-  }
-  return value;
-};
-
-const isLlamaParseMarkdownTier = (value: string): value is LlamaParseMarkdownTier =>
-  llamaParseMarkdownTiers.some((tier) => tier === value);
-
-const llamaParseTierForMarkdown = (): LlamaParseMarkdownTier => {
-  const tier = sourceProviderConfig().llamaParseTier;
-  if (isLlamaParseMarkdownTier(tier)) {
-    return tier;
-  }
-  throw new Error(
-    `LLAMA_PARSE_TIER=${tier} cannot produce Markdown. Use cost_effective, agentic, or agentic_plus.`,
-  );
-};
-
-const configuredWebExtractionProviderCount = () => {
-  const config = sourceProviderConfig();
-  return [config.firecrawlApiKey, config.tavilyApiKey, config.exaApiKey].filter(
-    providerKeyConfigured,
-  ).length;
-};
-
-const isWebExtractionConfigured = () => configuredWebExtractionProviderCount() > 0;
-
-const providerBaseUrl = (value: string) => value.replace(/\/+$/u, '');
-
-const fetchJson = (url: string, init: RequestInit) =>
-  runPromiseGenerator(function* storeProgram() {
-    const response = yield* waitFor(providerFetch(url, init));
-    if (!response.ok) {
-      const detail = yield* waitFor(response.text());
-      throw new Error(detail || `Provider request failed with ${response.status}.`);
-    }
-    return (yield* waitFor(response.json())) as unknown;
-  });
-
-const providerContentFromJson = (providerName: string, value: unknown) => {
-  const content = textFromUnknownJson(value, [
-    'markdown',
-    'raw_content',
-    'text',
-    'content',
-    'data',
-    'results',
-  ]);
-  if (content.length === 0) {
-    throw new Error(`${providerName} returned no readable Markdown.`);
-  }
-  return content;
-};
-
-const providerFailureMessage = (providerName: string, error: unknown) => {
-  const message =
-    error instanceof Error ? error.message : 'Provider request failed without a readable message.';
-  return `${providerName}: ${message.slice(0, 280)}`;
-};
-
-const llamaParseJobRecord = (value: Record<string, unknown>) => {
-  const nestedJob = value['job'];
-  if (nestedJob !== null && nestedJob !== undefined && typeof nestedJob === 'object') {
-    return nestedJob as Record<string, unknown>;
-  }
-  return value;
-};
-
-const llamaParseJobContent = (jobId: string) =>
-  runPromiseGenerator(function* storeProgram() {
-    const config = sourceProviderConfig();
-    let latestJob: Record<string, unknown> = {};
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      latestJob = (yield* waitFor(
-        fetchJson(`${config.llamaCloudBaseUrl}/api/v2/parse/${jobId}?expand=markdown`, {
-          headers: {
-            Authorization: `Bearer ${requireProviderKey(config.llamaCloudApiKey, 'LlamaParse')}`,
-          },
-          method: 'GET',
-        }),
-      )) as Record<string, unknown>;
-      const job = llamaParseJobRecord(latestJob);
-      const status = String(job['status'] ?? '').toUpperCase();
-      if (status === 'COMPLETED' || status === 'SUCCESS' || status === 'PARTIAL_SUCCESS') {
-        const content = textFromUnknownJson(latestJob, [
-          'markdown_full',
-          'markdown',
-          'markdown_content',
-          'content',
-          'pages',
-        ]);
-        if (content.length === 0) {
-          throw new Error('LlamaParse completed without readable markdown.');
-        }
-        return content;
-      }
-      if (status === 'FAILED' || status === 'ERROR' || status === 'CANCELLED') {
-        throw new Error(String(job['error_message'] ?? 'LlamaParse processing failed.'));
-      }
-      yield* waitFor(sleep(2000));
-    }
-    throw new Error('LlamaParse processing did not finish before the local timeout.');
-  });
-
-const createLlamaParseJob = (body: Record<string, unknown>) =>
-  runPromiseGenerator(function* storeProgram() {
-    const config = sourceProviderConfig();
-    const apiKey = requireProviderKey(config.llamaCloudApiKey, 'LlamaParse');
-    const parseJob = (yield* waitFor(
-      fetchJson(`${config.llamaCloudBaseUrl}/api/v2/parse`, {
-        body: JSON.stringify(body),
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'content-type': 'application/json',
-        },
-        method: 'POST',
-      }),
-    )) as Record<string, unknown>;
-    const jobId = typeof parseJob['id'] === 'string' ? parseJob['id'] : '';
-    if (jobId.length === 0) {
-      throw new Error('LlamaParse did not return a parse job id.');
-    }
-    return jobId;
-  });
-
-const parseLlamaDocument = (
-  sourceName: string,
-  binary: BinarySourcePayload,
-): Promise<ProviderProcessingResult> =>
-  runPromiseGenerator(function* storeProgram() {
-    const config = sourceProviderConfig();
-    const apiKey = requireProviderKey(config.llamaCloudApiKey, 'LlamaParse');
-    const formData = new FormData();
-    formData.append('purpose', 'parse');
-    formData.append(
-      'file',
-      new Blob([arrayBufferFor(binary.bytes)], { type: binary.mimeType }),
-      sourceName,
-    );
-    const uploaded = (yield* waitFor(
-      fetchJson(`${config.llamaCloudBaseUrl}/api/v1/beta/files`, {
-        body: formData,
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-        method: 'POST',
-      }),
-    )) as Record<string, unknown>;
-    const fileId = typeof uploaded['id'] === 'string' ? uploaded['id'] : '';
-    if (fileId.length === 0) {
-      throw new Error('LlamaParse did not return an uploaded file id.');
-    }
-    const jobId = yield* waitFor(
-      createLlamaParseJob({
-        file_id: fileId,
-        tier: llamaParseTierForMarkdown(),
-        version: config.llamaParseVersion,
-      }),
-    );
-    return {
-      content: yield* waitFor(llamaParseJobContent(jobId)),
-      mimeType: binary.mimeType,
-      providerJobId: jobId,
-      storageReference: `llamacloud:${fileId}:${jobId}`,
-    };
-  });
-
-const extractWithFirecrawl = (url: URL): Promise<WebExtractionResult> =>
-  runPromiseGenerator(function* storeProgram() {
-    const config = sourceProviderConfig();
-    const providerName = 'Firecrawl';
-    const response = (yield* waitFor(
-      fetchJson(`${providerBaseUrl(config.firecrawlBaseUrl)}/v1/scrape`, {
-        body: JSON.stringify({
-          formats: ['markdown'],
-          onlyMainContent: true,
-          url: url.toString(),
-        }),
-        headers: {
-          Authorization: `Bearer ${requireProviderKey(config.firecrawlApiKey, providerName)}`,
-          'content-type': 'application/json',
-        },
-        method: 'POST',
-      }),
-    )) as Record<string, unknown>;
-    return {
-      content: providerContentFromJson(providerName, response),
-      processor: 'firecrawl_url',
-      providerName,
-      storageReference: `firecrawl:${url.toString()}`,
-    };
-  });
-
-const extractWithTavily = (url: URL): Promise<WebExtractionResult> =>
-  runPromiseGenerator(function* storeProgram() {
-    const config = sourceProviderConfig();
-    const providerName = 'Tavily';
-    const response = (yield* waitFor(
-      fetchJson(`${providerBaseUrl(config.tavilyBaseUrl)}/extract`, {
-        body: JSON.stringify({
-          extract_depth: 'basic',
-          format: 'markdown',
-          urls: [url.toString()],
-        }),
-        headers: {
-          Authorization: `Bearer ${requireProviderKey(config.tavilyApiKey, providerName)}`,
-          'content-type': 'application/json',
-        },
-        method: 'POST',
-      }),
-    )) as Record<string, unknown>;
-    return {
-      content: providerContentFromJson(providerName, response),
-      processor: 'tavily_url',
-      providerName,
-      storageReference: `tavily:${url.toString()}`,
-    };
-  });
-
-const extractWithExa = (url: URL): Promise<WebExtractionResult> =>
-  runPromiseGenerator(function* storeProgram() {
-    const config = sourceProviderConfig();
-    const providerName = 'Exa';
-    const response = (yield* waitFor(
-      fetchJson(`${providerBaseUrl(config.exaBaseUrl)}/contents`, {
-        body: JSON.stringify({
-          text: true,
-          urls: [url.toString()],
-        }),
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': requireProviderKey(config.exaApiKey, providerName),
-        },
-        method: 'POST',
-      }),
-    )) as Record<string, unknown>;
-    return {
-      content: providerContentFromJson(providerName, response),
-      processor: 'exa_url',
-      providerName,
-      storageReference: `exa:${url.toString()}`,
-    };
-  });
-
-const extractWebUrl = (url: URL): Promise<WebExtractionResult> =>
-  runPromiseGenerator(function* storeProgram() {
-    const config = sourceProviderConfig();
-    const providers: WebExtractionProvider[] = [
-      { apiKey: config.firecrawlApiKey, extract: extractWithFirecrawl, name: 'Firecrawl' },
-      { apiKey: config.tavilyApiKey, extract: extractWithTavily, name: 'Tavily' },
-      { apiKey: config.exaApiKey, extract: extractWithExa, name: 'Exa' },
-    ];
-    const failures: string[] = [];
-    for (const provider of providers) {
-      if (!providerKeyConfigured(provider.apiKey)) {
-        continue;
-      }
-      try {
-        return yield* waitFor(provider.extract(url));
-      } catch (error) {
-        failures.push(providerFailureMessage(provider.name, error));
-      }
-    }
-    if (failures.length === 0) {
-      throw new Error(
-        'Web extraction provider is not configured. Set FIRECRAWL_API_KEY, TAVILY_API_KEY, or EXA_API_KEY and restart the dev server.',
-      );
-    }
-    throw new Error(`Web extraction failed. ${failures.join(' | ')}`);
-  });
-
-const transcribeWithDeepgram = (
-  sourceName: string,
-  binary: BinarySourcePayload,
-): Promise<ProviderProcessingResult> =>
-  runPromiseGenerator(function* storeProgram() {
-    const config = sourceProviderConfig();
-    const apiKey = requireProviderKey(config.deepgramApiKey, 'Deepgram');
-    const model = config.deepgramModel;
-    const response = (yield* waitFor(
-      fetchJson(
-        `${config.deepgramBaseUrl}/v1/listen?model=${encodeURIComponent(model)}&smart_format=true&paragraphs=true&utterances=true&diarize_model=latest`,
-        {
-          body: arrayBufferFor(binary.bytes),
-          headers: {
-            Authorization: `Token ${apiKey}`,
-            'content-type': binary.mimeType,
-          },
-          method: 'POST',
-        },
-      ),
-    )) as Record<string, unknown>;
-    const transcript = textFromUnknownJson(response, ['transcript']);
-    if (transcript.length === 0) {
-      throw new Error('Deepgram completed without a readable transcript.');
-    }
-    const metadata = response['metadata'] as Record<string, unknown> | undefined;
-    const requestId =
-      typeof metadata?.['request_id'] === 'string' ? metadata['request_id'] : undefined;
-    return {
-      content: transcript,
-      mimeType: binary.mimeType,
-      storageReference: `deepgram:${requestId ?? sourceName}`,
-      ...(typeof requestId === 'string' ? { providerJobId: requestId } : {}),
-    };
-  });
-
-// eslint-disable-next-line complexity
-const processSource = (
-  draftId: string,
-  source: Extract<WorkflowAction, { action: 'addSource' }>['source'],
-): Promise<SourceAsset> =>
-  // eslint-disable-next-line complexity
-  runPromiseGenerator(function* storeProgram() {
-    const createdAt = now();
-    const trimmedContent = source.content.trim();
-    const sourceType = source.type;
-    const trimmedSourceName = source.name.trim();
-    const sourceName = trimmedSourceName.length > 0 ? trimmedSourceName : source.type;
-    if (sourceType === 'url') {
-      const url = parseHttpUrl(trimmedContent);
-      if (url !== null) {
-        try {
-          const providerResult = yield* waitFor(extractWebUrl(url));
-          return {
-            content: providerResult.content,
-            createdAt,
-            id: createId(`source_${draftId}`),
-            name: sourceName,
-            originalInput: trimmedContent,
-            processor: providerResult.processor,
-            sizeLabel: source.sizeLabel ?? `${providerResult.content.length} chars`,
-            status: 'processed',
-            type: source.type,
-            ...(typeof providerResult.providerJobId === 'string'
-              ? { providerJobId: providerResult.providerJobId }
-              : {}),
-            ...(typeof providerResult.storageReference === 'string'
-              ? { storageReference: providerResult.storageReference }
-              : {}),
-          };
-        } catch (error) {
-          return {
-            content: '',
-            createdAt,
-            failureReason:
-              error instanceof Error
-                ? error.message
-                : 'The web extraction providers could not process this URL.',
-            id: createId(`source_${draftId}`),
-            name: sourceName,
-            originalInput: trimmedContent,
-            processor: 'web_extraction_url',
-            sizeLabel: source.sizeLabel ?? '0 chars',
-            status: 'failed',
-            type: source.type,
-          };
-        }
-      }
-    }
-    const filePayload = sourceType === 'file' ? decodeFileDataUrl(trimmedContent) : null;
-    const detectedMimeType =
-      filePayload === null ? undefined : yield* waitFor(detectBinaryMimeType(filePayload.bytes));
-    const declaredMimeType = filePayload?.declaredMimeType;
-    const fileNameMimeType = sourceType === 'file' ? mimeTypeFromFileName(sourceName) : undefined;
-    const verifiedBinaryProcessor = processorForVerifiedBinary(detectedMimeType);
-    const declaredTextProcessor = sourceProcessorForMimeType(declaredMimeType, true);
-    const fileNameTextProcessor = sourceProcessorForMimeType(fileNameMimeType, true);
-    let fileProcessor: string | null = null;
-    if (sourceType === 'file') {
-      if (filePayload === null) {
-        fileProcessor = fileNameTextProcessor;
-      } else if (
-        verifiedBinaryProcessor === 'unsupported_file' &&
-        declaredTextProcessor === 'local_text'
-      ) {
-        fileProcessor = 'local_text';
-      } else {
-        fileProcessor = verifiedBinaryProcessor;
-      }
-    }
-    const binary =
-      filePayload !== null && detectedMimeType !== undefined
-        ? { bytes: filePayload.bytes, mimeType: detectedMimeType }
-        : null;
-    const isSupported =
-      sourceType === 'notes' ||
-      sourceType === 'url' ||
-      (sourceType === 'file' && trimmedContent.length > 0 && fileProcessor === 'local_text');
-    const isProviderBackedFile =
-      fileProcessor !== null &&
-      fileProcessor !== 'local_text' &&
-      fileProcessor !== 'unsupported_file';
-    if (
-      sourceType === 'file' &&
-      isProviderBackedFile &&
-      fileProcessor !== null &&
-      binary !== null
-    ) {
-      try {
-        const providerResult = fileProcessor.includes('deepgram')
-          ? yield* waitFor(transcribeWithDeepgram(sourceName, binary))
-          : yield* waitFor(parseLlamaDocument(sourceName, binary));
-        return {
-          content: providerResult.content,
-          createdAt,
-          id: createId(`source_${draftId}`),
-          name: sourceName,
-          originalInput: trimmedContent,
-          processor: fileProcessor,
-          sizeLabel: source.sizeLabel ?? `${providerResult.content.length} chars`,
-          status: providerResult.content.length > 0 ? 'processed' : 'failed',
-          type: source.type,
-          ...(typeof providerResult.mimeType === 'string'
-            ? { mimeType: providerResult.mimeType }
-            : {}),
-          ...(typeof providerResult.providerJobId === 'string'
-            ? { providerJobId: providerResult.providerJobId }
-            : {}),
-          ...(typeof providerResult.storageReference === 'string'
-            ? { storageReference: providerResult.storageReference }
-            : {}),
-          ...(providerResult.content.length === 0
-            ? { failureReason: 'The provider did not return readable content.' }
-            : {}),
-        };
-      } catch (error) {
-        return {
-          content: '',
-          createdAt,
-          failureReason:
-            error instanceof Error
-              ? error.message
-              : 'The source provider could not process this file.',
-          id: createId(`source_${draftId}`),
-          mimeType: binary.mimeType,
-          name: sourceName,
-          originalInput: trimmedContent,
-          processor: fileProcessor,
-          sizeLabel: source.sizeLabel ?? `${binary.bytes.byteLength} bytes`,
-          status: 'failed',
-          type: source.type,
-        };
-      }
-    }
-    if (sourceType === 'file' && fileProcessor === 'local_text') {
-      const textContent =
-        filePayload === null ? trimmedContent : new TextDecoder().decode(filePayload.bytes).trim();
-      return {
-        content: textContent,
-        createdAt,
-        id: createId(`source_${draftId}`),
-        name: sourceName,
-        originalInput: trimmedContent,
-        processor: 'local_text',
-        sizeLabel: source.sizeLabel ?? `${textContent.length} chars`,
-        status: textContent.length > 0 ? 'processed' : 'unsupported',
-        type: source.type,
-        ...(declaredMimeType === undefined && fileNameMimeType === undefined
-          ? {}
-          : { mimeType: declaredMimeType ?? fileNameMimeType }),
-        ...(textContent.length > 0 ? {} : { failureReason: 'No readable content was supplied.' }),
-      };
-    }
-    if (sourceType === 'file' && filePayload !== null && fileProcessor === 'unsupported_file') {
-      return {
-        content: '',
-        createdAt,
-        failureReason: 'File type could not be verified from uploaded bytes.',
-        id: createId(`source_${draftId}`),
-        mimeType: detectedMimeType ?? declaredMimeType,
-        name: sourceName,
-        originalInput: trimmedContent,
-        processor: 'unsupported_file',
-        sizeLabel: source.sizeLabel ?? `${filePayload.bytes.byteLength} bytes`,
-        status: 'unsupported',
-        type: source.type,
-      };
-    }
-    return {
-      content: trimmedContent,
-      createdAt,
-      id: createId(`source_${draftId}`),
-      name: sourceName,
-      originalInput: trimmedContent,
-      processor: fileProcessor ?? processorFor(sourceType),
-      sizeLabel: source.sizeLabel ?? `${trimmedContent.length} chars`,
-      status: isSupported ? 'processed' : 'unsupported',
-      type: source.type,
-      ...(isSupported ? {} : { failureReason: 'No readable content was supplied.' }),
-    };
-  });
+const errorFailureReason = (error: unknown) =>
+  errorMessageFromUnknown(error) ?? 'AI generation failed without a readable provider error.';
 
 const failedAiRun = (draft: CourseDraft, run: AiRun, error: unknown): CourseDraft => ({
   ...draft,
@@ -1410,7 +582,7 @@ const failedAiRun = (draft: CourseDraft, run: AiRun, error: unknown): CourseDraf
     ...draft.aiRuns.filter((candidate) => candidate.id !== run.id),
     {
       ...run,
-      failureReason: error instanceof Error ? error.message : 'AI generation failed.',
+      failureReason: errorFailureReason(error),
       status: 'failed',
       updatedAt: now(),
     },
@@ -1438,6 +610,263 @@ const appliedAiRun = (run: AiRun, outputText: string, model: string, provider: s
   status: 'applied',
   updatedAt: now(),
 });
+
+const objectiveForBrief = (
+  draft: CourseDraft,
+  brief: ActivityBrief,
+): LearningObjective | undefined => {
+  const objectiveIds = brief.objectiveIds.length > 0 ? brief.objectiveIds : [brief.objectiveId];
+  return draft.learningBlueprint.objectives.find((objective) =>
+    objectiveIds.includes(objective.id),
+  );
+};
+
+const replaceGeneratedActivity = (
+  activities: readonly GeneratedActivity[],
+  activity: GeneratedActivity,
+) => [...activities.filter((candidate) => candidate.briefId !== activity.briefId), activity];
+
+const needsLearningPlan = (draft: CourseDraft) =>
+  !hasCoursePreparation(draft) ||
+  !hasObjectiveMap(draft) ||
+  !hasActivityPlan(draft) ||
+  draft.learningBlueprint.objectives.some((objective) => objective.status === 'stale') ||
+  draft.learningBlueprint.activityBriefs.some((brief) => brief.status === 'stale');
+
+const needsCoursePreparation = (draft: CourseDraft) => !hasCoursePreparation(draft);
+
+const needsActivities = (draft: CourseDraft) =>
+  hasActivityPlan(draft) &&
+  (!hasPlayableGeneratedActivityCoverage(draft) ||
+    draft.learningBlueprint.activityBriefs.some((brief) => brief.status === 'stale') ||
+    draft.learningBlueprint.generatedActivities.some((activity) => activity.status === 'stale'));
+
+const needsCourseContent = (draft: CourseDraft) =>
+  !hasCourseContent(draft) ||
+  draft.courseContent.status === 'stale' ||
+  draft.courseContent.sections.some(
+    (section) =>
+      section.status === 'stale' || section.blocks.some((block) => block.status === 'stale'),
+  );
+
+const generatedActivityBriefIds = (draft: CourseDraft) =>
+  new Set(
+    draft.learningBlueprint.generatedActivities
+      .filter(isPlayableGeneratedActivity)
+      .map((activity) => activity.briefId),
+  );
+
+const pendingActivityBriefs = (draft: CourseDraft, options: { force: boolean }) => {
+  if (options.force) {
+    return draft.learningBlueprint.activityBriefs.filter((brief) => brief.status !== 'empty');
+  }
+  const generatedBriefIds = generatedActivityBriefIds(draft);
+  return draft.learningBlueprint.activityBriefs.filter(
+    (brief) =>
+      brief.status !== 'empty' && (brief.status === 'stale' || !generatedBriefIds.has(brief.id)),
+  );
+};
+
+const aiGeneration = <A>(thunk: () => Promise<A>) =>
+  Effect.tryPromise({
+    catch: (cause) => new CoursitionStoreError({ message: errorFailureReason(cause) }),
+    try: thunk,
+  });
+
+const activityRunSummary = (generatedCount: number, failedCount: number, totalCount: number) =>
+  Schema.encodeEffect(activityRunSummaryJsonSchema)({ failedCount, generatedCount, totalCount });
+
+const courseGenerationSummary = (draft: CourseDraft) =>
+  Schema.encodeEffect(courseGenerationSummaryJsonSchema)({
+    content: draft.courseContent,
+    learningBlueprint: draft.learningBlueprint,
+  });
+
+const saveGeneratedActivity = (ownerId: string, draftId: string, activity: GeneratedActivity) =>
+  Effect.gen(function* saveGeneratedActivityProgram() {
+    const currentDraft = yield* requireDraft(ownerId, draftId);
+    const timestamp = now();
+    const nextActivity =
+      activity.type === 'not_playable' ? activity : { ...activity, status: 'generated' as const };
+    const nextDraft: CourseDraft = {
+      ...currentDraft,
+      courseContent: staleCourseContent(currentDraft.courseContent, timestamp),
+      learningBlueprint: {
+        ...currentDraft.learningBlueprint,
+        activityBriefs: currentDraft.learningBlueprint.activityBriefs.map((brief) =>
+          brief.id === activity.briefId && isPlayableGeneratedActivity(nextActivity)
+            ? { ...brief, status: 'generated', updatedAt: timestamp }
+            : brief,
+        ),
+        generatedActivities: replaceGeneratedActivity(
+          currentDraft.learningBlueprint.generatedActivities,
+          nextActivity,
+        ),
+        updatedAt: timestamp,
+      },
+      step: 'activityPlan',
+    };
+    return yield* saveDraft({ ...nextDraft, findings: buildFindings(nextDraft) });
+  });
+
+const generateAndSaveActivity = (ownerId: string, draft: CourseDraft, brief: ActivityBrief) =>
+  Effect.gen(function* generateAndSaveActivityProgram() {
+    const objective = objectiveForBrief(draft, brief);
+    if (objective === undefined) {
+      const activity = failedActivityFromBrief(
+        brief,
+        `No learning objective was found for activity brief: ${brief.title}.`,
+      );
+      yield* saveGeneratedActivity(ownerId, draft.id, activity);
+      return activity;
+    }
+    const activity = yield* aiGeneration(() =>
+      generateActivityWithAi(draft, objective, brief),
+    ).pipe(
+      Effect.match({
+        onFailure: (error) => failedActivityFromBrief(brief, error.message),
+        onSuccess: (result) => result.value,
+      }),
+    );
+    yield* saveGeneratedActivity(ownerId, draft.id, activity);
+    return activity;
+  });
+
+const runLearningPlanPhase = (
+  draft: CourseDraft,
+  options: { force: boolean; step: CourseDraft['step'] },
+) =>
+  Effect.gen(function* runLearningPlanPhaseProgram() {
+    if (!options.force && !needsLearningPlan(draft)) {
+      return draft;
+    }
+    const aiRun = createAiRun(draft, 'learning_blueprint_generation');
+    const draftWithRunningRun = yield* saveDraft({ ...draft, aiRuns: [...draft.aiRuns, aiRun] });
+    const result = yield* aiGeneration(() => generateLearningPlanWithAi(draftWithRunningRun)).pipe(
+      Effect.tapError((error) => saveDraft(failedAiRun(draftWithRunningRun, aiRun, error))),
+    );
+    const nextDraft: CourseDraft = {
+      ...draftWithRunningRun,
+      aiRuns: [
+        ...draftWithRunningRun.aiRuns.filter((run) => run.id !== aiRun.id),
+        appliedAiRun(aiRun, result.text, result.model, result.provider),
+      ],
+      courseContent: staleCourseContent(draftWithRunningRun.courseContent, now()),
+      learningBlueprint: result.value,
+      step: options.step,
+    };
+    return yield* saveDraft({
+      ...nextDraft,
+      findings: buildFindings({ ...nextDraft, findings: [] }),
+    });
+  });
+
+const runCoursePreparationPhase = (draft: CourseDraft, options: { force: boolean }) =>
+  Effect.gen(function* runCoursePreparationPhaseProgram() {
+    if (!options.force && !needsCoursePreparation(draft)) {
+      return draft;
+    }
+    const aiRun = createAiRun(draft, 'course_preparation_generation');
+    const draftWithRunningRun = yield* saveDraft({ ...draft, aiRuns: [...draft.aiRuns, aiRun] });
+    const result = yield* aiGeneration(() =>
+      generateCoursePreparationWithAi(draftWithRunningRun),
+    ).pipe(Effect.tapError((error) => saveDraft(failedAiRun(draftWithRunningRun, aiRun, error))));
+    const timestamp = now();
+    const nextBlueprint = staleLearningBlueprint(
+      {
+        ...draftWithRunningRun.learningBlueprint,
+        assumptions: result.value.assumptions,
+        coursePreparation: result.value.coursePreparation,
+      },
+      timestamp,
+    );
+    const nextDraft: CourseDraft = {
+      ...draftWithRunningRun,
+      aiRuns: [
+        ...draftWithRunningRun.aiRuns.filter((run) => run.id !== aiRun.id),
+        appliedAiRun(aiRun, result.text, result.model, result.provider),
+      ],
+      courseContent: staleCourseContent(draftWithRunningRun.courseContent, timestamp),
+      learningBlueprint: nextBlueprint,
+      step: 'preparation',
+    };
+    return yield* saveDraft({
+      ...nextDraft,
+      findings: buildFindings({ ...nextDraft, findings: [] }),
+    });
+  });
+
+const runActivityPhase = (ownerId: string, draft: CourseDraft, options: { force: boolean }) =>
+  Effect.gen(function* runActivityPhaseProgram() {
+    if (!options.force && !needsActivities(draft)) {
+      return draft;
+    }
+    const aiRun = createAiRun(draft, 'activity_generation');
+    const draftWithRunningRun = yield* saveDraft({ ...draft, aiRuns: [...draft.aiRuns, aiRun] });
+    const briefs = pendingActivityBriefs(draftWithRunningRun, options);
+    const activityResults = yield* Effect.all(
+      briefs.map((brief) => generateAndSaveActivity(ownerId, draftWithRunningRun, brief)),
+      { concurrency: 'unbounded' },
+    );
+    const activityPhaseDraft = yield* requireDraft(ownerId, draft.id);
+    const generatedCount = activityResults.filter(isPlayableGeneratedActivity).length;
+    const failedCount = activityResults.length - generatedCount;
+    const runSummary = yield* activityRunSummary(
+      generatedCount,
+      failedCount,
+      activityResults.length,
+    );
+    if (generatedCount === 0 && failedCount > 0) {
+      const message = `Activity generation failed for all ${failedCount} activity briefs.`;
+      yield* saveDraft(
+        failedAiRun(
+          {
+            ...activityPhaseDraft,
+            findings: buildFindings({ ...activityPhaseDraft, findings: [] }),
+            step: 'activityPlan',
+          },
+          aiRun,
+          new CoursitionStoreError({ message }),
+        ),
+      );
+      return yield* new CoursitionStoreError({ message });
+    }
+    const nextDraft: CourseDraft = {
+      ...activityPhaseDraft,
+      aiRuns: [
+        ...activityPhaseDraft.aiRuns.filter((run) => run.id !== aiRun.id),
+        appliedAiRun(aiRun, runSummary, aiRun.model, aiRun.provider),
+      ],
+      findings: buildFindings({ ...activityPhaseDraft, findings: [] }),
+      step: 'activityPlan',
+    };
+    return yield* saveDraft(nextDraft);
+  });
+
+const runCourseContentPhase = (draft: CourseDraft, options: { force: boolean }) =>
+  Effect.gen(function* runCourseContentPhaseProgram() {
+    if (!options.force && !needsCourseContent(draft)) {
+      return draft;
+    }
+    const aiRun = createAiRun(draft, 'course_content_generation');
+    const draftWithRunningRun = yield* saveDraft({ ...draft, aiRuns: [...draft.aiRuns, aiRun] });
+    const result = yield* aiGeneration(() => generateCourseContentWithAi(draftWithRunningRun)).pipe(
+      Effect.tapError((error) => saveDraft(failedAiRun(draftWithRunningRun, aiRun, error))),
+    );
+    const nextDraft = {
+      ...draftWithRunningRun,
+      aiRuns: [
+        ...draftWithRunningRun.aiRuns.filter((run) => run.id !== aiRun.id),
+        appliedAiRun(aiRun, result.text, result.model, result.provider),
+      ],
+      courseContent: result.value,
+      step: 'courseContent' as const,
+    };
+    return yield* saveDraft({
+      ...nextDraft,
+      findings: buildFindings({ ...nextDraft, findings: [] }),
+    });
+  });
 
 const updateFindingStatus = (
   findings: CourseDraft['findings'],
@@ -1478,10 +907,33 @@ const gateFailureReason = (gate: ReturnType<typeof getWorkflowStepGate>) => {
   return 'Complete the required previous step before continuing.';
 };
 
-const assertWorkflowGate = (gate: ReturnType<typeof getWorkflowStepGate>) => {
-  if (!gate.allowed) {
-    throw new Error(gateFailureReason(gate));
+const assertWorkflowGate = (gate: ReturnType<typeof getWorkflowStepGate>) =>
+  gate.allowed
+    ? Effect.void
+    : Effect.fail(new CoursitionStoreError({ message: gateFailureReason(gate) }));
+
+const assertCourseContentGenerationReady = (draft: CourseDraft) => {
+  if (!hasUsableSourceMaterial(draft)) {
+    return Effect.fail(
+      new CoursitionStoreError({ message: 'Add source material before continuing.' }),
+    );
   }
+  if (!hasCoursePreparation(draft)) {
+    return Effect.fail(
+      new CoursitionStoreError({ message: 'Complete course preparation before continuing.' }),
+    );
+  }
+  if (!hasObjectiveMap(draft)) {
+    return Effect.fail(
+      new CoursitionStoreError({ message: 'Generate the objective map before continuing.' }),
+    );
+  }
+  if (!hasActivityPlan(draft) || !hasPlayableGeneratedActivityCoverage(draft)) {
+    return Effect.fail(
+      new CoursitionStoreError({ message: 'Generate the activity plan before continuing.' }),
+    );
+  }
+  return Effect.void;
 };
 
 const draftForStep = (draft: CourseDraft, step: CourseDraft['step']): CourseDraft => ({
@@ -1490,30 +942,34 @@ const draftForStep = (draft: CourseDraft, step: CourseDraft['step']): CourseDraf
   step,
 });
 
-export const snapshotFor = (ownerId: string): Promise<WorkflowSnapshot> =>
-  runPromiseGenerator(function* storeProgram() {
+const snapshotForProgram = (ownerId: string) =>
+  Effect.gen(function* snapshotProgram() {
     const config = sourceProviderConfig();
     return {
       config: {
         aiProviderConfigured: isAiProviderConfigured(),
-        auth: 'better-auth',
+        auth: 'better-auth' as const,
         deepgramConfigured: providerKeyConfigured(config.deepgramApiKey),
         llamaParseConfigured: providerKeyConfigured(config.llamaCloudApiKey),
-        storage: 'json-file',
+        storage: 'json-file' as const,
         webExtractionConfigured: isWebExtractionConfigured(),
       },
-      draft: yield* waitFor(latestDraft(ownerId)),
-      drafts: yield* waitFor(draftSummariesFor(ownerId)),
+      draft: Option.getOrNull(yield* latestDraft(ownerId)),
+      drafts: yield* draftSummariesFor(ownerId),
     };
   });
 
-export const snapshotForRoute = (
+// Returns the post-mutation snapshot with the acted-on draft attached. Callers
+// run their mutation first, so the drafts list always reflects the new state.
+const snapshotWith = (
   ownerId: string,
-  draftId: string,
-  step: CourseDraft['step'],
-): Promise<WorkflowSnapshot> =>
-  runPromiseGenerator(function* storeProgram() {
-    const draft = yield* waitFor(requireDraft(ownerId, draftId));
+  draft: WorkflowSnapshot['draft'],
+): Effect.Effect<WorkflowSnapshot, StoreError, FileSystem.FileSystem> =>
+  snapshotForProgram(ownerId).pipe(Effect.map((snapshot) => ({ ...snapshot, draft })));
+
+const snapshotForRouteProgram = (ownerId: string, draftId: string, step: CourseDraft['step']) =>
+  Effect.gen(function* snapshotRouteProgram() {
+    const draft = yield* requireDraft(ownerId, draftId);
     const draftWithFindings = draftForStep(draft, draft.step);
     const routeDraft = draftForStep(draftWithFindings, step);
     const gate =
@@ -1522,536 +978,734 @@ export const snapshotForRoute = (
         : getWorkflowStepGate(draftWithFindings, step);
     if (!gate.allowed) {
       const fallbackStep = gate.blockedStep ?? 'mode';
-      return {
-        ...(yield* waitFor(snapshotFor(ownerId))),
-        draft: draftForStep(draft, fallbackStep),
-      };
+      return yield* snapshotWith(ownerId, draftForStep(draft, fallbackStep));
     }
-    return {
-      ...(yield* waitFor(snapshotFor(ownerId))),
-      draft: routeDraft,
-    };
+    return yield* snapshotWith(ownerId, routeDraft);
   });
+
+type DraftAction<K extends WorkflowAction['action']> = Extract<WorkflowAction, { action: K }>;
+type DraftScopedAction = Exclude<
+  WorkflowAction,
+  { action: 'getState' | 'createDraft' | 'selectDraft' | 'deleteDraft' }
+>;
+type WorkflowSnapshotEffect = Effect.Effect<
+  WorkflowSnapshot,
+  CoursitionStoreError | Schema.SchemaError,
+  FileSystem.FileSystem
+>;
+
+interface StepTransition {
+  readonly from: CourseDraft['step'];
+  readonly to: CourseDraft['step'];
+  readonly ready: (draft: CourseDraft) => boolean;
+  readonly advance: (
+    ownerId: string,
+    draft: CourseDraft,
+  ) => Effect.Effect<CourseDraft, CoursitionStoreError | Schema.SchemaError, FileSystem.FileSystem>;
+}
+
+// Assist-mode auto-advance: navigating to a step whose phase has not run yet
+// generates it on the way. The double-phase activity->content jump is handled
+// inline in applyGoToStep because it must run before the destination gate.
+const assistStepTransitions: readonly StepTransition[] = [
+  {
+    advance: (ownerId, draft) => runCoursePreparationPhase(draft, { force: false }),
+    from: 'sources',
+    ready: (draft) => hasUsableSourceMaterial(draft) && needsCoursePreparation(draft),
+    to: 'preparation',
+  },
+  {
+    advance: (ownerId, draft) => runLearningPlanPhase(draft, { force: false, step: 'objectives' }),
+    from: 'preparation',
+    ready: (draft) =>
+      hasUsableSourceMaterial(draft) && hasCoursePreparation(draft) && needsLearningPlan(draft),
+    to: 'objectives',
+  },
+  {
+    advance: (ownerId, draft) =>
+      runActivityPhase(ownerId, draft, { force: false }).pipe(
+        Effect.map((next) => draftForStep(next, 'activityPlan')),
+      ),
+    from: 'objectives',
+    ready: (draft) => hasObjectiveMap(draft) && needsActivities(draft),
+    to: 'activityPlan',
+  },
+  {
+    advance: (ownerId, draft) =>
+      runCourseContentPhase(draft, { force: false }).pipe(
+        Effect.map((next) => draftForStep(next, 'courseContent')),
+      ),
+    from: 'activityPlan',
+    ready: (draft) => !needsActivities(draft) && needsCourseContent(draft),
+    to: 'courseContent',
+  },
+];
+
+const applyGoToStep = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'goToStep'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* goToStepProgram() {
+    const draftWithFindings = draftForStep(draft, draft.step);
+    if (
+      action.step === 'courseContent' &&
+      draftWithFindings.step === 'activityPlan' &&
+      draftWithFindings.mode === 'assist' &&
+      hasActivityPlan(draftWithFindings) &&
+      needsActivities(draftWithFindings)
+    ) {
+      yield* assertWorkflowGate(getWorkflowStepGate(draftWithFindings, 'activityPlan'));
+      const activityDraft = yield* runActivityPhase(ownerId, draftWithFindings, { force: false });
+      const activityDraftWithFindings = draftForStep(activityDraft, 'activityPlan');
+      yield* assertWorkflowGate(getWorkflowStepGate(activityDraftWithFindings, 'courseContent'));
+      const contentDraft = yield* runCourseContentPhase(activityDraftWithFindings, {
+        force: false,
+      });
+      return yield* snapshotWith(ownerId, draftForStep(contentDraft, 'courseContent'));
+    }
+    yield* assertWorkflowGate(getWorkflowStepGate(draftWithFindings, action.step));
+    const transition = assistStepTransitions.find(
+      (candidate) =>
+        candidate.from === draftWithFindings.step &&
+        candidate.to === action.step &&
+        draftWithFindings.mode === 'assist' &&
+        candidate.ready(draftWithFindings),
+    );
+    if (transition !== undefined) {
+      return yield* snapshotWith(ownerId, yield* transition.advance(ownerId, draftWithFindings));
+    }
+    return yield* snapshotWith(
+      ownerId,
+      yield* saveDraft(draftForStep(draftWithFindings, action.step)),
+    );
+  });
+
+const applyCreateDraft = (
+  ownerId: string,
+  action: DraftAction<'createDraft'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* createDraftProgram() {
+    const title = action.title.trim();
+    if (title.length === 0) {
+      return yield* new CoursitionStoreError({ message: 'Course title is required.' });
+    }
+    const createdAt = now();
+    const draft = yield* saveDraft({
+      aiRuns: [],
+      courseContent: emptyCourseContent(),
+      createdAt,
+      derivedSourceDocuments: [],
+      findings: [],
+      id: createId('course'),
+      knowledgeChunks: [],
+      language: action.language,
+      learningBlueprint: emptyLearningBlueprint(action.language),
+      mode: 'assist',
+      ownerId,
+      sourceProcessingIncomplete: false,
+      sources: [],
+      step: 'mode',
+      title,
+      updatedAt: createdAt,
+    });
+    return yield* snapshotWith(ownerId, draft);
+  });
+
+const applyDeleteDraft = (
+  ownerId: string,
+  action: DraftAction<'deleteDraft'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* deleteDraftActionProgram() {
+    yield* deleteDraft(ownerId, action.draftId);
+    return yield* snapshotWith(ownerId, null);
+  });
+
+const applyUpdateDraftTitle = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'updateDraftTitle'>,
+): WorkflowSnapshotEffect =>
+  saveDraft({ ...draft, title: action.title.trim() || draft.title }).pipe(
+    Effect.flatMap((saved) => snapshotWith(ownerId, saved)),
+  );
+
+const applySetMode = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'setMode'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* setModeProgram() {
+    if (action.mode !== 'generate' && action.mode !== 'assist') {
+      return yield* new CoursitionStoreError({ message: 'Unsupported course mode.' });
+    }
+    return yield* snapshotWith(ownerId, yield* saveDraft({ ...draft, mode: action.mode }));
+  });
+
+const applyGenerateCourse = (ownerId: string, draft: CourseDraft): WorkflowSnapshotEffect =>
+  Effect.gen(function* generateCourseProgram() {
+    if (draft.mode !== 'generate') {
+      return yield* new CoursitionStoreError({
+        message: 'Course generation is only available in generate mode.',
+      });
+    }
+    if (!hasUsableSourceMaterial(draft)) {
+      return yield* new CoursitionStoreError({
+        message: 'Add source material before generating the course.',
+      });
+    }
+    const aiRun = createAiRun(draft, 'course_generation');
+    const draftWithRunningRun = yield* saveDraft({ ...draft, aiRuns: [...draft.aiRuns, aiRun] });
+    const courseDraft = yield* Effect.gen(function* generateFullCourse() {
+      const plannedDraft = yield* runLearningPlanPhase(draftWithRunningRun, {
+        force: false,
+        step: 'activityPlan',
+      });
+      const activityDraft = yield* runActivityPhase(ownerId, plannedDraft, { force: false });
+      const activityDraftWithFindings = draftForStep(activityDraft, activityDraft.step);
+      yield* assertCourseContentGenerationReady(activityDraftWithFindings);
+      const contentDraft = yield* runCourseContentPhase(activityDraft, { force: false });
+      const runSummary = yield* courseGenerationSummary(contentDraft);
+      const nextDraft = {
+        ...contentDraft,
+        aiRuns: [
+          ...contentDraft.aiRuns.filter((run) => run.id !== aiRun.id),
+          appliedAiRun(aiRun, runSummary, aiRun.model, aiRun.provider),
+        ],
+        step: 'preview' as const,
+      };
+      return yield* saveDraft({
+        ...nextDraft,
+        findings: buildFindings({ ...nextDraft, findings: [] }),
+      });
+    }).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          requireDraft(ownerId, draft.id).pipe(
+            Effect.flatMap((failedCourseDraft) =>
+              saveDraft(failedAiRun(failedCourseDraft, aiRun, error)),
+            ),
+          ),
+        onSuccess: (saved) => Effect.succeed(saved),
+      }),
+    );
+    return yield* snapshotWith(ownerId, courseDraft);
+  });
+
+const applyAddSource = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'addSource'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* addSourceProgram() {
+    if (action.source.name.trim().length === 0) {
+      return yield* new CoursitionStoreError({ message: 'Source name is required.' });
+    }
+    if (action.source.type !== 'file' && action.source.content.trim().length === 0) {
+      return yield* new CoursitionStoreError({ message: 'Source content is required.' });
+    }
+    const source = yield* Effect.tryPromise({
+      catch: toStoreError,
+      try: () =>
+        sourceProcessingRuntime.runPromise(
+          processSource(sourceProcessorDeps, draft.id, action.source),
+        ),
+    });
+    const sources = [...draft.sources, source];
+    const derived = documentsAndChunksForSource(source, source.createdAt ?? now());
+    const timestamp = now();
+    return yield* snapshotWith(
+      ownerId,
+      yield* saveDraft({
+        ...draft,
+        courseContent: staleCourseContent(draft.courseContent, timestamp),
+        derivedSourceDocuments: [
+          ...draft.derivedSourceDocuments,
+          ...derived.derivedSourceDocuments,
+        ],
+        knowledgeChunks: [...draft.knowledgeChunks, ...derived.knowledgeChunks],
+        learningBlueprint: staleLearningBlueprint(draft.learningBlueprint, timestamp),
+        sourceProcessingIncomplete: sourceProcessingIncomplete(sources),
+        sources,
+        step: 'sources',
+      }),
+    );
+  });
+
+const applyDeleteSource = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'deleteSource'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* deleteSourceProgram() {
+    const sources = draft.sources.map((source) =>
+      source.id === action.sourceId
+        ? { ...source, deletedAt: now(), status: 'deleted' as const }
+        : source,
+    );
+    return yield* snapshotWith(
+      ownerId,
+      yield* saveDraft({
+        ...draft,
+        courseContent: staleCourseContent(draft.courseContent, now()),
+        derivedSourceDocuments: draft.derivedSourceDocuments.filter(
+          (document) => document.sourceAssetId !== action.sourceId,
+        ),
+        knowledgeChunks: draft.knowledgeChunks.filter(
+          (chunk) => chunk.sourceAssetId !== action.sourceId,
+        ),
+        learningBlueprint: staleLearningBlueprint(draft.learningBlueprint, now()),
+        sourceProcessingIncomplete: sourceProcessingIncomplete(sources),
+        sources,
+      }),
+    );
+  });
+
+const applyRetrySource = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'retrySource'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* retrySourceProgram() {
+    const existingSource = draft.sources.find((source) => source.id === action.sourceId);
+    if (existingSource === undefined) {
+      return yield* new CoursitionStoreError({
+        message: 'Source not found for signed-in creator.',
+      });
+    }
+    const filePayloadOption =
+      existingSource.type === 'file' ? yield* loadFileSourcePayload(existingSource) : Option.none();
+    if (
+      existingSource.type === 'file' &&
+      Option.isNone(filePayloadOption) &&
+      existingSource.processor !== 'local_text'
+    ) {
+      return yield* new CoursitionStoreError({
+        message: 'Original file bytes are not available for retry.',
+      });
+    }
+    const filePayload = Option.getOrNull(filePayloadOption);
+    const retriedSource = yield* Effect.tryPromise({
+      catch: toStoreError,
+      try: () =>
+        sourceProcessingRuntime.runPromise(
+          processSource(sourceProcessorDeps, draft.id, {
+            content: existingSource.content,
+            filePayload,
+            name: existingSource.name,
+            sizeLabel: existingSource.sizeLabel,
+            sourceId: existingSource.id,
+            storageReference: existingSource.storageReference,
+            type: existingSource.type,
+          }),
+        ),
+    });
+    const replacementSource = retriedSource;
+    const derived = documentsAndChunksForSource(
+      replacementSource,
+      replacementSource.createdAt ?? now(),
+    );
+    const sources = draft.sources.map((source) =>
+      source.id === action.sourceId ? replacementSource : source,
+    );
+    return yield* snapshotWith(
+      ownerId,
+      yield* saveDraft({
+        ...draft,
+        courseContent: staleCourseContent(draft.courseContent, now()),
+        derivedSourceDocuments: [
+          ...draft.derivedSourceDocuments.filter(
+            (document) => document.sourceAssetId !== action.sourceId,
+          ),
+          ...derived.derivedSourceDocuments,
+        ],
+        knowledgeChunks: [
+          ...draft.knowledgeChunks.filter((chunk) => chunk.sourceAssetId !== action.sourceId),
+          ...derived.knowledgeChunks,
+        ],
+        learningBlueprint: staleLearningBlueprint(draft.learningBlueprint, now()),
+        sourceProcessingIncomplete: sourceProcessingIncomplete(sources),
+        sources,
+      }),
+    );
+  });
+
+const applyRetryAiRun = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'retryAiRun'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* retryAiRunProgram() {
+    const run = draft.aiRuns.find((candidate) => candidate.id === action.runId);
+    if (run === undefined) {
+      return yield* new CoursitionStoreError({
+        message: 'AI run not found for signed-in creator.',
+      });
+    }
+    if (run.status !== 'failed') {
+      return yield* new CoursitionStoreError({ message: 'Only failed AI runs can be retried.' });
+    }
+    switch (run.type) {
+      case 'course_generation': {
+        if (draft.mode !== 'generate') {
+          return yield* new CoursitionStoreError({
+            message: 'Course generation is only available in generate mode.',
+          });
+        }
+        if (!hasUsableSourceMaterial(draft)) {
+          return yield* new CoursitionStoreError({
+            message: 'Add source material before generating the course.',
+          });
+        }
+        const plannedDraft = yield* runLearningPlanPhase(draft, {
+          force: false,
+          step: 'activityPlan',
+        });
+        const activityDraft = yield* runActivityPhase(ownerId, plannedDraft, { force: false });
+        const activityDraftWithFindings = draftForStep(activityDraft, activityDraft.step);
+        yield* assertCourseContentGenerationReady(activityDraftWithFindings);
+        const contentDraft = yield* runCourseContentPhase(activityDraft, { force: false });
+        return yield* snapshotWith(
+          ownerId,
+          yield* saveDraft({
+            ...contentDraft,
+            findings: buildFindings({ ...contentDraft, findings: [] }),
+            step: 'preview',
+          }),
+        );
+      }
+      case 'course_preparation_generation': {
+        const nextDraft = yield* runCoursePreparationPhase(draft, { force: true });
+        return yield* snapshotWith(ownerId, nextDraft);
+      }
+      case 'learning_blueprint_generation': {
+        const draftWithFindings = draftForStep(draft, draft.step);
+        yield* assertWorkflowGate(getWorkflowStepGate(draftWithFindings, 'objectives'));
+        const nextDraft = yield* runLearningPlanPhase(draftWithFindings, {
+          force: true,
+          step: 'objectives',
+        });
+        return yield* snapshotWith(ownerId, nextDraft);
+      }
+      case 'activity_generation': {
+        const draftWithFindings = draftForStep(draft, draft.step);
+        yield* assertWorkflowGate(getWorkflowStepGate(draftWithFindings, 'activityPlan'));
+        const nextDraft = yield* runActivityPhase(ownerId, draftWithFindings, { force: true });
+        return yield* snapshotWith(ownerId, nextDraft);
+      }
+      case 'course_content_generation': {
+        const draftWithFindings = draftForStep(draft, draft.step);
+        yield* assertWorkflowGate(getWorkflowStepGate(draftWithFindings, 'courseContent'));
+        const nextDraft = yield* runCourseContentPhase(draftWithFindings, { force: true });
+        return yield* snapshotWith(ownerId, nextDraft);
+      }
+      case 'teaching_quality_review': {
+        return yield* new CoursitionStoreError({
+          message: 'Teaching quality review runs are not retried by this workflow.',
+        });
+      }
+      default: {
+        const unsupportedRunType: never = run.type;
+        return yield* new CoursitionStoreError({
+          message: `Unsupported AI run type: ${unsupportedRunType}`,
+        });
+      }
+    }
+  });
+
+const applyGenerateLearningBlueprint = (
+  ownerId: string,
+  draft: CourseDraft,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* generateLearningBlueprintProgram() {
+    const draftWithFindings = draftForStep(draft, draft.step);
+    yield* assertWorkflowGate(getWorkflowStepGate(draftWithFindings, 'objectives'));
+    const nextDraft = yield* runLearningPlanPhase(draftWithFindings, {
+      force: true,
+      step: 'objectives',
+    });
+    return yield* snapshotWith(ownerId, nextDraft);
+  });
+
+const applyGenerateActivities = (ownerId: string, draft: CourseDraft): WorkflowSnapshotEffect =>
+  Effect.gen(function* generateActivitiesProgram() {
+    const draftWithFindings = draftForStep(draft, draft.step);
+    yield* assertWorkflowGate(getWorkflowStepGate(draftWithFindings, 'activityPlan'));
+    const nextDraft = yield* runActivityPhase(ownerId, draftWithFindings, { force: true });
+    return yield* snapshotWith(ownerId, nextDraft);
+  });
+
+const applyUpdateCoursePreparation = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'updateCoursePreparation'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* updateCoursePreparationProgram() {
+    const timestamp = now();
+    const preparation = {
+      ...action.preparation,
+      language:
+        action.preparation.languagePreference === 'source'
+          ? action.preparation.language
+          : action.preparation.languagePreference,
+    };
+    const nextBlueprint = staleLearningBlueprint(
+      { ...draft.learningBlueprint, coursePreparation: preparation },
+      timestamp,
+    );
+    const nextDraft = {
+      ...draft,
+      courseContent: staleCourseContent(draft.courseContent, timestamp),
+      learningBlueprint: nextBlueprint,
+      step: 'preparation' as const,
+    };
+    return yield* snapshotWith(
+      ownerId,
+      yield* saveDraft({ ...nextDraft, findings: buildFindings(nextDraft) }),
+    );
+  });
+
+const applyUpdateLearningObjective = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'updateLearningObjective'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* updateLearningObjectiveProgram() {
+    const timestamp = now();
+    const nextObjectives = draft.learningBlueprint.objectives.map((objective) =>
+      objective.id === action.objectiveId
+        ? {
+            ...objective,
+            capability: action.capability.trim() || objective.capability,
+            status: 'edited' as const,
+            title: action.title.trim() || objective.title,
+            updatedAt: timestamp,
+          }
+        : objective,
+    );
+    const nextActivityBriefs = draft.learningBlueprint.activityBriefs.map((brief) =>
+      brief.objectiveId === action.objectiveId || brief.objectiveIds.includes(action.objectiveId)
+        ? { ...brief, status: staleStatusFor(brief.status), updatedAt: timestamp }
+        : brief,
+    );
+    const nextGeneratedActivities = draft.learningBlueprint.generatedActivities.map((activity) =>
+      activity.objectiveIds.includes(action.objectiveId)
+        ? { ...activity, status: staleStatusFor(activity.status) }
+        : activity,
+    );
+    const nextDraft = {
+      ...draft,
+      learningBlueprint: {
+        ...draft.learningBlueprint,
+        activityBriefs: nextActivityBriefs,
+        generatedActivities: nextGeneratedActivities,
+        objectives: nextObjectives,
+        updatedAt: timestamp,
+      },
+    };
+    return yield* snapshotWith(
+      ownerId,
+      yield* saveDraft({
+        ...nextDraft,
+        courseContent: staleCourseContent(nextDraft.courseContent, timestamp),
+        findings: buildFindings(nextDraft),
+        step: 'objectives',
+      }),
+    );
+  });
+
+const applyUpdateActivityBrief = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'updateActivityBrief'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* updateActivityBriefProgram() {
+    const timestamp = now();
+    let activityBriefUpdated = false;
+    const nextActivityBriefs = draft.learningBlueprint.activityBriefs.map((brief) => {
+      if (brief.id !== action.briefId) {
+        return brief;
+      }
+      activityBriefUpdated = true;
+      return {
+        ...brief,
+        feedbackGuidance: action.feedbackGuidance.trim() || brief.feedbackGuidance,
+        instructions: action.instructions.trim() || brief.instructions,
+        learnerAction: action.learnerAction.trim() || brief.learnerAction,
+        status: 'edited' as const,
+        successCriteria: action.successCriteria.trim() || brief.successCriteria,
+        title: action.title.trim() || brief.title,
+        type: action.type,
+        updatedAt: timestamp,
+      };
+    });
+    const nextGeneratedActivities = draft.learningBlueprint.generatedActivities.map((activity) =>
+      activity.briefId === action.briefId && activityBriefUpdated
+        ? { ...activity, status: staleStatusFor(activity.status) }
+        : activity,
+    );
+    const nextDraft = {
+      ...draft,
+      learningBlueprint: {
+        ...draft.learningBlueprint,
+        activityBriefs: nextActivityBriefs,
+        generatedActivities: nextGeneratedActivities,
+        updatedAt: timestamp,
+      },
+    };
+    return yield* snapshotWith(
+      ownerId,
+      yield* saveDraft({
+        ...nextDraft,
+        courseContent: staleCourseContent(nextDraft.courseContent, timestamp),
+        findings: buildFindings(nextDraft),
+        step: 'activityPlan',
+      }),
+    );
+  });
+
+const applyGenerateCourseContent = (ownerId: string, draft: CourseDraft): WorkflowSnapshotEffect =>
+  Effect.gen(function* generateCourseContentProgram() {
+    const draftWithFindings = draftForStep(draft, draft.step);
+    yield* assertWorkflowGate(getWorkflowStepGate(draftWithFindings, 'courseContent'));
+    const nextDraft = yield* runCourseContentPhase(draftWithFindings, { force: true });
+    return yield* snapshotWith(ownerId, nextDraft);
+  });
+
+const applySetFindingStatus = (
+  ownerId: string,
+  draft: CourseDraft,
+  action: DraftAction<'setFindingStatus'>,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* setFindingStatusProgram() {
+    const currentFindings = buildFindings(draft);
+    return yield* snapshotWith(
+      ownerId,
+      yield* saveDraft({
+        ...draft,
+        findings: updateFindingStatus(currentFindings, action.findingId, action.status),
+      }),
+    );
+  });
+
+const applyOpenPreview = (ownerId: string, draft: CourseDraft): WorkflowSnapshotEffect =>
+  Effect.gen(function* openPreviewProgram() {
+    const previewDraft = { ...draft, findings: buildFindings(draft) };
+    if (
+      !getWorkflowPreviewGate(previewDraft, { blockOpenFindings: draft.mode !== 'generate' })
+        .allowed
+    ) {
+      return yield* snapshotWith(
+        ownerId,
+        yield* saveDraft({
+          ...previewDraft,
+          step: draft.step === 'preview' ? 'courseContent' : draft.step,
+        }),
+      );
+    }
+    return yield* snapshotWith(ownerId, yield* saveDraft({ ...previewDraft, step: 'preview' }));
+  });
+
+const applyDraftAction = (ownerId: string, action: DraftScopedAction): WorkflowSnapshotEffect =>
+  Effect.gen(function* draftActionProgram() {
+    const draft = yield* requireDraft(ownerId, action.draftId);
+    switch (action.action) {
+      case 'updateDraftTitle': {
+        return yield* applyUpdateDraftTitle(ownerId, draft, action);
+      }
+      case 'goToStep': {
+        return yield* applyGoToStep(ownerId, draft, action);
+      }
+      case 'setMode': {
+        return yield* applySetMode(ownerId, draft, action);
+      }
+      case 'generateCourse': {
+        return yield* applyGenerateCourse(ownerId, draft);
+      }
+      case 'addSource': {
+        return yield* applyAddSource(ownerId, draft, action);
+      }
+      case 'deleteSource': {
+        return yield* applyDeleteSource(ownerId, draft, action);
+      }
+      case 'retrySource': {
+        return yield* applyRetrySource(ownerId, draft, action);
+      }
+      case 'retryAiRun': {
+        return yield* applyRetryAiRun(ownerId, draft, action);
+      }
+      case 'generateLearningBlueprint': {
+        return yield* applyGenerateLearningBlueprint(ownerId, draft);
+      }
+      case 'generateActivities': {
+        return yield* applyGenerateActivities(ownerId, draft);
+      }
+      case 'updateCoursePreparation': {
+        return yield* applyUpdateCoursePreparation(ownerId, draft, action);
+      }
+      case 'updateLearningObjective': {
+        return yield* applyUpdateLearningObjective(ownerId, draft, action);
+      }
+      case 'updateActivityBrief': {
+        return yield* applyUpdateActivityBrief(ownerId, draft, action);
+      }
+      case 'generateCourseContent': {
+        return yield* applyGenerateCourseContent(ownerId, draft);
+      }
+      case 'setFindingStatus': {
+        return yield* applySetFindingStatus(ownerId, draft, action);
+      }
+      case 'openPreview': {
+        return yield* applyOpenPreview(ownerId, draft);
+      }
+      default: {
+        const unsupportedAction: never = action;
+        return yield* new CoursitionStoreError({
+          message: `Unsupported workflow action: ${String(unsupportedAction)}`,
+        });
+      }
+    }
+  });
+
+const applyWorkflowActionProgram = (
+  ownerId: string,
+  action: WorkflowAction,
+): WorkflowSnapshotEffect =>
+  Effect.gen(function* dispatchProgram() {
+    switch (action.action) {
+      case 'getState': {
+        yield* ensureDefaultDraftsForOwner(ownerId);
+        return yield* snapshotForProgram(ownerId);
+      }
+      case 'createDraft': {
+        return yield* applyCreateDraft(ownerId, action);
+      }
+      case 'selectDraft': {
+        return yield* snapshotWith(ownerId, yield* requireDraft(ownerId, action.draftId));
+      }
+      case 'deleteDraft': {
+        return yield* applyDeleteDraft(ownerId, action);
+      }
+      default: {
+        return yield* applyDraftAction(ownerId, action);
+      }
+    }
+  });
+
+export const snapshotFor = (ownerId: string): Promise<WorkflowSnapshot> =>
+  storeRuntime.runPromise(
+    ensureDefaultDraftsForOwner(ownerId).pipe(Effect.flatMap(() => snapshotForProgram(ownerId))),
+  );
+
+export const snapshotForRoute = (
+  ownerId: string,
+  draftId: string,
+  step: CourseDraft['step'],
+): Promise<WorkflowSnapshot> =>
+  storeRuntime.runPromise(snapshotForRouteProgram(ownerId, draftId, step));
 
 export const applyWorkflowAction = (
   ownerId: string,
   action: WorkflowAction,
 ): Promise<WorkflowSnapshot> =>
-  // eslint-disable-next-line complexity
-  runPromiseGenerator(function* storeProgram() {
-    if (action.action === 'getState') {
-      return yield* waitFor(snapshotFor(ownerId));
-    }
-
-    if (action.action === 'createDraft') {
-      const title = action.title.trim();
-      if (title.length === 0) {
-        throw new Error('Course title is required.');
-      }
-      const createdAt = now();
-      const draft = yield* waitFor(
-        saveDraft({
-          aiRuns: [],
-          courseContent: emptyCourseContent(),
-          createdAt,
-          derivedSourceDocuments: [],
-          findings: [],
-          id: createId('course'),
-          knowledgeChunks: [],
-          language: action.language,
-          learningBlueprint: emptyLearningBlueprint(action.language),
-          mode: 'assist',
-          ownerId,
-          sourceProcessingIncomplete: false,
-          sources: [],
-          step: 'mode',
-          title,
-          updatedAt: createdAt,
-        }),
-      );
-      return { ...(yield* waitFor(snapshotFor(ownerId))), draft };
-    }
-
-    if (action.action === 'selectDraft') {
-      return {
-        ...(yield* waitFor(snapshotFor(ownerId))),
-        draft: yield* waitFor(requireDraft(ownerId, action.draftId)),
-      };
-    }
-
-    if (action.action === 'deleteDraft') {
-      yield* waitFor(deleteDraft(ownerId, action.draftId));
-      return {
-        ...(yield* waitFor(snapshotFor(ownerId))),
-        draft: null,
-      };
-    }
-
-    const draft = yield* waitFor(requireDraft(ownerId, action.draftId));
-
-    switch (action.action) {
-      case 'updateDraftTitle': {
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(
-            saveDraft({
-              ...draft,
-              title: action.title.trim() || draft.title,
-            }),
-          ),
-        };
-      }
-      case 'goToStep': {
-        const draftWithFindings = draftForStep(draft, draft.step);
-        assertWorkflowGate(getWorkflowStepGate(draftWithFindings, action.step));
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(saveDraft(draftForStep(draftWithFindings, action.step))),
-        };
-      }
-      case 'setMode': {
-        if (action.mode !== 'generate' && action.mode !== 'assist') {
-          throw new Error('Unsupported course mode.');
-        }
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(
-            saveDraft({
-              ...draft,
-              mode: action.mode,
-            }),
-          ),
-        };
-      }
-      case 'generateCourse': {
-        if (draft.mode !== 'generate') {
-          throw new Error('Course generation is only available in generate mode.');
-        }
-        if (!hasUsableSourceMaterial(draft)) {
-          throw new Error('Add source material before generating the course.');
-        }
-        const aiRun = createAiRun(draft, 'course_generation');
-        const draftWithRunningRun = yield* waitFor(
-          saveDraft({
-            ...draft,
-            aiRuns: [...draft.aiRuns, aiRun],
-          }),
-        );
-        try {
-          const blueprintResult = yield* waitFor(
-            generateLearningBlueprintWithAi(draftWithRunningRun),
-          );
-          const contentResult = yield* waitFor(
-            generateCourseContentWithAi({
-              ...draftWithRunningRun,
-              learningBlueprint: blueprintResult.value,
-            }),
-          );
-          const nextDraft = {
-            ...draftWithRunningRun,
-            aiRuns: [
-              ...draftWithRunningRun.aiRuns.filter((run) => run.id !== aiRun.id),
-              appliedAiRun(
-                aiRun,
-                JSON.stringify({
-                  content: contentResult.value,
-                  learningBlueprint: blueprintResult.value,
-                }),
-                contentResult.model,
-                contentResult.provider,
-              ),
-            ],
-            courseContent: contentResult.value,
-            learningBlueprint: blueprintResult.value,
-            step: 'preview' as const,
-          };
-          return {
-            ...(yield* waitFor(snapshotFor(ownerId))),
-            draft: yield* waitFor(
-              saveDraft({
-                ...nextDraft,
-                findings: buildFindings({ ...nextDraft, findings: [] }),
-              }),
-            ),
-          };
-        } catch (error) {
-          return {
-            ...(yield* waitFor(snapshotFor(ownerId))),
-            draft: yield* waitFor(saveDraft(failedAiRun(draftWithRunningRun, aiRun, error))),
-          };
-        }
-      }
-      case 'addSource': {
-        if (action.source.name.trim().length === 0) {
-          throw new Error('Source name is required.');
-        }
-        if (action.source.type !== 'file' && action.source.content.trim().length === 0) {
-          throw new Error('Source content is required.');
-        }
-        const source = yield* waitFor(processSource(draft.id, action.source));
-        const sources = [...draft.sources, source];
-        const derived = documentsAndChunksForSource(source, source.createdAt ?? now());
-        const timestamp = now();
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(
-            saveDraft({
-              ...draft,
-              courseContent: staleCourseContent(draft.courseContent, timestamp),
-              derivedSourceDocuments: [
-                ...draft.derivedSourceDocuments,
-                ...derived.derivedSourceDocuments,
-              ],
-              knowledgeChunks: [...draft.knowledgeChunks, ...derived.knowledgeChunks],
-              learningBlueprint: staleLearningBlueprint(draft.learningBlueprint, timestamp),
-              sourceProcessingIncomplete: sourceProcessingIncomplete(sources),
-              sources,
-              step: 'sources',
-            }),
-          ),
-        };
-      }
-      case 'deleteSource': {
-        const sources = draft.sources.map((source) =>
-          source.id === action.sourceId
-            ? { ...source, deletedAt: now(), status: 'deleted' as const }
-            : source,
-        );
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(
-            saveDraft({
-              ...draft,
-              courseContent: staleCourseContent(draft.courseContent, now()),
-              derivedSourceDocuments: draft.derivedSourceDocuments.filter(
-                (document) => document.sourceAssetId !== action.sourceId,
-              ),
-              knowledgeChunks: draft.knowledgeChunks.filter(
-                (chunk) => chunk.sourceAssetId !== action.sourceId,
-              ),
-              learningBlueprint: staleLearningBlueprint(draft.learningBlueprint, now()),
-              sourceProcessingIncomplete: sourceProcessingIncomplete(sources),
-              sources,
-            }),
-          ),
-        };
-      }
-      case 'retrySource': {
-        const existingSource = draft.sources.find((source) => source.id === action.sourceId);
-        if (existingSource === undefined) {
-          throw new Error('Source not found for signed-in creator.');
-        }
-        const retriedSource = yield* waitFor(
-          processSource(draft.id, {
-            content: existingSource.originalInput ?? existingSource.content,
-            name: existingSource.name,
-            sizeLabel: existingSource.sizeLabel,
-            type: existingSource.type,
-          }),
-        );
-        const replacementSource = { ...retriedSource, id: existingSource.id };
-        const derived = documentsAndChunksForSource(
-          replacementSource,
-          replacementSource.createdAt ?? now(),
-        );
-        const sources = draft.sources.map((source) =>
-          source.id === action.sourceId ? replacementSource : source,
-        );
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(
-            saveDraft({
-              ...draft,
-              courseContent: staleCourseContent(draft.courseContent, now()),
-              derivedSourceDocuments: [
-                ...draft.derivedSourceDocuments.filter(
-                  (document) => document.sourceAssetId !== action.sourceId,
-                ),
-                ...derived.derivedSourceDocuments,
-              ],
-              knowledgeChunks: [
-                ...draft.knowledgeChunks.filter((chunk) => chunk.sourceAssetId !== action.sourceId),
-                ...derived.knowledgeChunks,
-              ],
-              learningBlueprint: staleLearningBlueprint(draft.learningBlueprint, now()),
-              sourceProcessingIncomplete: sourceProcessingIncomplete(sources),
-              sources,
-            }),
-          ),
-        };
-      }
-      case 'retryAiRun': {
-        const run = draft.aiRuns.find((candidate) => candidate.id === action.runId);
-        if (run === undefined) {
-          throw new Error('AI run not found for signed-in creator.');
-        }
-        if (run.status !== 'failed') {
-          throw new Error('Only failed AI runs can be retried.');
-        }
-        switch (run.type) {
-          case 'course_generation': {
-            return yield* waitFor(
-              applyWorkflowAction(ownerId, { action: 'generateCourse', draftId: draft.id }),
-            );
-          }
-          case 'learning_blueprint_generation': {
-            return yield* waitFor(
-              applyWorkflowAction(ownerId, {
-                action: 'generateLearningBlueprint',
-                draftId: draft.id,
-              }),
-            );
-          }
-          case 'course_content_generation': {
-            return yield* waitFor(
-              applyWorkflowAction(ownerId, { action: 'generateCourseContent', draftId: draft.id }),
-            );
-          }
-          case 'teaching_quality_review': {
-            throw new Error('Teaching quality review runs are not retried by this workflow.');
-          }
-          default: {
-            const unsupportedRunType: never = run.type;
-            throw new Error(`Unsupported AI run type: ${unsupportedRunType}`);
-          }
-        }
-      }
-      case 'generateLearningBlueprint': {
-        const draftWithFindings = draftForStep(draft, draft.step);
-        assertWorkflowGate(getWorkflowStepGate(draftWithFindings, 'objectives'));
-        const aiRun = createAiRun(draft, 'learning_blueprint_generation');
-        const draftWithRunningRun = yield* waitFor(
-          saveDraft({
-            ...draft,
-            aiRuns: [...draft.aiRuns, aiRun],
-          }),
-        );
-        try {
-          const result = yield* waitFor(generateLearningBlueprintWithAi(draftWithRunningRun));
-          const nextDraft: CourseDraft = {
-            ...draftWithRunningRun,
-            aiRuns: [
-              ...draftWithRunningRun.aiRuns.filter((run) => run.id !== aiRun.id),
-              appliedAiRun(aiRun, result.text, result.model, result.provider),
-            ],
-            learningBlueprint: result.value,
-            step:
-              result.value.activityBriefs.length > 0
-                ? ('activityPlan' as const)
-                : ('objectives' as const),
-          };
-          return {
-            ...(yield* waitFor(snapshotFor(ownerId))),
-            draft: yield* waitFor(
-              saveDraft({
-                ...nextDraft,
-                findings: buildFindings({ ...nextDraft, findings: [] }),
-              }),
-            ),
-          };
-        } catch (error) {
-          return {
-            ...(yield* waitFor(snapshotFor(ownerId))),
-            draft: yield* waitFor(saveDraft(failedAiRun(draftWithRunningRun, aiRun, error))),
-          };
-        }
-      }
-      case 'updateCoursePreparation': {
-        const timestamp = now();
-        const preparation = normalizeCoursePreparation(draft, action.preparation);
-        const nextBlueprint = staleLearningBlueprint(
-          {
-            ...draft.learningBlueprint,
-            coursePreparation: preparation,
-          },
-          timestamp,
-        );
-        const nextDraft = {
-          ...draft,
-          courseContent: staleCourseContent(draft.courseContent, timestamp),
-          learningBlueprint: nextBlueprint,
-          step: 'preparation' as const,
-        };
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(
-            saveDraft({
-              ...nextDraft,
-              findings: buildFindings(nextDraft),
-            }),
-          ),
-        };
-      }
-      case 'updateLearningObjective': {
-        const timestamp = now();
-        const nextObjectives = draft.learningBlueprint.objectives.map((objective) =>
-          objective.id === action.objectiveId
-            ? {
-                ...objective,
-                capability: action.capability.trim() || objective.capability,
-                status: 'edited' as const,
-                title: action.title.trim() || objective.title,
-                updatedAt: timestamp,
-              }
-            : objective,
-        );
-        const nextActivityBriefs = draft.learningBlueprint.activityBriefs.map((brief) =>
-          brief.objectiveId === action.objectiveId ||
-          brief.objectiveIds.includes(action.objectiveId)
-            ? { ...brief, status: staleStatusFor(brief.status), updatedAt: timestamp }
-            : brief,
-        );
-        const nextGeneratedActivities = draft.learningBlueprint.generatedActivities.map(
-          (activity) =>
-            activity.objectiveIds.includes(action.objectiveId)
-              ? { ...activity, status: staleStatusFor(activity.status) }
-              : activity,
-        );
-        const nextDraft = {
-          ...draft,
-          learningBlueprint: {
-            ...draft.learningBlueprint,
-            activityBriefs: nextActivityBriefs,
-            generatedActivities: nextGeneratedActivities,
-            objectives: nextObjectives,
-            updatedAt: timestamp,
-          },
-        };
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(
-            saveDraft({
-              ...nextDraft,
-              courseContent: staleCourseContent(nextDraft.courseContent, timestamp),
-              findings: buildFindings(nextDraft),
-              step: 'objectives',
-            }),
-          ),
-        };
-      }
-      case 'updateActivityBrief': {
-        const timestamp = now();
-        let activityBriefUpdated = false;
-        const nextActivityBriefs = draft.learningBlueprint.activityBriefs.map((brief) => {
-          if (brief.id !== action.briefId) {
-            return brief;
-          }
-          activityBriefUpdated = true;
-          return {
-            ...brief,
-            feedbackGuidance: action.feedbackGuidance.trim() || brief.feedbackGuidance,
-            instructions: action.instructions.trim() || brief.instructions,
-            learnerAction: action.learnerAction.trim() || brief.learnerAction,
-            status: 'edited' as const,
-            successCriteria: action.successCriteria.trim() || brief.successCriteria,
-            title: action.title.trim() || brief.title,
-            type: action.type,
-            updatedAt: timestamp,
-          };
-        });
-        const nextGeneratedActivities = draft.learningBlueprint.generatedActivities.map(
-          (activity) =>
-            activity.briefId === action.briefId && activityBriefUpdated
-              ? { ...activity, status: staleStatusFor(activity.status) }
-              : activity,
-        );
-        const nextDraft = {
-          ...draft,
-          learningBlueprint: {
-            ...draft.learningBlueprint,
-            activityBriefs: nextActivityBriefs,
-            generatedActivities: nextGeneratedActivities,
-            updatedAt: timestamp,
-          },
-        };
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(
-            saveDraft({
-              ...nextDraft,
-              courseContent: staleCourseContent(nextDraft.courseContent, timestamp),
-              findings: buildFindings(nextDraft),
-              step: 'activityPlan',
-            }),
-          ),
-        };
-      }
-      case 'generateCourseContent': {
-        const draftWithFindings = draftForStep(draft, draft.step);
-        assertWorkflowGate(getWorkflowStepGate(draftWithFindings, 'courseContent'));
-        const aiRun = createAiRun(draft, 'course_content_generation');
-        const draftWithRunningRun = yield* waitFor(
-          saveDraft({ ...draft, aiRuns: [...draft.aiRuns, aiRun] }),
-        );
-        try {
-          const result = yield* waitFor(generateCourseContentWithAi(draftWithRunningRun));
-          const nextDraft = {
-            ...draftWithRunningRun,
-            aiRuns: [
-              ...draftWithRunningRun.aiRuns.filter((run) => run.id !== aiRun.id),
-              appliedAiRun(aiRun, result.text, result.model, result.provider),
-            ],
-            courseContent: result.value,
-            step: 'courseContent' as const,
-          };
-          return {
-            ...(yield* waitFor(snapshotFor(ownerId))),
-            draft: yield* waitFor(
-              saveDraft({
-                ...nextDraft,
-                findings: buildFindings({ ...nextDraft, findings: [] }),
-              }),
-            ),
-          };
-        } catch (error) {
-          return {
-            ...(yield* waitFor(snapshotFor(ownerId))),
-            draft: yield* waitFor(saveDraft(failedAiRun(draftWithRunningRun, aiRun, error))),
-          };
-        }
-      }
-      case 'setFindingStatus': {
-        const currentFindings = buildFindings(draft);
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(
-            saveDraft({
-              ...draft,
-              findings: updateFindingStatus(currentFindings, action.findingId, action.status),
-            }),
-          ),
-        };
-      }
-      case 'openPreview': {
-        const previewDraft = { ...draft, findings: buildFindings(draft) };
-        if (
-          !getWorkflowPreviewGate(previewDraft, {
-            blockOpenFindings: draft.mode !== 'generate',
-          }).allowed
-        ) {
-          return {
-            ...(yield* waitFor(snapshotFor(ownerId))),
-            draft: yield* waitFor(
-              saveDraft({
-                ...previewDraft,
-                step: draft.step === 'preview' ? 'courseContent' : draft.step,
-              }),
-            ),
-          };
-        }
-        return {
-          ...(yield* waitFor(snapshotFor(ownerId))),
-          draft: yield* waitFor(
-            saveDraft({
-              ...previewDraft,
-              step: 'preview',
-            }),
-          ),
-        };
-      }
-      default: {
-        const unsupportedAction: never = action;
-        throw new Error(`Unsupported workflow action: ${JSON.stringify(unsupportedAction)}`);
-      }
-    }
-  });
+  storeRuntime.runPromise(applyWorkflowActionProgram(ownerId, action));

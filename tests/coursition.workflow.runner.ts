@@ -9,6 +9,7 @@ import {
   generateCourseContentWithAi,
 } from '../server/coursition/ai-provider.ts';
 import * as workflowStore from '../server/coursition/store.ts';
+import { hasPlayableGeneratedActivityCoverage } from '../shared/coursition/workflow.ts';
 
 const root = process.cwd();
 
@@ -162,7 +163,7 @@ const firstSourceReferenceFor = (draft) =>
     sourceAssetId: draft.sources.find((source) => source.status === 'processed')?.id ?? draft.id,
   };
 
-const seedAxBlueprint = async (store, ownerId, draftId) => {
+const seedAxBlueprint = async (store, ownerId, draftId, step = 'activityPlan') => {
   const snapshot = await store.applyWorkflowAction(ownerId, {
     action: 'selectDraft',
     draftId,
@@ -226,6 +227,11 @@ const seedAxBlueprint = async (store, ownerId, draftId) => {
               isCorrect: false,
               text: 'Přejít rovnou k eskalaci a důkaz doplnit později.',
             },
+            {
+              feedback: 'Tahle volba zachytí důkaz, ale stále přeskočí vlastníka rozhodnutí.',
+              isCorrect: false,
+              text: 'Zachytit důkaz a přeskočit rovnou na další krok bez vlastníka.',
+            },
           ]
         : [
             {
@@ -237,6 +243,12 @@ const seedAxBlueprint = async (store, ownerId, draftId) => {
               feedback: 'This skips the source signal and loses the ownership handoff.',
               isCorrect: false,
               text: 'Escalate first and reconstruct the evidence later.',
+            },
+            {
+              feedback:
+                'This captures evidence, but it still skips the owner who must carry the next decision.',
+              isCorrect: false,
+              text: 'Capture evidence and move to the next step without naming an owner.',
             },
           ],
     explanationPrompt:
@@ -283,7 +295,7 @@ const seedAxBlueprint = async (store, ownerId, draftId) => {
     },
     findings: [],
     learningBlueprint: nextBlueprint,
-    step: 'activityPlan',
+    step,
     updatedAt: timestamp,
   };
   await writeWorkflowFile(storeFile);
@@ -453,6 +465,12 @@ const generateLearningBlueprint = (store, ownerId, draftId) =>
 const generateCourseContent = (store, ownerId, draftId) =>
   workflow(store, ownerId, {
     action: 'generateCourseContent',
+    draftId,
+  });
+
+const generateCourse = (store, ownerId, draftId) =>
+  workflow(store, ownerId, {
+    action: 'generateCourse',
     draftId,
   });
 
@@ -738,7 +756,7 @@ const scenarios = {
         objectiveId: firstObjective.id,
         title: firstObjective.title,
       });
-      const objectivesDraft = await goToStep(store, ownerId, draft.id, 'objectives');
+      const objectivesDraft = await seedAxBlueprint(store, ownerId, draft.id, 'objectives');
       const [firstBrief] = blueprintFor(objectivesDraft).activityBriefs;
       if (!firstBrief) {
         throw new Error('Expected generated activity brief.');
@@ -913,6 +931,9 @@ const scenarios = {
             finalStep: finalStepDraft.step,
             noteStatus: notesDraft.sources.find((source) => source.name === 'Lifecycle notes')
               ?.status,
+            originalInputExposed: finalSourceDraft.sources.some((source) =>
+              Object.hasOwn(source, 'originalInput'),
+            ),
             retriedSourceStatus: retriedDraft.sources.find(
               (source) => source.name === 'Retryable source.txt',
             )?.status,
@@ -986,6 +1007,9 @@ const scenarios = {
           }
           return {
             jobBodies: server.requests.jobs,
+            originalInputExposed: [parsedSource, retriedSource].some((source) =>
+              Object.hasOwn(source, 'originalInput'),
+            ),
             parsedContent: parsedSource.content,
             parsedProcessor: parsedSource.processor,
             parsedProviderJobId: parsedSource.providerJobId,
@@ -993,10 +1017,12 @@ const scenarios = {
             pollCount: server.requests.polls.length,
             pollExpands: server.requests.polls.map((poll) => poll.expand),
             retriedContent: retriedSource.content,
-            retriedOriginalInputPreserved: retriedSource.originalInput === pdfContent,
             retriedProviderJobId: retriedSource.providerJobId,
             retriedStatus: retriedSource.status,
             sameSourceId: retriedSource.id === parsedSource.id,
+            storageReferencePreserved:
+              typeof retriedSource.storageReference === 'string' &&
+              retriedSource.storageReference.startsWith('json-file:source-assets/'),
             uploadCount: server.requests.uploads.length,
           };
         } finally {
@@ -1112,7 +1138,7 @@ const scenarios = {
         ...draft.learningBlueprint.coursePreparation,
         audience: 'incident coordinators with a changed validation cohort',
       });
-      const objectivesDraft = await goToStep(store, ownerId, draft.id, 'objectives');
+      const objectivesDraft = await seedAxBlueprint(store, ownerId, draft.id, 'objectives');
       await addNotesSource(
         store,
         ownerId,
@@ -1134,6 +1160,144 @@ const scenarios = {
         stepAfterPreparationEdit: objectivesDraft.step,
         stepAfterSourceEdit: activityPlanDraft.step,
         updatedAudience: editedPreparationDraft.learningBlueprint.coursePreparation.audience,
+      };
+    } finally {
+      await cleanup();
+    }
+  },
+
+  async activityPhaseBlocksContent() {
+    const { cleanup, store } = await createHarness();
+    try {
+      const ownerId = 'owner-activity-phase-blocks-content';
+      const draft = await createDraft(store, ownerId, 'Activity phase blocks content');
+      await addNotesSource(store, ownerId, draft.id, sourceMaterial);
+      await updatePreparation(store, ownerId, draft.id, sourceFirstPreparation());
+      const seededDraft = await seedAxBlueprint(store, ownerId, draft.id);
+      const storeFile = await readWorkflowFile();
+      const draftIndex = storeFile.drafts.findIndex(
+        (candidate) => candidate.id === seededDraft.id && candidate.ownerId === ownerId,
+      );
+      if (draftIndex === -1) {
+        throw new Error('Expected draft in workflow store.');
+      }
+      storeFile.drafts[draftIndex] = {
+        ...storeFile.drafts[draftIndex],
+        learningBlueprint: {
+          ...storeFile.drafts[draftIndex].learningBlueprint,
+          generatedActivities: [],
+        },
+        step: 'activityPlan',
+      };
+      await writeWorkflowFile(storeFile);
+
+      let blockedContentError = '';
+      try {
+        await generateCourseContent(store, ownerId, seededDraft.id);
+      } catch (error) {
+        blockedContentError = error instanceof Error ? error.message : String(error);
+      }
+
+      await seedAxBlueprint(store, ownerId, seededDraft.id);
+      const contentDraft = await generateCourseContent(store, ownerId, seededDraft.id);
+
+      return {
+        blockedContentError,
+        generatedActivityCount: contentDraft.learningBlueprint.generatedActivities.length,
+        sectionCount: contentDraft.courseContent.sections.length,
+        stepAfterContent: contentDraft.step,
+      };
+    } finally {
+      await cleanup();
+    }
+  },
+
+  async generateModeFullCourseAction() {
+    const { cleanup, store } = await createHarness();
+    try {
+      const ownerId = 'owner-generate-mode-full-course-action';
+      const draft = await createDraft(store, ownerId, 'Generate mode full course action');
+      await workflow(store, ownerId, {
+        action: 'setMode',
+        draftId: draft.id,
+        mode: 'generate',
+      });
+      await addNotesSource(store, ownerId, draft.id, sourceMaterial);
+      await updatePreparation(store, ownerId, draft.id, sourceFirstPreparation());
+      await seedAxBlueprint(store, ownerId, draft.id);
+      const generatedDraft = await generateCourse(store, ownerId, draft.id);
+
+      return {
+        courseGenerationFailureReason: generatedDraft.aiRuns.find(
+          (run) => run.type === 'course_generation',
+        )?.failureReason,
+        courseGenerationStatus: generatedDraft.aiRuns.find(
+          (run) => run.type === 'course_generation',
+        )?.status,
+        generatedActivityCount: generatedDraft.learningBlueprint.generatedActivities.length,
+        sectionCount: generatedDraft.courseContent.sections.length,
+        stepAfterGenerateCourse: generatedDraft.step,
+      };
+    } finally {
+      await cleanup();
+    }
+  },
+
+  async activityCoverageRequiresPlayableGeneration() {
+    const { cleanup, store } = await createHarness();
+    try {
+      const ownerId = 'owner-activity-coverage-requires-playable';
+      const draft = await buildAssistBlueprint(store, ownerId);
+      const [brief, generatedActivity] = [
+        draft.learningBlueprint.activityBriefs[0],
+        draft.learningBlueprint.generatedActivities[0],
+      ];
+      if (brief === undefined || generatedActivity === undefined) {
+        throw new Error('Expected seeded activity plan and generated activity.');
+      }
+      const storeFile = await readWorkflowFile();
+      const draftIndex = storeFile.drafts.findIndex(
+        (candidate) => candidate.id === draft.id && candidate.ownerId === ownerId,
+      );
+      if (draftIndex === -1) {
+        throw new Error('Expected draft in workflow store.');
+      }
+      const notPlayableActivity = {
+        ...generatedActivity,
+        interaction: {
+          feedback: 'Generation failed.',
+          kind: 'not_playable',
+          prompt: 'The playable activity was not generated.',
+          reason: 'The generated activity failed validation.',
+        },
+        status: 'generated',
+        type: 'not_playable',
+      };
+      storeFile.drafts[draftIndex] = {
+        ...storeFile.drafts[draftIndex],
+        learningBlueprint: {
+          ...storeFile.drafts[draftIndex].learningBlueprint,
+          generatedActivities: [notPlayableActivity],
+        },
+        step: 'activityPlan',
+      };
+      await writeWorkflowFile(storeFile);
+      const brokenSnapshot = await store.applyWorkflowAction(ownerId, {
+        action: 'selectDraft',
+        draftId: draft.id,
+      });
+      const brokenDraft = requiredDraft(brokenSnapshot.draft);
+      await seedAxBlueprint(store, ownerId, draft.id);
+      const fixedSnapshot = await store.applyWorkflowAction(ownerId, {
+        action: 'selectDraft',
+        draftId: draft.id,
+      });
+      const fixedDraft = requiredDraft(fixedSnapshot.draft);
+      return {
+        coverageAfterNotPlayable: hasPlayableGeneratedActivityCoverage(brokenDraft),
+        coverageAfterPlayable: hasPlayableGeneratedActivityCoverage(fixedDraft),
+        notPlayableType: brokenDraft.learningBlueprint.generatedActivities[0]?.type,
+        playableType: fixedDraft.learningBlueprint.generatedActivities[0]?.type,
       };
     } finally {
       await cleanup();

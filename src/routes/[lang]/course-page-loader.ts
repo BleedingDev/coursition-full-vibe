@@ -5,7 +5,6 @@ import * as Effect from 'effect/Effect';
 import * as Schema from 'effect/Schema';
 import type { CoursePageLoaderData } from '@/features/coursition/route-data';
 import { sessionPayloadSchema } from '@shared/coursition/effect-api';
-import type { SessionPayload } from '@shared/coursition/effect-api';
 import {
   courseRoutePath,
   isCourseRouteLanguage,
@@ -30,14 +29,11 @@ class LoaderPromiseError extends Data.TaggedError('LoaderPromiseError')<{
   readonly cause: unknown;
 }> {}
 
-const foreignPromise = <A>(evaluate: () => PromiseLike<A>) =>
+const sessionForRequest = (request: Request) =>
   Effect.tryPromise({
     catch: (cause) => new LoaderPromiseError({ cause }),
-    try: evaluate,
-  });
-
-const sessionForRequest = (request: Request): Effect.Effect<SessionPayload['session']> =>
-  foreignPromise(() => auth.api.getSession({ headers: request.headers })).pipe(
+    try: () => auth.api.getSession({ headers: request.headers }),
+  }).pipe(
     Effect.flatMap((session) => Schema.decodeUnknownEffect(sessionPayloadSchema)({ session })),
     Effect.map((payload) => payload.session),
     Effect.orElseSucceed(() => null),
@@ -72,10 +68,7 @@ const snapshotForLanguage = (
   };
 };
 
-const loaderEffect = ({
-  params,
-  request,
-}: CoursePageLoaderArgs): Effect.Effect<CoursePageLoaderData | Response, LoaderPromiseError> =>
+const loaderEffect = ({ params, request }: CoursePageLoaderArgs) =>
   Effect.gen(function* effectProgram() {
     const pathname = requestPathname(request);
     const language = languageFrom(params, pathname);
@@ -115,7 +108,10 @@ const loaderEffect = ({
       };
     }
     if (route === null) {
-      const snapshot = yield* foreignPromise(() => snapshotFor(sessionUser.id));
+      const snapshot = yield* Effect.tryPromise({
+        catch: (cause) => new LoaderPromiseError({ cause }),
+        try: () => snapshotFor(sessionUser.id),
+      });
       return {
         language,
         route: null,
@@ -128,9 +124,10 @@ const loaderEffect = ({
       };
     }
 
-    const snapshotResult = yield* foreignPromise(() =>
-      snapshotForRoute(sessionUser.id, route.draftId, route.step),
-    ).pipe(
+    const snapshotResult = yield* Effect.tryPromise({
+      catch: (cause) => new LoaderPromiseError({ cause }),
+      try: () => snapshotForRoute(sessionUser.id, route.draftId, route.step),
+    }).pipe(
       Effect.map((snapshot) => ({
         snapshot: snapshotForLanguage(snapshot, language),
         type: 'snapshot' as const,

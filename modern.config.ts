@@ -82,8 +82,7 @@ export default defineConfig(
           }
           chain.ignoreWarnings([
             {
-              message: /the request of a dependency is an expression/u,
-              module: /modern-js-plugin-i18n/u,
+              message: /Critical dependency: the request of a dependency is an expression/u,
             },
           ]);
         },

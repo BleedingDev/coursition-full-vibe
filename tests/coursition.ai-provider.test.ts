@@ -5,10 +5,13 @@ import type {
   CoursePreparation,
 } from '../shared/coursition/workflow.ts';
 import {
+  activityEvaluationFromAxResult,
   aiProviderConfig,
+  coursePreparationFromAxPlanningResult,
   generatedActivityFromAxSpec,
   generateCourseContentWithAi,
   isAiProviderConfigured,
+  learningBlueprintFromAxPlanningResult,
 } from '../server/coursition/ai-provider.ts';
 
 const preparation = (language: CoursePreparation['language']): CoursePreparation => ({
@@ -91,7 +94,7 @@ const activityBrief = (overrides: Partial<ActivityBrief>): ActivityBrief => {
   const createdAt = '2026-06-04T00:00:00.000Z';
   return {
     createdAt,
-    feedbackGuidance: 'Assessment-only guidance that tells the evaluator what to look for.',
+    feedbackGuidance: 'Brief-level feedback guidance for the generated activity.',
     id: 'activity_quality_guard',
     instructions: 'Solve the learner-facing task.',
     learnerAction: 'Do the exercise and explain your decision.',
@@ -99,7 +102,7 @@ const activityBrief = (overrides: Partial<ActivityBrief>): ActivityBrief => {
     objectiveIds: ['objective_quality_guard'],
     sourceConfidence: 'high',
     status: 'generated',
-    successCriteria: 'Target-answer rubric text that should stay out of answer options.',
+    successCriteria: 'Brief-level success criteria for the generated activity.',
     title: 'Internal activity title',
     type: 'retrieval_check',
     updatedAt: createdAt,
@@ -107,7 +110,11 @@ const activityBrief = (overrides: Partial<ActivityBrief>): ActivityBrief => {
   };
 };
 
-const expectNotPlayableActivity = (activity: ReturnType<typeof generatedActivityFromAxSpec>) => {
+type GeneratedActivityResult = ReturnType<typeof generatedActivityFromAxSpec>;
+type PracticeTaskActivity = Extract<GeneratedActivityResult, { type: 'practice_task' }>;
+type RubricAnswerActivity = Extract<GeneratedActivityResult, { type: 'rubric_answer' }>;
+
+const expectNotPlayableActivity = (activity: GeneratedActivityResult) => {
   expect(activity.type).toBe('not_playable');
   if (activity.type !== 'not_playable') {
     throw new Error(`Expected not_playable, received ${activity.type}`);
@@ -117,6 +124,22 @@ const expectNotPlayableActivity = (activity: ReturnType<typeof generatedActivity
   expect(activity.interaction.prompt).toMatch(/\S/u);
   expect(activity.interaction.reason).toMatch(/Ax-generated playable activity/iu);
   expect(activity.interaction.feedback).toMatch(/\S/u);
+};
+
+const expectPracticeTaskActivity = (activity: GeneratedActivityResult): PracticeTaskActivity => {
+  expect(activity.type).toBe('practice_task');
+  if (activity.type !== 'practice_task') {
+    throw new Error(`Expected practice_task, received ${activity.type}`);
+  }
+  return activity;
+};
+
+const expectRubricAnswerActivity = (activity: GeneratedActivityResult): RubricAnswerActivity => {
+  expect(activity.type).toBe('rubric_answer');
+  if (activity.type !== 'rubric_answer') {
+    throw new Error(`Expected rubric_answer, received ${activity.type}`);
+  }
+  return activity;
 };
 
 describe('Coursition AI provider', () => {
@@ -129,6 +152,103 @@ describe('Coursition AI provider', () => {
       expect(config.model.length).toBeGreaterThan(0);
       expect(config.baseURL.length).toBeGreaterThan(0);
     }
+  });
+
+  test('accepts native Ax JSON objects for course preparation output', () => {
+    const draft = sourceFirstDraft();
+    const generated = coursePreparationFromAxPlanningResult(draft, {
+      assumptions: 'Zdroj je cesky, proto bude kurz v cestine.',
+      coursePreparation: {
+        activityMixPreference: 'kratke scenare a prakticke ukoly',
+        audience: 'autori, kteri se uci psat romany a povidky',
+        constraints: 'nepridavat tematiku mimo zdrojovy dokument',
+        depth: 'prakticky postup od napadu po revizi textu',
+        desiredOutcome: 'Ucastnici navrhnou zanrovy pribeh a pripravi ukazku textu.',
+        priorKnowledge: 'zakladni chut psat beletrii',
+        sourceStrictness: 'strict',
+        tone: 'prakticky a vecny',
+      },
+      outputLanguage: 'cs',
+    });
+
+    expect(generated.coursePreparation.language).toBe('cs');
+    expect(generated.coursePreparation.languagePreference).toBe('source');
+    expect(generated.coursePreparation.desiredOutcome).toContain('zanrovy pribeh');
+    expect(generated.coursePreparation.sourceStrictness).toBe('strict');
+    expect(generated.assumptions).toEqual(['Zdroj je cesky, proto bude kurz v cestine.']);
+  });
+
+  test('accepts native Ax JSON arrays for planning output', () => {
+    const draft = sourceFirstDraft();
+    const generatedAt = '2026-06-04T00:00:00.000Z';
+    const sourceReference = {
+      heading: 'Incident review notes',
+      position: 'chunk-1',
+      sourceAssetId: 'source_source_first_quality',
+    };
+    const learningBlueprint = learningBlueprintFromAxPlanningResult(draft, {
+      activityBriefs: [
+        {
+          feedbackGuidance: 'Explain why evidence and ownership come before escalation.',
+          id: 'brief_incident_decision',
+          instructions: 'Choose the best next action in the incident review workflow.',
+          learnerAction: 'Select the source-backed next decision.',
+          objectiveId: 'objective_incident_decision',
+          objectiveIds: ['objective_incident_decision'],
+          sourceConfidence: 'high',
+          sourceReferences: [sourceReference],
+          status: 'generated',
+          successCriteria: 'The choice preserves evidence and ownership before escalation.',
+          title: 'Mission Decision: incident handoff',
+          type: 'scenario_decision',
+          updatedAt: generatedAt,
+        },
+      ],
+      assumptions: 'Use the incident review source as the course basis.',
+      coursePreparation: {
+        activityMixPreference: 'scenario decision and retrieval practice',
+        audience: 'incident coordinators',
+        constraints: 'Stay grounded in the supplied source.',
+        depth: 'practical',
+        desiredOutcome: 'Learners can make source-backed incident review decisions.',
+        priorKnowledge: 'Basic incident workflow terms.',
+        sourceStrictness: 'strict',
+        tone: 'clear and direct',
+      },
+      objectives: [
+        {
+          capability: 'Apply evidence and ownership rules before escalation.',
+          id: 'objective_incident_decision',
+          sourceConfidence: 'high',
+          sourceReferences: [sourceReference],
+          sourceSupport: 'source_backed',
+          status: 'generated',
+          title: 'Make source-backed escalation decisions',
+          topicName: 'Incident review',
+          updatedAt: generatedAt,
+        },
+      ],
+      outputLanguage: 'en',
+    });
+
+    expect(learningBlueprint.coursePreparation.language).toBe('en');
+    expect(learningBlueprint.objectives).toHaveLength(1);
+    expect(learningBlueprint.activityBriefs).toHaveLength(1);
+    expect(learningBlueprint.generatedActivities).toHaveLength(0);
+  });
+
+  test('rejects wrapped Ax activity brief arrays instead of unwrapping them', () => {
+    const draft = sourceFirstDraft();
+
+    expect(() =>
+      learningBlueprintFromAxPlanningResult(draft, {
+        activityBriefs: { activityBriefs: [] },
+        assumptions: 'Wrapped output should fail the planning contract.',
+        coursePreparation: preparation('en'),
+        objectives: [],
+        outputLanguage: 'en',
+      }),
+    ).toThrow(/activityBriefs must be a JSON array/u);
   });
 
   test('renders course content from Ax-generated playable activities', async () => {
@@ -150,6 +270,11 @@ describe('Coursition AI provider', () => {
           feedback: 'This starts escalation before the review has a reliable handoff.',
           isCorrect: false,
           text: 'Escalate first and reconstruct ownership after the review call.',
+        },
+        {
+          feedback: 'This captures evidence but leaves the handoff owner ambiguous.',
+          isCorrect: false,
+          text: 'Capture evidence and leave escalation ownership for the next meeting.',
         },
       ],
       explanationPrompt: 'Explain why the handoff comes first.',
@@ -197,15 +322,44 @@ describe('Coursition AI provider', () => {
     );
   });
 
+  test('successful activity generation clears stale brief activity status', () => {
+    const brief = activityBrief({ status: 'stale' });
+    const activity = generatedActivityFromAxSpec(brief, {
+      choices: [
+        {
+          feedback: 'Correct.',
+          isCorrect: true,
+          text: 'Capture evidence before escalation.',
+        },
+        {
+          feedback: 'This skips evidence.',
+          isCorrect: false,
+          text: 'Escalate immediately.',
+        },
+        {
+          feedback: 'This captures evidence but leaves ownership unclear.',
+          isCorrect: false,
+          text: 'Capture evidence and leave the owner blank.',
+        },
+      ],
+      explanationPrompt: 'Explain the evidence cue.',
+      feedback: 'Compare the choice with the source rule.',
+      question: 'What should happen first?',
+      type: 'retrieval_check',
+    });
+
+    expect(activity.type).toBe('retrieval_check');
+    expect(activity.status).toBe('generated');
+  });
+
   test('requires an Ax playable spec instead of inventing activity content from a brief', () => {
     const brief = activityBrief({
-      feedbackGuidance:
-        'Assessment-only guidance: correct only when the learner keeps the intended distinction.',
+      feedbackGuidance: 'Brief-level guidance for the intended classification distinction.',
       instructions:
         'For each source excerpt, complete the table and add one sentence explaining your placement.',
       learnerAction:
         'Classify the excerpts into the categories supplied by the generated playable activity.',
-      successCriteria: 'Target-answer rubric text that should stay out of generated card text.',
+      successCriteria: 'Brief-level success criteria for generated card text.',
       title: 'Classification exercise',
       type: 'retrieval_check',
     });
@@ -234,6 +388,11 @@ describe('Coursition AI provider', () => {
           isCorrect: false,
           text: 'Close the review once the first responder has a theory.',
         },
+        {
+          feedback: 'This captures context but still misses the owner handoff.',
+          isCorrect: false,
+          text: 'Write the context summary and let the escalation owner emerge later.',
+        },
       ],
       explanationPrompt: 'Explain which source rule makes this answer work.',
       feedback: 'Use the handoff and evidence-capture rules from the source.',
@@ -255,7 +414,74 @@ describe('Coursition AI provider', () => {
     expect(activity.interaction.choices.map((choice) => [choice.text, choice.isCorrect])).toEqual([
       ['Capture the evidence and confirm the next owner before handoff.', true],
       ['Close the review once the first responder has a theory.', false],
+      ['Write the context summary and let the escalation owner emerge later.', false],
     ]);
+  });
+
+  test('rejects retrieval checks without exactly one correct answer', () => {
+    const brief = activityBrief({
+      instructions: 'Answer the generated retrieval check.',
+      type: 'retrieval_check',
+    });
+    const activity = generatedActivityFromAxSpec(brief, {
+      choices: [
+        {
+          feedback: 'Feedback for answer A.',
+          isCorrect: true,
+          text: 'Answer A',
+        },
+        {
+          feedback: 'Feedback for answer B.',
+          isCorrect: true,
+          text: 'Answer B',
+        },
+        {
+          feedback: 'Feedback for answer C.',
+          isCorrect: false,
+          text: 'Answer C',
+        },
+      ],
+      explanationPrompt: 'Explain the source-backed distinction.',
+      feedback: 'Compare each option with the source.',
+      objectiveTitle: 'Objective',
+      question: 'Which answer follows the source?',
+      type: 'retrieval_check',
+    });
+
+    expectNotPlayableActivity(activity);
+  });
+
+  test('rejects retrieval checks with duplicate choice text', () => {
+    const brief = activityBrief({
+      instructions: 'Answer the generated retrieval check.',
+      type: 'retrieval_check',
+    });
+    const activity = generatedActivityFromAxSpec(brief, {
+      choices: [
+        {
+          feedback: 'Correct feedback.',
+          isCorrect: true,
+          text: 'Capture evidence before escalation.',
+        },
+        {
+          feedback: 'Incorrect feedback.',
+          isCorrect: false,
+          text: 'Capture evidence before escalation.',
+        },
+        {
+          feedback: 'Incorrect feedback.',
+          isCorrect: false,
+          text: 'Escalate before capturing evidence.',
+        },
+      ],
+      explanationPrompt: 'Explain the source-backed distinction.',
+      feedback: 'Compare each option with the source.',
+      objectiveTitle: 'Objective',
+      question: 'Which answer follows the source?',
+      type: 'retrieval_check',
+    });
+
+    expectNotPlayableActivity(activity);
   });
 
   test('accepts Ax-generated matching specs', () => {
@@ -320,26 +546,46 @@ describe('Coursition AI provider', () => {
     ]);
   });
 
-  test('rejects invalid Ax specs as non-playable generation failures', () => {
+  test('rejects structurally invalid Ax specs as non-playable generation failures', () => {
     const brief = activityBrief({
       instructions: 'Use the generated activity.',
       type: 'ordering_matching',
     });
     const activity = generatedActivityFromAxSpec(brief, {
-      feedback: 'Assessment-only guidance that tells the evaluator what to look for.',
+      feedback: 'Review the sequence and fix the duplicated item.',
       items: [
-        { correctPosition: 0, matchLabel: 'Label A', text: 'Target-answer rubric text' },
-        { correctPosition: 0, matchLabel: 'Label B', text: 'Another learner card' },
+        { correctPosition: 1, matchLabel: '', text: 'Capture evidence' },
+        { correctPosition: 2, matchLabel: '', text: 'Capture evidence' },
+        { correctPosition: 3, matchLabel: '', text: 'Choose escalation path' },
       ],
-      mode: 'matching',
+      mode: 'ordering',
       objectiveTitle: 'Objective',
-      prompt: 'Assessment-only prompt',
+      prompt: 'Put the generated process cards in order.',
       type: 'ordering_matching',
     });
 
     expectNotPlayableActivity(activity);
-    expect(JSON.stringify(activity)).not.toContain('Assessment-only');
-    expect(JSON.stringify(activity)).not.toContain('Target-answer');
+  });
+
+  test('rejects ordering specs with duplicate positions', () => {
+    const brief = activityBrief({
+      instructions: 'Order the generated process cards.',
+      type: 'ordering_matching',
+    });
+    const activity = generatedActivityFromAxSpec(brief, {
+      feedback: 'Check the sequence before moving on.',
+      items: [
+        { correctPosition: 1, matchLabel: '', text: 'Generated first step' },
+        { correctPosition: 1, matchLabel: '', text: 'Generated second step' },
+        { correctPosition: 3, matchLabel: '', text: 'Generated third step' },
+      ],
+      mode: 'ordering',
+      objectiveTitle: 'Objective',
+      prompt: 'Put the generated process cards in order.',
+      type: 'ordering_matching',
+    });
+
+    expectNotPlayableActivity(activity);
   });
 
   test('accepts Ax-generated scenario specs', () => {
@@ -389,6 +635,42 @@ describe('Coursition AI provider', () => {
     );
   });
 
+  test('rejects scenario decisions without exactly one preferred answer', () => {
+    const brief = activityBrief({
+      instructions: 'Choose the generated scenario decision.',
+      type: 'scenario_decision',
+    });
+    const activity = generatedActivityFromAxSpec(brief, {
+      choices: [
+        {
+          consequence: 'The review has ownership and evidence before escalation.',
+          feedback: 'This preserves the workflow.',
+          isPreferred: true,
+          text: 'Assign one owner and capture evidence before escalation.',
+        },
+        {
+          consequence: 'The review also preserves the workflow.',
+          feedback: 'This is also marked preferred and should be rejected structurally.',
+          isPreferred: true,
+          text: 'Confirm ownership, capture evidence, then pick the escalation path.',
+        },
+        {
+          consequence: 'The review moves quickly but loses handoff clarity.',
+          feedback: 'This skips a required workflow step.',
+          isPreferred: false,
+          text: 'Escalate immediately and write notes later.',
+        },
+      ],
+      feedback: 'Compare each option with the source-backed workflow.',
+      justificationPrompt: 'Justify the decision in one sentence.',
+      objectiveTitle: 'Objective',
+      prompt: 'A review starts with unclear ownership. What should happen first?',
+      type: 'scenario_decision',
+    });
+
+    expectNotPlayableActivity(activity);
+  });
+
   test('accepts Ax-generated practice specs', () => {
     const brief = activityBrief({
       instructions: 'Complete the generated practice task.',
@@ -403,17 +685,14 @@ describe('Coursition AI provider', () => {
       type: 'practice_task',
     });
 
-    expect(activity.type).toBe('practice_task');
-    if (activity.type !== 'practice_task') {
-      throw new Error(`Expected practice_task, received ${activity.type}`);
-    }
-    expect(activity.interaction).toMatchObject({
+    const practiceActivity = expectPracticeTaskActivity(activity);
+    expect(practiceActivity.interaction).toMatchObject({
       feedback: 'Compare the answer with the checklist before continuing.',
       kind: 'practice_task',
       prompt: 'Write a compact incident review note using the generated checklist.',
       submissionLabel: 'Incident review note',
     });
-    expect(activity.interaction.checklist).toEqual([
+    expect(practiceActivity.interaction.checklist).toEqual([
       'Names the handoff owner',
       'Captures evidence',
       'States the review decision',
@@ -433,11 +712,87 @@ describe('Coursition AI provider', () => {
       type: 'rubric_answer',
     });
 
-    expect(activity.type).toBe('rubric_answer');
-    if (activity.type !== 'rubric_answer') {
-      throw new Error(`Expected rubric_answer, received ${activity.type}`);
-    }
-    expect(activity.interaction.prompt).toContain('sample text generated by Ax');
-    expect(activity.interaction.criteria).toEqual(['Criterion one', 'Criterion two']);
+    const rubricActivity = expectRubricAnswerActivity(activity);
+    expect(rubricActivity.interaction.prompt).toContain('sample text generated by Ax');
+    expect(rubricActivity.interaction.criteria).toEqual(['Criterion one', 'Criterion two']);
+  });
+
+  test('normalizes Ax-generated open-ended activity evaluation feedback', () => {
+    const brief = activityBrief({
+      instructions: 'Complete the generated practice task.',
+      type: 'practice_task',
+    });
+    const activity = expectPracticeTaskActivity(
+      generatedActivityFromAxSpec(brief, {
+        criteria: 'Names the owner\nStates the evidence',
+        feedback: 'Compare your answer with the checklist.',
+        objectiveTitle: 'Objective',
+        prompt: 'Write an incident review note.',
+        submissionLabel: 'Review note',
+        type: 'practice_task',
+      }),
+    );
+
+    const evaluation = activityEvaluationFromAxResult(activity, {
+      criteriaEvaluationJson: JSON.stringify([
+        {
+          criterion: 'Names the owner',
+          feedback: 'The note assigns a clear owner.',
+          met: true,
+        },
+        {
+          criterion: 'States the evidence',
+          feedback: 'Add the specific captured evidence.',
+          met: false,
+        },
+      ]),
+      feedbackMarkdown: '**Good start.** The owner is clear, but the evidence is vague.',
+      nextStep: 'Add one concrete evidence sentence.',
+      score: 1.4,
+    });
+
+    expect(evaluation.score).toBe(1);
+    expect(evaluation.feedbackMarkdown).toContain('Good start');
+    expect(evaluation.nextStep).toBe('Add one concrete evidence sentence.');
+    expect(evaluation.criteria).toEqual([
+      {
+        criterion: 'Names the owner',
+        feedback: 'The note assigns a clear owner.',
+        met: true,
+      },
+      {
+        criterion: 'States the evidence',
+        feedback: 'Add the specific captured evidence.',
+        met: false,
+      },
+    ]);
+  });
+
+  test('rejects missing practice specs instead of inventing a practice task', () => {
+    const brief = activityBrief({
+      feedbackGuidance: 'Compare the answer against the concrete criteria.',
+      instructions: 'Write a short incident review note.',
+      learnerAction: 'Draft the note.',
+      successCriteria: 'Names the owner\nStates the evidence\nDefines the next action',
+      type: 'practice_task',
+    });
+
+    const activity = generatedActivityFromAxSpec(brief, null);
+
+    expectNotPlayableActivity(activity);
+  });
+
+  test('rejects missing rubric specs instead of inventing a rubric answer', () => {
+    const brief = activityBrief({
+      feedbackGuidance: 'Use the rubric to improve the answer.',
+      instructions: 'Review the sample incident note and improve it.',
+      learnerAction: 'Revise the answer.',
+      successCriteria: 'Mentions ownership\nUses captured evidence\nStates the escalation decision',
+      type: 'rubric_answer',
+    });
+
+    const activity = generatedActivityFromAxSpec(brief, null);
+
+    expectNotPlayableActivity(activity);
   });
 });

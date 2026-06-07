@@ -38,7 +38,6 @@
         "instructionsPlaceholder": "Podle poznámek ze scénáře připravte agendu na 30minutový kickoff.",
         "learnerAction": "Akce studenta",
         "learnerActionPlaceholder": "Vytvořte agendu a vysvětlete, proč obsahuje jednotlivé části.",
-        "save": "Uložit zadání aktivity",
         "successCriteria": "Kritéria úspěchu",
         "successCriteriaPlaceholder": "Obsahuje cíle, stakeholdery, rizika, další kroky a vlastníky.",
         "title": "Plán aktivit",
@@ -110,6 +109,7 @@
         "titlePlaceholder": "Základy zákaznického onboardingu"
       },
       "errors": {
+        "aiRunFailed": "Generování AI selhalo.",
         "dismiss": "Zavřít",
         "generic": "Zkontrolujte formulář a zkuste to znovu.",
         "modeSaveRequired": "Režim generování kurzu se ještě ukládá. Zkuste to za chvíli znovu."
@@ -175,6 +175,7 @@
         },
         "runs": {
           "activity_plan_generation": "Plán aktivit",
+          "course_preparation_generation": "Příprava kurzu",
           "course_content_generation": "Obsah kurzu",
           "objective_map_generation": "Vygenerovaná mapa cílů",
           "preparation_generation": "Příprava kurzu",
@@ -215,6 +216,10 @@
         "correct": "Správně",
         "criteria": "Kritéria",
         "criteriaChecked": "Zaškrtnuto {{checked}} z {{total}} kritérií.",
+        "aiFeedback": "Zpětná vazba AI",
+        "evaluating": "Vyhodnocujeme...",
+        "evaluateWithAi": "Získat zpětnou vazbu AI",
+        "evaluationFailed": "Zpětná vazba AI selhala. Zkuste to za chvíli znovu.",
         "incompleteActivity": "Vygenerovaná aktivita ještě není hratelná",
         "incompleteActivityHeading": "Neúplná vygenerovaná aktivita",
         "incompleteActivityReasons": {
@@ -235,6 +240,7 @@
         "matchingInstruction": "Spáruj všech {{total}} karet s nejlepším štítkem a potom zkontroluj celou sadu.",
         "moveDown": "Posunout dolů",
         "moveUp": "Posunout nahoru",
+        "nextStep": "Další krok",
         "noActivities": "Kurz zatím nemá připojené vygenerované aktivity.",
         "noFindings": "Žádná otevřená zjištění kvality.",
         "open": "Náhled kurzu",
@@ -250,6 +256,33 @@
         "rubric": "Rubrika",
         "selfCheck": "Sebekontrola",
         "showFeedback": "Zobrazit zpětnou vazbu",
+        "skins": {
+          "ordering_matching": {
+            "label": "Sestav stroj",
+            "what": "Umísti části tam, kam patří, aby proces nebo kategorie dávaly smysl.",
+            "why": "Pomůže ti to látku uspořádat, ne ji jen poznat."
+          },
+          "practice_task": {
+            "label": "Malá mise",
+            "what": "Vytvoř krátkou odpověď, kterou můžeš porovnat s jasnými kritérii.",
+            "why": "Zdroj se tím změní na něco, co opravdu dokážeš udělat."
+          },
+          "retrieval_check": {
+            "label": "Rychlé vybavení",
+            "what": "Ověř si, že poznáš klíčové pravidlo, než půjdeš dál.",
+            "why": "Rychlé vybavení z paměti usnadní další aktivitu."
+          },
+          "rubric_answer": {
+            "label": "Režim recenzenta",
+            "what": "Posuď nebo vylepši odpověď podle rubriky.",
+            "why": "Kritéria ti ukážou kvalitu dřív, než odpověď odevzdáš."
+          },
+          "scenario_decision": {
+            "label": "Rozhodnutí mise",
+            "what": "Vyber další krok a podívej se na důsledek.",
+            "why": "Rozhodnutí ukáže, jestli umíš myšlenku použít v kontextu."
+          }
+        },
         "strongDecision": "Silné rozhodnutí",
         "title": "Hratelný náhled"
       },
@@ -304,14 +337,14 @@
       },
       "preparation": {
         "audience": "Cílové publikum",
-        "audiencePlaceholder": "Noví customer success manažeři v onboardingovém týmu.",
+        "audiencePlaceholder": "Popište, pro koho kurz je.",
         "avoid": "Čemu se má kurz vyhnout?",
-        "avoidPlaceholder": "Vynechat cenovou politiku a enterprise nákupní procesy.",
+        "avoidPlaceholder": "Popište témata nebo detaily, kterým se má kurz vyhnout.",
         "depth": "Hloubka kurzu",
-        "depthPlaceholder": "Praktická, checklistová úroveň s krátkými scénáři.",
+        "depthPlaceholder": "Popište hloubku a způsob zpracování.",
         "generateRequired": "Příprava kurzu potřebuje před generováním cílů výsledek, publikum a praxi.",
         "outcome": "Výsledek učení",
-        "outcomePlaceholder": "Účastníci zvládnou vést zákaznický kickoff od agendy po navazující kroky.",
+        "outcomePlaceholder": "Popište, co mají účastníci po kurzu zvládnout.",
         "outputLanguage": "Jazyk výstupu kurzu",
         "outputLanguageOptions": {
           "cs": "Čeština",
@@ -319,9 +352,9 @@
           "source": "Stejně jako zdroj"
         },
         "practice": "Styl praxe",
-        "practicePlaceholder": "Použít role-play zadání a pracovní list pro plán kickoffu.",
+        "practicePlaceholder": "Popište typ praxe, kterou mají účastníci projít.",
         "prior": "Vstupní znalosti",
-        "priorPlaceholder": "Znají základy produktu, ale ještě nevedli kickoff hovor.",
+        "priorPlaceholder": "Popište, co už účastníci znají.",
         "save": "Uložit přípravu",
         "strict": "Používat jen tvrzení podložená zdroji",
         "title": "Příprava kurzu"
@@ -329,17 +362,17 @@
       "objectives": {
         "assumptions": "Předpoklady generování",
         "capability": "Schopnost",
-        "capabilityPlaceholder": "Ze zdrojových poznámek určit cíle zákazníka, stakeholdery, rizika a navazující kroky.",
+        "capabilityPlaceholder": "Popište pozorovatelnou schopnost, kterou má cíl ověřit.",
         "emptyObjectives": "Po zdrojích a přípravě vygenerujte mapu cílů.",
         "generate": "Vygenerovat mapu cílů",
         "generating": "Generujeme mapu cílů...",
         "objectiveCount": "{{count}} cílů",
         "objectiveNumber": "Cíl {{number}}",
         "objectiveTitle": "Název cíle",
-        "objectiveTitlePlaceholder": "Vést kickoff discovery",
+        "objectiveTitlePlaceholder": "Pojmenujte schopnost účastníka.",
         "objectivesTitle": "Mapa cílů",
+        "purpose": "Mapa cílů převádí zdrojový materiál na schopnosti účastníků, ze kterých se staví aktivity a sekce kurzu.",
         "regenerate": "Vygenerovat mapu cílů znovu",
-        "saveObjective": "Uložit cíl",
         "sourceConfidence": {
           "high": "Vysoká jistota",
           "low": "Nízká jistota",

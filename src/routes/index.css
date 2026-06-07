@@ -113,6 +113,21 @@ html[data-theme='dark'] {
   padding: 0;
 }
 
+[data-coursition-workflow] .coursition-feedback-panel--success {
+  background: #dcfce7;
+  color: #052e16;
+}
+
+[data-coursition-workflow] .coursition-feedback-panel--warning {
+  background: #fee2e2;
+  color: #450a0a;
+}
+
+[data-coursition-workflow] .coursition-feedback-panel .coursition-markdown-text,
+[data-coursition-workflow] .coursition-feedback-panel .coursition-mdx-editor-content {
+  color: inherit;
+}
+
 [data-coursition-workflow] .coursition-mdx-editor-content :where(p, ul, ol, blockquote) {
   margin-block: 0.5rem;
 }
@@ -144,4 +159,49 @@ html[data-theme='dark'] {
 [data-coursition-workflow] .coursition-mdx-editor-content img {
   max-inline-size: min(100%, 24rem);
   block-size: auto;
+}
+
+[data-coursition-workflow] .coursition-markdown-text {
+  color: inherit;
+}
+
+[data-coursition-workflow] .coursition-markdown-text .coursition-mdx-editor {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+[data-coursition-workflow] .coursition-markdown-text .coursition-mdx-editor-content {
+  padding: 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+[data-coursition-workflow] .coursition-markdown-text .coursition-mdx-editor-content > :first-child {
+  margin-block-start: 0;
+}
+
+[data-coursition-workflow] .coursition-markdown-text .coursition-mdx-editor-content > :last-child {
+  margin-block-end: 0;
+}
+
+[data-coursition-workflow] .coursition-markdown-text .coursition-mdx-editor-content :where(ul) {
+  list-style: disc;
+  padding-inline-start: 1.25rem;
+}
+
+[data-coursition-workflow] .coursition-markdown-text .coursition-mdx-editor-content :where(ol) {
+  list-style: decimal;
+  padding-inline-start: 1.25rem;
+}
+
+[data-coursition-workflow] .coursition-markdown-text .coursition-mdx-editor-content :where(strong) {
+  font-weight: var(--font-weight-bold);
+}
+
+[data-coursition-workflow] .coursition-markdown-text .coursition-mdx-editor-content :where(a) {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }

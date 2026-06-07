@@ -7,7 +7,7 @@ export type SupportedLanguage = (typeof supportedLanguages)[number];
 export const [defaultLanguage] = supportedLanguages;
 
 export const isSupportedLanguage = (value: string): value is SupportedLanguage =>
-  supportedLanguages.includes(value as SupportedLanguage);
+  value === 'en' || value === 'cs';
 
 export const languageFromPathname = (pathname: string): SupportedLanguage | null => {
   const firstSegment = pathname.split('/').find(Boolean);

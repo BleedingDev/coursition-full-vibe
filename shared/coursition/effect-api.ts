@@ -8,7 +8,7 @@ import {
 } from '@modern-js/plugin-bff/effect-client';
 
 const aiModeSchema = Schema.Literals(['generate', 'assist']);
-const draftStepSchema = Schema.Literals([
+export const draftStepSchema = Schema.Literals([
   'mode',
   'sources',
   'preparation',
@@ -36,7 +36,7 @@ const sourceSupportSchema = Schema.Literals([
 const sourceConfidenceSchema = Schema.Literals(['high', 'medium', 'low', 'none']);
 const generatedStatusSchema = Schema.Literals(['empty', 'generated', 'edited', 'stale']);
 const confidenceSchema = Schema.Literals(['high', 'medium', 'low']);
-const activityTypeSchema = Schema.Literals([
+export const activityTypeSchema = Schema.Literals([
   'retrieval_check',
   'practice_task',
   'scenario_decision',
@@ -61,7 +61,9 @@ const aiRunStatusSchema = Schema.Literals([
 ]);
 const aiRunTypeSchema = Schema.Literals([
   'course_generation',
+  'course_preparation_generation',
   'learning_blueprint_generation',
+  'activity_generation',
   'course_content_generation',
   'teaching_quality_review',
 ]);
@@ -83,7 +85,6 @@ export const sourceAssetSchema = Schema.Struct({
   id: Schema.String,
   mimeType: Schema.optional(Schema.String),
   name: Schema.String,
-  originalInput: Schema.optional(Schema.String),
   processor: Schema.String,
   providerJobId: Schema.optional(Schema.String),
   sizeLabel: Schema.String,
@@ -454,6 +455,7 @@ export const workflowActionSchema = Schema.Union([
     preparation: coursePreparationSchema,
   }),
   Schema.Struct({ action: Schema.Literal('generateLearningBlueprint'), draftId: Schema.String }),
+  Schema.Struct({ action: Schema.Literal('generateActivities'), draftId: Schema.String }),
   Schema.Struct({
     action: Schema.Literal('updateLearningObjective'),
     capability: Schema.String,
@@ -484,6 +486,54 @@ export const workflowActionSchema = Schema.Union([
 
 export type WorkflowAction = Schema.Schema.Type<typeof workflowActionSchema>;
 
+/*
+ * Derived domain types. The schemas above are the single source of truth for
+ * the Coursition domain model: the wire contract, runtime validation, and
+ * these TypeScript types all come from one definition, so they can never
+ * drift. shared/coursition/workflow.ts re-exports these names.
+ */
+export type AiMode = Schema.Schema.Type<typeof aiModeSchema>;
+export type DraftStep = Schema.Schema.Type<typeof draftStepSchema>;
+export type SourceStatus = Schema.Schema.Type<typeof sourceStatusSchema>;
+export type SourceType = Schema.Schema.Type<typeof sourceTypeSchema>;
+export type SourceSupport = Schema.Schema.Type<typeof sourceSupportSchema>;
+export type SourceConfidence = Schema.Schema.Type<typeof sourceConfidenceSchema>;
+export type GeneratedStatus = Schema.Schema.Type<typeof generatedStatusSchema>;
+export type ActivityType = Schema.Schema.Type<typeof activityTypeSchema>;
+export type ContentBlockType = Schema.Schema.Type<typeof contentBlockTypeSchema>;
+export type AiRunStatus = Schema.Schema.Type<typeof aiRunStatusSchema>;
+export type AiRunType = Schema.Schema.Type<typeof aiRunTypeSchema>;
+export type CourseLanguage = 'en' | 'cs';
+export type CourseLanguagePreference = 'source' | CourseLanguage;
+export type SourceReference = Schema.Schema.Type<typeof sourceReferenceSchema>;
+export type SourceAsset = Schema.Schema.Type<typeof sourceAssetSchema>;
+export type DerivedSourceDocument = Schema.Schema.Type<typeof derivedSourceDocumentSchema>;
+export type KnowledgeChunk = Schema.Schema.Type<typeof knowledgeChunkSchema>;
+export type RetrievalChoice = Schema.Schema.Type<typeof retrievalChoiceSchema>;
+export type RetrievalCheckInteraction = Schema.Schema.Type<typeof retrievalCheckInteractionSchema>;
+export type PracticeTaskInteraction = Schema.Schema.Type<typeof practiceTaskInteractionSchema>;
+export type ScenarioChoice = Schema.Schema.Type<typeof scenarioChoiceSchema>;
+export type ScenarioDecisionInteraction = Schema.Schema.Type<
+  typeof scenarioDecisionInteractionSchema
+>;
+export type OrderingMatchingItem = Schema.Schema.Type<typeof orderingMatchingItemSchema>;
+export type OrderingMatchingInteraction = Schema.Schema.Type<
+  typeof orderingMatchingInteractionSchema
+>;
+export type RubricAnswerInteraction = Schema.Schema.Type<typeof rubricAnswerInteractionSchema>;
+export type NotPlayableInteraction = Schema.Schema.Type<typeof notPlayableInteractionSchema>;
+export type ActivityInteraction =
+  | RetrievalCheckInteraction
+  | PracticeTaskInteraction
+  | ScenarioDecisionInteraction
+  | OrderingMatchingInteraction
+  | RubricAnswerInteraction
+  | NotPlayableInteraction;
+export type ReviewFinding = Schema.Schema.Type<typeof reviewFindingSchema>;
+export type AiRun = Schema.Schema.Type<typeof aiRunSchema>;
+export type CourseDraft = Schema.Schema.Type<typeof courseDraftSchema>;
+export type CourseDraftSummary = Schema.Schema.Type<typeof courseDraftSummarySchema>;
+
 export const sessionUserSchema = Schema.Struct({
   email: Schema.String,
   id: Schema.String,
@@ -506,6 +556,34 @@ export const authCredentialsSchema = Schema.Struct({
 export const signOutPayloadSchema = Schema.Struct({
   ok: Schema.Boolean,
 });
+
+export const activityEvaluationRequestSchema = Schema.Struct({
+  activityId: Schema.String,
+  answer: Schema.String,
+  checkedCriteria: Schema.Array(Schema.String),
+  draftId: Schema.String,
+});
+
+export const activityEvaluationCriterionSchema = Schema.Struct({
+  criterion: Schema.String,
+  feedback: Schema.String,
+  met: Schema.Boolean,
+});
+
+export const activityEvaluationResponseSchema = Schema.Struct({
+  criteria: Schema.Array(activityEvaluationCriterionSchema),
+  feedbackMarkdown: Schema.String,
+  nextStep: Schema.String,
+  score: Schema.Finite,
+});
+
+export type ActivityEvaluationRequest = Schema.Schema.Type<typeof activityEvaluationRequestSchema>;
+export type ActivityEvaluationCriterion = Schema.Schema.Type<
+  typeof activityEvaluationCriterionSchema
+>;
+export type ActivityEvaluationResponse = Schema.Schema.Type<
+  typeof activityEvaluationResponseSchema
+>;
 
 export class CoursitionUnauthorized extends Schema.TaggedErrorClass<CoursitionUnauthorized>()(
   'CoursitionUnauthorized',
@@ -561,6 +639,15 @@ export const coursitionEffectApi = HttpApi.make('CoursitionEffectApi')
         error: endpointErrors,
         payload: workflowActionSchema,
         success: workflowSnapshotSchema,
+      }),
+    ),
+  )
+  .add(
+    HttpApiGroup.make('activityEvaluation').add(
+      HttpApiEndpoint.post('evaluate', '/coursition/activity-evaluation', {
+        error: endpointErrors,
+        payload: activityEvaluationRequestSchema,
+        success: activityEvaluationResponseSchema,
       }),
     ),
   );

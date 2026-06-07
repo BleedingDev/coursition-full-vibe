@@ -38,7 +38,6 @@
         "instructionsPlaceholder": "Use the scenario notes to prepare a 30-minute kickoff agenda.",
         "learnerAction": "Learner action",
         "learnerActionPlaceholder": "Create the agenda and explain why each section is included.",
-        "save": "Save activity brief",
         "successCriteria": "Success criteria",
         "successCriteriaPlaceholder": "Includes goals, stakeholders, risks, next steps, and owner names.",
         "title": "Activity plan",
@@ -110,6 +109,7 @@
         "titlePlaceholder": "Customer onboarding fundamentals"
       },
       "errors": {
+        "aiRunFailed": "AI generation failed.",
         "dismiss": "Dismiss",
         "generic": "Check the form and try again.",
         "modeSaveRequired": "Course generation mode is still saving. Try again in a moment."
@@ -175,6 +175,7 @@
         },
         "runs": {
           "activity_plan_generation": "Activity plan",
+          "course_preparation_generation": "Course preparation",
           "course_content_generation": "Course content",
           "objective_map_generation": "Generated objective map",
           "preparation_generation": "Course preparation",
@@ -215,6 +216,10 @@
         "correct": "Correct",
         "criteria": "Criteria",
         "criteriaChecked": "{{checked}} of {{total}} criteria checked.",
+        "aiFeedback": "AI feedback",
+        "evaluating": "Evaluating...",
+        "evaluateWithAi": "Get AI feedback",
+        "evaluationFailed": "AI feedback failed. Try again in a moment.",
         "incompleteActivity": "Generated activity is not playable yet",
         "incompleteActivityHeading": "Incomplete generated activity",
         "incompleteActivityReasons": {
@@ -235,6 +240,7 @@
         "matchingInstruction": "Match all {{total}} cards to the best label, then check the set.",
         "moveDown": "Move down",
         "moveUp": "Move up",
+        "nextStep": "Next step",
         "noActivities": "No generated activities are attached to this course yet.",
         "noFindings": "No open quality findings.",
         "open": "Preview course",
@@ -250,6 +256,33 @@
         "rubric": "Rubric",
         "selfCheck": "Self-check",
         "showFeedback": "Show feedback",
+        "skins": {
+          "ordering_matching": {
+            "label": "Build the Machine",
+            "what": "Put the pieces where they belong so the process or categories make sense.",
+            "why": "This helps you organize the material instead of only recognizing it."
+          },
+          "practice_task": {
+            "label": "Tiny Mission",
+            "what": "Create a small answer you can compare against clear criteria.",
+            "why": "This turns the source into something you can actually do."
+          },
+          "retrieval_check": {
+            "label": "Recall Sprint",
+            "what": "Prove you can recognize the key rule before moving on.",
+            "why": "Quick retrieval makes the next activity easier to trust."
+          },
+          "rubric_answer": {
+            "label": "Reviewer Mode",
+            "what": "Judge or improve an answer using the rubric.",
+            "why": "Reviewing criteria makes quality visible before you submit."
+          },
+          "scenario_decision": {
+            "label": "Mission Decision",
+            "what": "Choose the next action and see the consequence.",
+            "why": "Decisions show whether you can use the idea in context."
+          }
+        },
         "strongDecision": "Strong decision",
         "title": "Playable preview"
       },
@@ -304,14 +337,14 @@
       },
       "preparation": {
         "audience": "Target audience",
-        "audiencePlaceholder": "New customer success managers joining the onboarding team.",
+        "audiencePlaceholder": "Describe who this course is for.",
         "avoid": "What should the course avoid?",
-        "avoidPlaceholder": "Skip pricing policy and enterprise procurement details.",
+        "avoidPlaceholder": "Name topics or details the course should not cover.",
         "depth": "Course depth",
-        "depthPlaceholder": "Practical, checklist-driven, with short scenarios.",
+        "depthPlaceholder": "Describe the level of depth and treatment.",
         "generateRequired": "Course preparation needs outcome, audience, and practice before objective generation.",
         "outcome": "Learning outcome",
-        "outcomePlaceholder": "Learners can run a customer kickoff from agenda to follow-up.",
+        "outcomePlaceholder": "Describe what learners should be able to do after the course.",
         "outputLanguage": "Course output language",
         "outputLanguageOptions": {
           "cs": "Czech",
@@ -319,9 +352,9 @@
           "source": "Same as source"
         },
         "practice": "Practice style",
-        "practicePlaceholder": "Use role-play prompts and a kickoff plan worksheet.",
+        "practicePlaceholder": "Describe the type of practice learners should complete.",
         "prior": "Prior knowledge",
-        "priorPlaceholder": "They know the product basics but have not led a kickoff call.",
+        "priorPlaceholder": "Describe what learners already know.",
         "save": "Save preparation",
         "strict": "Use only source-backed claims",
         "title": "Course preparation"
@@ -329,17 +362,17 @@
       "objectives": {
         "assumptions": "Generation assumptions",
         "capability": "Capability",
-        "capabilityPlaceholder": "Identify customer goals, stakeholders, risks, and follow-up actions from source-backed notes.",
+        "capabilityPlaceholder": "Describe the observable capability this objective should prove.",
         "emptyObjectives": "Generate the objective map after sources and preparation are ready.",
         "generate": "Generate objective map",
         "generating": "Generating objective map...",
         "objectiveCount": "{{count}} objectives",
         "objectiveNumber": "Objective {{number}}",
         "objectiveTitle": "Objective title",
-        "objectiveTitlePlaceholder": "Run a kickoff discovery",
+        "objectiveTitlePlaceholder": "Name the learner capability.",
         "objectivesTitle": "Objective map",
+        "purpose": "The objective map turns source material into the learner capabilities that activities and course sections are built from.",
         "regenerate": "Regenerate objective map",
-        "saveObjective": "Save objective",
         "sourceConfidence": {
           "high": "High confidence",
           "low": "Low confidence",

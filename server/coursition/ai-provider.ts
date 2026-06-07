@@ -1,10 +1,14 @@
-import { ai as createAxAI, ax, f } from '@ax-llm/ax';
+import { ai as createAxAI, flow } from '@ax-llm/ax';
 import type { AxAIOpenAIModel, AxForwardable } from '@ax-llm/ax';
 import * as Data from 'effect/Data';
 import { DateTime } from 'effect';
 import * as Effect from 'effect/Effect';
-import { activityTypes, emptyCoursePreparation } from '../../shared/coursition/workflow.ts';
+import * as Option from 'effect/Option';
+import * as Schema from 'effect/Schema';
+import { activityTypeSchema } from '../../shared/coursition/effect-api.ts';
 import type {
+  ActivityEvaluationCriterion,
+  ActivityEvaluationResponse,
   ActivityBrief,
   ActivityType,
   CourseContent,
@@ -35,61 +39,18 @@ interface AiJsonResult<T> {
   value: T;
 }
 
-interface GeneratedLearningBlueprintObject {
-  activityBriefs?: unknown;
-  assumptions?: unknown;
-  coursePreparation?: unknown;
-  generatedActivities?: unknown;
-  objectives?: unknown;
-}
-
-interface GeneratedObjectiveObject {
-  capability?: unknown;
-  title?: unknown;
-  topicName?: unknown;
-}
-
-interface GeneratedActivityBriefObject {
-  feedbackGuidance?: unknown;
-  instructions?: unknown;
-  learnerAction?: unknown;
-  objectiveTitle?: unknown;
-  successCriteria?: unknown;
-  title?: unknown;
-  type?: unknown;
-}
-
-interface GeneratedPlayableActivityObject {
-  choices?: unknown;
-  criteria?: unknown;
-  explanationPrompt?: unknown;
-  feedback?: unknown;
-  items?: unknown;
-  justificationPrompt?: unknown;
-  mode?: unknown;
-  objectiveTitle?: unknown;
-  prompt?: unknown;
-  question?: unknown;
-  submissionLabel?: unknown;
-  type?: unknown;
-}
-
-interface GeneratedPlayableItemObject {
-  correctPosition?: unknown;
-  matchLabel?: unknown;
-  text?: unknown;
-}
-
-interface GeneratedPlayableChoiceObject {
-  consequence?: unknown;
-  feedback?: unknown;
-  isPreferred?: unknown;
-  isCorrect?: unknown;
-  text?: unknown;
-}
-
 class AiProviderEffectError extends Data.TaggedError('AiProviderEffectError')<{
   readonly cause: unknown;
+  readonly message: string;
+}> {}
+
+class AiProviderContractError extends Data.TaggedError('AiProviderContractError')<{
+  readonly field?: string;
+  readonly message: string;
+}> {}
+
+class AiProviderConfigurationError extends Data.TaggedError('AiProviderConfigurationError')<{
+  readonly message: string;
 }> {}
 
 const defaultLocalBaseUrl = 'http://localhost:8317/v1';
@@ -97,6 +58,551 @@ const defaultLocalApiKey = 'droid-local-key';
 const defaultModel = 'gpt-5.3-codex-spark';
 const localCourseContentRendererProvider = 'local-course-content-renderer';
 const axProviderLabel = 'ax/openai-compatible';
+
+interface ActivityGenerationFlowInput {
+  activityPolicy: string;
+  courseTitle: string;
+  existingPreparation: string;
+  languageCode: string;
+  sourceEvidence: string;
+}
+
+interface ActivityGenerationFlowOutput {
+  activityBriefs: unknown;
+  assumptions: string;
+  coursePreparation: unknown;
+  objectives: unknown;
+  outputLanguage: string;
+}
+
+interface CoursePreparationFlowInput {
+  activityPolicy: string;
+  courseTitle: string;
+  existingPreparation: string;
+  languageCode: string;
+  sourceEvidence: string;
+}
+
+interface CoursePreparationFlowOutput {
+  assumptions: string;
+  coursePreparation: unknown;
+  outputLanguage: string;
+}
+
+interface PlayableActivityFlowInput {
+  activityBriefJson: string;
+  activityPolicy: string;
+  objectiveJson: string;
+  outputLanguage: string;
+  sourceEvidence: string;
+}
+
+interface PlayableActivityFlowOutput {
+  generatedActivityJson: string;
+  qualityReview: string;
+  qualityScore: number;
+}
+
+interface ActivityEvaluationFlowInput {
+  activityContextJson: string;
+  answer: string;
+  checkedCriteriaJson: string;
+  criteriaInputJson: string;
+  evaluatorPolicy: string;
+  inputMaterial: string;
+  outputLanguage: string;
+  question: string;
+  sourceEvidence: string;
+}
+
+interface ActivityEvaluationFlowOutput {
+  criteriaEvaluationJson: string;
+  feedbackMarkdown: string;
+  nextStep: string;
+  score: number;
+}
+
+const coursePlannerResultSchema = Schema.Struct({
+  assumptions: Schema.String,
+  coursePreparation: Schema.Unknown,
+  objectives: Schema.Unknown,
+  outputLanguage: Schema.String,
+});
+const activityBriefPlannerResultSchema = Schema.Struct({
+  activityBriefs: Schema.Unknown,
+});
+const coursePreparationPlannerResultSchema = Schema.Struct({
+  assumptions: Schema.String,
+  coursePreparation: Schema.Unknown,
+  outputLanguage: Schema.String,
+});
+const playableActivityWriterResultSchema = Schema.Struct({
+  generatedActivityJson: Schema.String,
+});
+const activityQualityJudgeResultSchema = Schema.Struct({
+  passed: Schema.Boolean,
+  qualityReview: Schema.String,
+  qualityScore: Schema.Finite,
+  repairGuidance: Schema.String,
+});
+const activityEvaluationFlowResultSchema = Schema.Struct({
+  criteriaEvaluationJson: Schema.String,
+  feedbackMarkdown: Schema.String,
+  nextStep: Schema.String,
+  score: Schema.Finite,
+});
+
+const coursePlannerResultFrom = Schema.decodeUnknownSync(coursePlannerResultSchema);
+const activityBriefPlannerResultFrom = Schema.decodeUnknownSync(activityBriefPlannerResultSchema);
+const coursePreparationPlannerResultFrom = Schema.decodeUnknownSync(
+  coursePreparationPlannerResultSchema,
+);
+const playableActivityWriterResultFrom = Schema.decodeUnknownSync(
+  playableActivityWriterResultSchema,
+);
+const activityQualityJudgeResultFrom = Schema.decodeUnknownSync(activityQualityJudgeResultSchema);
+const activityEvaluationFlowResultFrom = Schema.decodeUnknownSync(
+  activityEvaluationFlowResultSchema,
+);
+
+const activityJudgeRubric = [
+  'Score from 0 to 1.',
+  '',
+  'A generated activity pack passes only if:',
+  '1. Every activity uses exactly one of the five reusable engines.',
+  '2. Every activity has a clear learner action.',
+  '3. Every activity is self-contained.',
+  '4. Every activity is grounded in the supplied source evidence or clearly simple enough for the evidence.',
+  '5. Wrong-answer feedback teaches a misconception, missing condition, or better strategy.',
+  '6. Open-ended activities have observable criteria.',
+  '7. The set contains variety: not only retrieval checks.',
+  '8. At least one activity asks for transfer or application, not only recognition.',
+  '9. No activity depends on hidden evaluator notes.',
+  '10. No activity is merely decorative.',
+  '',
+  'Return passed=false if the activity pack would embarrass a course creator in front of a real learner.',
+  'Repair guidance must be specific enough for the playableActivityWriter to fix the activity pack.',
+].join('\n');
+
+const learningPlanOutputContract = [
+  'Planning output contract:',
+  '',
+  'coursePreparation must be one JSON object with exactly these learner-facing string fields:',
+  '- audience',
+  '- desiredOutcome',
+  '- priorKnowledge',
+  '- tone',
+  '- depth',
+  '- constraints',
+  '- activityMixPreference',
+  '- sourceStrictness with value "strict" or "standard"',
+  '',
+  'Every objective object in objectives must use these exact keys:',
+  '- title: short learner-facing title',
+  '- topicName: source-backed topic name',
+  '- capability: observable learner capability',
+  '- sourceSupport: "source_backed" or "inferred"',
+  '- sourceConfidence: "high", "medium", "low", or "none"',
+  '',
+  'Every activity brief object in activityBriefs must use these exact keys:',
+  '- objectiveIds: array of objective ids from the objectives output',
+  '- title: short internal activity title',
+  '- type: one of retrieval_check, scenario_decision, ordering_matching, practice_task, rubric_answer',
+  '- learnerAction: one concrete learner action',
+  '- instructions: learner-facing activity instructions',
+  '- successCriteria: observable completion criteria',
+  '- feedbackGuidance: how feedback should teach the source-backed point',
+  '- sourceConfidence: "high", "medium", "low", or "none"',
+  '',
+  'Do not rename these keys.',
+  'Do not output arrays of strings.',
+  'Do not wrap arrays inside objects.',
+  'Do not include markdown around JSON values.',
+].join('\n');
+
+const coursePreparationOutputContract = [
+  'Course preparation output contract:',
+  '',
+  'coursePreparation must be one JSON object with exactly these learner-facing string fields:',
+  '- audience',
+  '- desiredOutcome',
+  '- priorKnowledge',
+  '- tone',
+  '- depth',
+  '- constraints',
+  '- activityMixPreference',
+  '- sourceStrictness with value "strict" or "standard"',
+  '',
+  'Do not rename these keys.',
+  'Do not wrap coursePreparation inside another object.',
+  'Do not include objectives or activity briefs.',
+  'Do not include markdown around JSON values.',
+].join('\n');
+
+const playableActivityOutputContract = [
+  'Playable activity output contract:',
+  '',
+  'generatedActivityJson must be one JSON object for the requested activity brief type.',
+  'Do not wrap it in another object.',
+  'Do not include markdown.',
+  'Use exactly the keys listed for the selected type.',
+  '',
+  'retrieval_check keys:',
+  '- type: "retrieval_check"',
+  '- question: learner-facing question',
+  '- choices: array of 3 or 4 objects with text, isCorrect, feedback',
+  '- explanationPrompt: short prompt asking learner to explain the source cue',
+  '- feedback: overall feedback guidance',
+  'Exactly one retrieval_check choice must have isCorrect=true.',
+  '',
+  'scenario_decision keys:',
+  '- type: "scenario_decision"',
+  '- prompt: concrete scenario text',
+  '- choices: array of 2 to 4 objects with text, isPreferred, consequence, feedback',
+  '- justificationPrompt: short prompt asking learner to justify the decision',
+  '- feedback: overall feedback guidance',
+  'Exactly one scenario_decision choice must have isPreferred=true.',
+  '',
+  'ordering_matching keys:',
+  '- type: "ordering_matching"',
+  '- mode: "ordering" or "matching"',
+  '- prompt: learner-facing task prompt',
+  '- items: array of objects',
+  '- feedback: overall feedback guidance',
+  'For mode="ordering", each item must have text and unique correctPosition starting at 1.',
+  'For mode="matching", each item must have text and matchLabel, with at least two distinct labels.',
+  '',
+  'practice_task keys:',
+  '- type: "practice_task"',
+  '- prompt: learner-facing production task',
+  '- submissionLabel: short label for the learner response',
+  '- criteria: array of at least 2 observable checklist strings',
+  '- feedback: overall feedback guidance',
+  '',
+  'rubric_answer keys:',
+  '- type: "rubric_answer"',
+  '- prompt: learner-facing critique or improvement task',
+  '- criteria: array of at least 2 rubric criterion strings',
+  '- feedback: overall feedback guidance',
+].join('\n');
+
+const activityEvaluationOutputContract = [
+  'Activity evaluation output contract:',
+  '',
+  'Evaluate the learner answer against the supplied question, input material, source evidence, activity context, criteria, and learner-selected criteria.',
+  'Return feedback in the requested outputLanguage.',
+  'feedbackMarkdown must be concise Markdown with:',
+  '- one short overall judgment',
+  '- specific evidence from the learner answer',
+  '- missing or weak points tied to the criteria',
+  '- one concrete improvement instruction',
+  'Do not invent requirements outside the provided activity context and criteria.',
+  'Be direct but useful. Do not merely praise. Do not say you cannot grade open-ended work.',
+  'score is 0 to 1.',
+  'criteriaEvaluationJson must be a JSON array. Each item has exact keys criterion, met, feedback.',
+  'nextStep is one short learner-facing action.',
+].join('\n');
+
+const activityPolicyForDraft = (draft: CourseDraft) => {
+  const {
+    learningBlueprint: {
+      coursePreparation: { languagePreference },
+    },
+  } = draft;
+  const languageInstruction =
+    languagePreference === 'source'
+      ? [
+          'The coursePlanner must choose outputLanguage from the supplied sourceEvidence.',
+          'Use the dominant learner-facing language of the input documents.',
+          'If documents conflict, choose the language that best matches the course source material.',
+        ].join('\n')
+      : [
+          `The creator explicitly selected outputLanguage=${languagePreference}.`,
+          `The coursePlanner must return outputLanguage="${languagePreference}".`,
+        ].join('\n');
+
+  return [
+    languageInstruction,
+    'Supported outputLanguage values are "en" and "cs".',
+    'All learner-facing content must use the chosen outputLanguage.',
+    '',
+    'Coursition has exactly five reusable activity engines:',
+    '1. retrieval_check - recall or recognize one source-backed concept, rule, fact, or small procedure step.',
+    '2. scenario_decision - choose a realistic next action in a concrete situation and see consequences.',
+    '3. ordering_matching - sequence steps, match concepts to examples, or classify cards into groups.',
+    '4. practice_task - produce a small artifact, answer, plan, note, fix, or decision.',
+    '5. rubric_answer - write, critique, or improve an answer against explicit criteria.',
+    '',
+    'Never invent new game mechanics.',
+    'Never generate UI code.',
+    'Never generate a custom mini-app.',
+    'Never output iframe/script/component instructions.',
+    '',
+    'Every activity must be:',
+    '- source-related',
+    '- self-contained',
+    '- concrete',
+    '- doable without reading hidden evaluator notes',
+    '- useful even if the learner gets it wrong',
+    '- focused on one learner action',
+    '',
+    'Good activities create learning through:',
+    '- retrieval',
+    '- discrimination',
+    '- decision making',
+    '- sequencing',
+    '- classification',
+    '- production',
+    '- self-explanation',
+    '- revision',
+    '',
+    'For wrong answers, feedback must explain the misconception or missing criterion.',
+    'For correct answers, feedback must explain the principle, not only praise the learner.',
+    'For open-ended tasks, criteria must be observable in the learner response.',
+    '',
+    'Prefer playful framing without changing mechanics:',
+    '- Recall Sprint for retrieval_check',
+    '- Mission Decision for scenario_decision',
+    '- Build the Machine for ordering_matching',
+    '- Tiny Mission for practice_task',
+    '- Reviewer Mode for rubric_answer',
+    '',
+    'Quality judge rubric:',
+    activityJudgeRubric,
+    '',
+    learningPlanOutputContract,
+  ].join('\n');
+};
+
+const coursitionActivityGenerationFlow = flow<
+  ActivityGenerationFlowInput,
+  ActivityGenerationFlowOutput
+>({ autoParallel: false })
+  .node(
+    'coursePlanner',
+    [
+      'courseTitle:string,',
+      'languageCode:string,',
+      'existingPreparation:string,',
+      'sourceEvidence:string,',
+      'activityPolicy:string',
+      '-> outputLanguage:string "Supported values: en or cs.",',
+      'coursePreparation:json "Top-level JSON object. Do not stringify. Do not wrap in another object.",',
+      'assumptions:string,',
+      'objectives:json[] "Top-level JSON array of objects. Each object must include exact keys title, topicName, capability, sourceSupport, and sourceConfidence. Do not stringify. Do not wrap in another object."',
+    ].join(' '),
+  )
+  .node(
+    'activityBriefPlanner',
+    [
+      'outputLanguage:string,',
+      'coursePreparation:json,',
+      'objectives:json[],',
+      'sourceEvidence:string,',
+      'activityPolicy:string',
+      '-> activityBriefs:json[] "Top-level JSON array of objects. Each object must include exact keys objectiveIds, title, type, learnerAction, instructions, successCriteria, feedbackGuidance, and sourceConfidence. Do not stringify. Do not wrap in another object."',
+    ].join(' '),
+  )
+  .execute('coursePlanner', (state) => ({
+    activityPolicy: state.activityPolicy,
+    courseTitle: state.courseTitle,
+    existingPreparation: state.existingPreparation,
+    languageCode: state.languageCode,
+    sourceEvidence: state.sourceEvidence,
+  }))
+  .execute('activityBriefPlanner', (state) => {
+    const coursePlannerResult = coursePlannerResultFrom(state.coursePlannerResult);
+    return {
+      activityPolicy: state.activityPolicy,
+      coursePreparation: coursePlannerResult.coursePreparation,
+      objectives: coursePlannerResult.objectives,
+      outputLanguage: coursePlannerResult.outputLanguage,
+      sourceEvidence: state.sourceEvidence,
+    };
+  })
+  .returns((state) => {
+    const activityBriefPlannerResult = activityBriefPlannerResultFrom(
+      state.activityBriefPlannerResult,
+    );
+    const coursePlannerResult = coursePlannerResultFrom(state.coursePlannerResult);
+    return {
+      activityBriefs: activityBriefPlannerResult.activityBriefs,
+      assumptions: coursePlannerResult.assumptions,
+      coursePreparation: coursePlannerResult.coursePreparation,
+      objectives: coursePlannerResult.objectives,
+      outputLanguage: coursePlannerResult.outputLanguage,
+    };
+  });
+
+const coursitionCoursePreparationFlow = flow<
+  CoursePreparationFlowInput,
+  CoursePreparationFlowOutput
+>({ autoParallel: false })
+  .node(
+    'coursePreparationPlanner',
+    [
+      'courseTitle:string,',
+      'languageCode:string,',
+      'existingPreparation:string,',
+      'sourceEvidence:string,',
+      'activityPolicy:string',
+      '-> outputLanguage:string "Supported values: en or cs.",',
+      'coursePreparation:json "Top-level JSON object with exact keys audience, desiredOutcome, priorKnowledge, tone, depth, constraints, activityMixPreference, and sourceStrictness. Do not stringify. Do not wrap in another object.",',
+      'assumptions:string',
+    ].join(' '),
+  )
+  .execute('coursePreparationPlanner', (state) => ({
+    activityPolicy: [state.activityPolicy, coursePreparationOutputContract].join('\n\n'),
+    courseTitle: state.courseTitle,
+    existingPreparation: state.existingPreparation,
+    languageCode: state.languageCode,
+    sourceEvidence: state.sourceEvidence,
+  }))
+  .returns((state) => {
+    const coursePlannerResult = coursePreparationPlannerResultFrom(
+      state.coursePreparationPlannerResult,
+    );
+    return {
+      assumptions: coursePlannerResult.assumptions,
+      coursePreparation: coursePlannerResult.coursePreparation,
+      outputLanguage: coursePlannerResult.outputLanguage,
+    };
+  });
+
+const coursitionPlayableActivityFlow = flow<PlayableActivityFlowInput, PlayableActivityFlowOutput>({
+  autoParallel: false,
+})
+  .node(
+    'playableActivityWriter',
+    [
+      'outputLanguage:string,',
+      'objectiveJson:string,',
+      'activityBriefJson:string,',
+      'sourceEvidence:string,',
+      'activityPolicy:string,',
+      'repairGuidance:string',
+      '-> generatedActivityJson:string',
+    ].join(' '),
+  )
+  .node(
+    'activityQualityJudge',
+    [
+      'outputLanguage:string,',
+      'objectiveJson:string,',
+      'activityBriefJson:string,',
+      'generatedActivityJson:string,',
+      'sourceEvidence:string,',
+      'activityPolicy:string',
+      '-> qualityScore:number, passed:boolean, qualityReview:string, repairGuidance:string',
+    ].join(' '),
+  )
+  .map((state) => ({
+    ...state,
+    repairAttempt: 0,
+    repairGuidance: 'First attempt: write one valid playable activity from the brief and policy.',
+  }))
+  .label('writeAndJudgeActivity')
+  .map((state) => ({
+    ...state,
+    repairAttempt: state.repairAttempt + 1,
+  }))
+  .execute('playableActivityWriter', (state) => ({
+    activityBriefJson: state.activityBriefJson,
+    activityPolicy: state.activityPolicy,
+    objectiveJson: state.objectiveJson,
+    outputLanguage: state.outputLanguage,
+    repairGuidance:
+      state.repairGuidance ||
+      'First attempt: write one valid playable activity from the brief and policy.',
+    sourceEvidence: state.sourceEvidence,
+  }))
+  .execute('activityQualityJudge', (state) => {
+    const playableActivityWriterResult = playableActivityWriterResultFrom(
+      state.playableActivityWriterResult,
+    );
+    return {
+      activityBriefJson: state.activityBriefJson,
+      activityPolicy: state.activityPolicy,
+      generatedActivityJson: playableActivityWriterResult.generatedActivityJson,
+      objectiveJson: state.objectiveJson,
+      outputLanguage: state.outputLanguage,
+      sourceEvidence: state.sourceEvidence,
+    };
+  })
+  .map((state) => {
+    const activityQualityJudgeResult = activityQualityJudgeResultFrom(
+      state.activityQualityJudgeResult,
+    );
+    return {
+      ...state,
+      repairGuidance: activityQualityJudgeResult.repairGuidance,
+    };
+  })
+  .feedback((state) => {
+    const activityQualityJudgeResult = activityQualityJudgeResultFrom(
+      state.activityQualityJudgeResult,
+    );
+    return (
+      activityQualityJudgeResult.passed === false &&
+      activityQualityJudgeResult.qualityScore < 0.82 &&
+      state.repairAttempt < 3
+    );
+  }, 'writeAndJudgeActivity')
+  .returns((state) => {
+    const activityQualityJudgeResult = activityQualityJudgeResultFrom(
+      state.activityQualityJudgeResult,
+    );
+    const playableActivityWriterResult = playableActivityWriterResultFrom(
+      state.playableActivityWriterResult,
+    );
+    return {
+      generatedActivityJson: playableActivityWriterResult.generatedActivityJson,
+      qualityReview: activityQualityJudgeResult.qualityReview,
+      qualityScore: activityQualityJudgeResult.qualityScore,
+    };
+  });
+
+const coursitionActivityEvaluationFlow = flow<
+  ActivityEvaluationFlowInput,
+  ActivityEvaluationFlowOutput
+>({
+  autoParallel: false,
+})
+  .node(
+    'activityEvaluator',
+    [
+      'outputLanguage:string,',
+      'question:string,',
+      'inputMaterial:string,',
+      'sourceEvidence:string,',
+      'activityContextJson:string,',
+      'criteriaInputJson:string,',
+      'checkedCriteriaJson:string,',
+      'answer:string,',
+      'evaluatorPolicy:string',
+      '-> feedbackMarkdown:string, score:number, criteriaEvaluationJson:string, nextStep:string',
+    ].join(' '),
+  )
+  .execute('activityEvaluator', (state) => ({
+    activityContextJson: state.activityContextJson,
+    answer: state.answer,
+    checkedCriteriaJson: state.checkedCriteriaJson,
+    criteriaInputJson: state.criteriaInputJson,
+    evaluatorPolicy: state.evaluatorPolicy,
+    inputMaterial: state.inputMaterial,
+    outputLanguage: state.outputLanguage,
+    question: state.question,
+    sourceEvidence: state.sourceEvidence,
+  }))
+  .returns((state) => {
+    const evaluatorResult = activityEvaluationFlowResultFrom(state.activityEvaluatorResult);
+    return {
+      criteriaEvaluationJson: evaluatorResult.criteriaEvaluationJson,
+      feedbackMarkdown: evaluatorResult.feedbackMarkdown,
+      nextStep: evaluatorResult.nextStep,
+      score: evaluatorResult.score,
+    };
+  });
 
 const configuredAxOpenAiModel = (model: string) => model as AxAIOpenAIModel;
 
@@ -122,14 +628,15 @@ const isLocalSiteUrl = (value: string | undefined) => {
 };
 
 const shouldUseDefaultLocalAiProvider = (config: CoursitionAiRuntimeConfig) =>
-  config.nodeEnv !== 'production' || isLocalSiteUrl(config.modernPublicSiteUrl);
+  config.nodeEnv !== 'test' &&
+  (config.nodeEnv !== 'production' || isLocalSiteUrl(config.modernPublicSiteUrl));
 
 const aiCallTimeoutMs = () => {
   const config = loadCoursitionAiRuntimeConfig();
   if (config.aiTimeoutMs !== undefined) {
     return config.aiTimeoutMs;
   }
-  return config.nodeEnv === 'test' ? 1500 : 20_000;
+  return config.nodeEnv === 'test' ? 1500 : 120_000;
 };
 
 export const aiProviderConfig = (): AiProviderConfig | null => {
@@ -172,7 +679,12 @@ const createCoursitionAxAi = (config: AiProviderConfig) =>
     },
   });
 
-const jsonTextFrom = (value: unknown) => JSON.stringify(value);
+const unknownRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
+const unknownJsonStringSchema = Schema.UnknownFromJsonString;
+const unknownRecordJsonStringSchema = Schema.fromJsonString(unknownRecordSchema);
+const activityTypeFromUnknown = Schema.decodeUnknownOption(activityTypeSchema);
+
+const jsonTextFrom = Schema.encodeSync(unknownJsonStringSchema);
 
 const localCourseContentRendererResult = <T>(value: T): AiJsonResult<T> => ({
   model: `${defaultModel}/deterministic`,
@@ -181,31 +693,67 @@ const localCourseContentRendererResult = <T>(value: T): AiJsonResult<T> => ({
   value,
 });
 
-const foreignPromise = <Value>(evaluate: () => PromiseLike<Value>) =>
-  Effect.tryPromise({
-    catch: (cause) => new AiProviderEffectError({ cause }),
-    try: evaluate,
+const aiProviderMessageFrom = (cause: unknown) =>
+  typeof cause === 'object' &&
+  cause !== null &&
+  'message' in cause &&
+  typeof cause.message === 'string' &&
+  cause.message.trim().length > 0
+    ? cause.message.trim()
+    : 'AI provider failed without a readable message.';
+
+const isAiProviderEffectError = (cause: unknown): cause is AiProviderEffectError =>
+  typeof cause === 'object' &&
+  cause !== null &&
+  '_tag' in cause &&
+  cause._tag === 'AiProviderEffectError';
+
+const toAiProviderEffectError = (cause: unknown) =>
+  isAiProviderEffectError(cause)
+    ? cause
+    : new AiProviderEffectError({
+        cause,
+        message: aiProviderMessageFrom(cause),
+      });
+
+const aiProviderContractError = (message: string, field?: string) =>
+  new AiProviderEffectError({
+    cause: new AiProviderContractError({
+      ...(field === undefined ? {} : { field }),
+      message,
+    }),
+    message,
   });
+
+const throwAiProviderContractError = (message: string, field?: string): never => {
+  throw aiProviderContractError(message, field);
+};
 
 const generateStructuredObjectEffect = <TInput, TOutput>(
   program: AxForwardable<TInput, TOutput, string>,
   input: TInput,
-): Effect.Effect<AiJsonResult<TOutput>, AiProviderEffectError> => {
+) => {
   const config = aiProviderConfig();
   if (config === null) {
+    const message = 'AI provider is not configured.';
     return Effect.fail(
       new AiProviderEffectError({
-        cause: new Error('AI provider is not configured.'),
+        cause: new AiProviderConfigurationError({
+          message,
+        }),
+        message,
       }),
     );
   }
   const provider = createCoursitionAxAi(config);
-  return foreignPromise(() =>
-    program.forward(provider, input, {
-      stream: true,
-      timeout: aiCallTimeoutMs(),
-    }),
-  ).pipe(
+  return Effect.tryPromise({
+    catch: toAiProviderEffectError,
+    try: () =>
+      program.forward(provider, input, {
+        stream: true,
+        timeout: aiCallTimeoutMs(),
+      }),
+  }).pipe(
     Effect.map((value) => ({
       model: config.model,
       provider: config.provider,
@@ -215,43 +763,89 @@ const generateStructuredObjectEffect = <TInput, TOutput>(
   );
 };
 
-const asRecord = (value: unknown): Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+const asRecord = Schema.decodeUnknownSync(unknownRecordSchema);
+
+const parseGeneratedArrayValue = (value: unknown, fieldName: string): unknown[] => {
+  const parsed = typeof value === 'string' ? (JSON.parse(value) as unknown) : value;
+  if (!Array.isArray(parsed)) {
+    throwAiProviderContractError(`${fieldName} must be a JSON array.`, fieldName);
+  }
+  return parsed as unknown[];
+};
+
+const parseGeneratedRecordValue = (value: unknown, fieldName: string): Record<string, unknown> => {
+  const parsed =
+    typeof value === 'string'
+      ? Schema.decodeUnknownSync(unknownRecordJsonStringSchema)(value)
+      : value;
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throwAiProviderContractError(`${fieldName} must be a JSON object.`, fieldName);
+  }
+  return asRecord(parsed);
+};
+
+const parseGeneratedRecordArrayValue = (
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown>[] =>
+  parseGeneratedArrayValue(value, fieldName).map((item, index) => {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+      throwAiProviderContractError(`${fieldName}[${index}] must be a JSON object.`, fieldName);
+    }
+    return asRecord(item);
+  });
 
 const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 const asText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const firstNonEmptyText = (...values: readonly string[]) =>
   values.find((value) => value.trim().length > 0)?.trim() ?? '';
 
+const requiredText = (value: unknown, fieldName: string): string => {
+  const text = asText(value);
+  if (text.length === 0) {
+    throwAiProviderContractError(`AI provider returned empty ${fieldName}.`, fieldName);
+  }
+  return text;
+};
+
 const currentIsoTimestamp = () => DateTime.formatIso(DateTime.nowUnsafe());
 
 const processedSourceEvidence = (draft: CourseDraft) => {
-  if (draft.knowledgeChunks.length > 0) {
-    return draft.knowledgeChunks
-      .slice(0, 16)
-      .map(
-        (chunk, index) =>
-          `Chunk ${index + 1} (${chunk.reference.heading ?? chunk.sourceAssetId}, ${
-            chunk.reference.position
-          })\n${chunk.content.slice(0, 1600)}`,
-      )
+  if (draft.derivedSourceDocuments.length > 0) {
+    return draft.derivedSourceDocuments
+      .map((document, index) => {
+        const sourceName =
+          draft.sources.find((source) => source.id === document.sourceAssetId)?.name ??
+          document.sourceAssetId;
+        return `Document ${index + 1}: ${sourceName}\n${document.content}`;
+      })
       .join('\n\n');
   }
   return draft.sources
     .filter((source) => source.status === 'processed' || source.status === 'partially_processed')
-    .slice(0, 8)
-    .map((source, index) => `Source ${index + 1}: ${source.name}\n${source.content.slice(0, 4000)}`)
+    .map((source, index) => `Source ${index + 1}: ${source.name}\n${source.content}`)
     .join('\n\n');
 };
 
-const courseOutputLanguage = (draft: CourseDraft): CourseDraft['language'] => {
+const requestedOutputLanguage = (draft: CourseDraft) =>
+  draft.learningBlueprint.coursePreparation.languagePreference;
+
+const courseContentLanguage = (draft: CourseDraft): CourseDraft['language'] => {
   const preference = draft.learningBlueprint.coursePreparation.languagePreference;
   return preference === 'source' ? draft.learningBlueprint.coursePreparation.language : preference;
 };
 
-const fallbackTokens = (value: string) =>
+const generatedOutputLanguage = (value: unknown): CourseDraft['language'] => {
+  if (value === 'en' || value === 'cs') {
+    return value;
+  }
+  return throwAiProviderContractError(
+    'AI provider returned unsupported outputLanguage.',
+    'outputLanguage',
+  );
+};
+
+const sourceMatchTokens = (value: string) =>
   [...value.matchAll(/[\p{L}\p{N}][\p{L}\p{N}+#./-]*/gu)]
     .map((match) => match[0]?.toLowerCase() ?? '')
     .filter((word) => word.length > 2)
@@ -277,31 +871,17 @@ const fallbackTokens = (value: string) =>
         ]).has(word),
     );
 
-const fallbackTitle = (draft: CourseDraft, index: number) => {
-  const tokens = fallbackTokens(`${draft.title} ${processedSourceEvidence(draft)}`).slice(
-    index,
-    index + 3,
-  );
-  if (tokens.length === 0) {
-    return draft.language === 'cs' ? `Cíl ${index + 1}` : `Objective ${index + 1}`;
-  }
-  const title = tokens.map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`).join(' ');
-  return draft.language === 'cs' ? title.toLowerCase() : title;
-};
-
 const objectiveEvidenceFor = (draft: CourseDraft, query: string) => {
-  const queryTokens = new Set(fallbackTokens(query));
+  const queryTokens = new Set(sourceMatchTokens(query));
   const scoredChunks = draft.knowledgeChunks
     .map((chunk, index) => {
-      const score = fallbackTokens(`${chunk.reference.heading ?? ''} ${chunk.content}`).filter(
+      const score = sourceMatchTokens(`${chunk.reference.heading ?? ''} ${chunk.content}`).filter(
         (token) => queryTokens.has(token),
       ).length;
       return { chunk, index, score };
     })
     .toSorted((left, right) => right.score - left.score || left.index - right.index);
-  const selectedChunks = scoredChunks.filter((entry) => entry.score > 0).slice(0, 3);
-  const fallbackChunks = scoredChunks.slice(0, 2);
-  const chunks = selectedChunks.length > 0 ? selectedChunks : fallbackChunks;
+  const chunks = scoredChunks.filter((entry) => entry.score > 0).slice(0, 3);
   const sourceReferences = chunks.map((entry) => entry.chunk.reference);
   let sourceConfidence: SourceConfidence = 'none';
   if (sourceReferences.length > 0) {
@@ -316,300 +896,97 @@ const objectiveEvidenceFor = (draft: CourseDraft, query: string) => {
   };
 };
 
-const normalizedActivityType = (value: unknown, index: number): ActivityType => {
-  if (typeof value === 'string' && activityTypes.some((activityType) => activityType === value)) {
-    return value as ActivityType;
-  }
-  return activityTypes[index % activityTypes.length] ?? 'retrieval_check';
-};
-
 const generatedActivityType = (value: unknown): ActivityType | null =>
-  typeof value === 'string' && activityTypes.some((activityType) => activityType === value)
-    ? (value as ActivityType)
-    : null;
-
-const learningBlueprintProgram = ax(
-  f()
-    .description(
-      'Create a source-grounded course preparation, objective map, and interactive activity plan.',
-    )
-    .input('languageCode', f.string('Language code for all generated course copy'))
-    .input('courseTitle', f.string('Course title'))
-    .input('existingPreparation', f.string('Creator-edited course preparation fields'))
-    .input('sourceEvidence', f.string('Source excerpts that define the course scope'))
-    .output(
-      'coursePreparation',
-      f.object(
-        {
-          activityMixPreference: f.string('Preferred mix of learner practice activities'),
-          audience: f.string('Specific intended learner group'),
-          constraints: f.string('Constraints and exclusions for the course'),
-          depth: f.string('Course depth'),
-          desiredOutcome: f.string('Observable learner outcome'),
-          priorKnowledge: f.string('Expected prior knowledge'),
-          sourceStrictness: f.class(['standard', 'strict'] as const, 'Source strictness mode'),
-          tone: f.string('Tone for learner-facing content'),
-        },
-        'Course preparation',
-      ),
-    )
-    .output(
-      'assumptions',
-      f.string('One assumption per line about inferred audience, outcome, depth, or constraints'),
-    )
-    .output(
-      'objectives',
-      f
-        .object({
-          capability: f.string('Observable learner capability'),
-          title: f.string('Short objective title'),
-          topicName: f.string('Source topic or grouping for this objective'),
-        })
-        .array('Three to six learning objectives'),
-    )
-    .output(
-      'activityBriefs',
-      f
-        .object({
-          feedbackGuidance: f.string('Feedback or rubric guidance'),
-          instructions: f.string('Learner-facing instructions'),
-          learnerAction: f.string('What the learner must do'),
-          objectiveTitle: f.string('Objective title this brief supports'),
-          successCriteria: f.string('What a good answer or action must include'),
-          title: f.string('Activity brief title'),
-          type: f.class(activityTypes, 'One approved activity type'),
-        })
-        .array('One activity brief per objective or objective cluster'),
-    )
-    .output(
-      'generatedActivities',
-      f
-        .object({
-          choices: f
-            .object({
-              consequence: f.string(
-                'Learner-facing consequence for this choice; empty string when not used',
-              ),
-              feedback: f.string('Immediate feedback for this choice; empty string when not used'),
-              isCorrect: f.boolean('True only for correct retrieval-check choices'),
-              isPreferred: f.boolean('True only for the strongest scenario decision'),
-              text: f.string('Learner-facing choice text; empty string when not used'),
-            })
-            .array('Choices for retrieval_check or scenario_decision; empty for other types'),
-          criteria: f.string(
-            'One learner-facing checklist or rubric criterion per line; no assessor-only text',
-          ),
-          explanationPrompt: f.string(
-            'Short learner-facing explanation prompt for retrieval checks; empty when not used',
-          ),
-          feedback: f.string('Learner-facing feedback after checking the activity'),
-          items: f
-            .object({
-              correctPosition: f.number(
-                '1-based correct order for ordering items; use 0 when not an ordering item',
-              ),
-              matchLabel: f.string(
-                'Correct label for matching items; empty string when not a matching item',
-              ),
-              text: f.string('Learner-facing card/item text; empty string when not used'),
-            })
-            .array('Cards/items for matching or ordering; empty for other types'),
-          justificationPrompt: f.string(
-            'Short learner-facing justification prompt for scenario decisions; empty when not used',
-          ),
-          mode: f.class(
-            ['matching', 'ordering', 'none'] as const,
-            'Use matching/order for ordering_matching, otherwise none',
-          ),
-          objectiveTitle: f.string('Objective title this generated activity supports'),
-          prompt: f.string(
-            'Self-contained playable prompt. If the task needs a sample, include the sample here.',
-          ),
-          question: f.string(
-            'Question text for retrieval checks; empty string for other activity types',
-          ),
-          submissionLabel: f.string(
-            'Learner-facing input label for practice/rubric tasks; empty when not used',
-          ),
-          type: f.class(activityTypes, 'One approved activity type'),
-        })
-        .array(
-          'One complete playable activity per activity brief. Do not reference missing samples. Do not use success criteria or evaluator guidance as answer text.',
-        ),
-    )
-    .build(),
-  { stream: true },
-);
-
-const firstProcessedSourceName = (draft: CourseDraft) =>
-  draft.sources.find(
-    (source) =>
-      (source.status === 'processed' || source.status === 'partially_processed') &&
-      source.name.trim().length > 0,
-  )?.name ?? draft.title;
-
-const fallbackPreparationFor = (
-  draft: CourseDraft,
-  language: CourseDraft['language'],
-): LearningBlueprint['coursePreparation'] => {
-  const sourceName = firstProcessedSourceName(draft);
-  const focus = fallbackTitle({ ...draft, language }, 0);
-  if (language === 'cs') {
-    return {
-      ...emptyCoursePreparation(language),
-      activityMixPreference: 'Krátké vybavovací kontroly, praktické úkoly a scénářová rozhodnutí.',
-      audience: `Studenti, kteří potřebují prakticky použít materiál ${sourceName}.`,
-      constraints: `Držet se zdrojového materiálu ${sourceName} a jasně označit odvozené části.`,
-      depth: 'practical',
-      desiredOutcome: `Student umí použít ${focus} v konkrétní praktické situaci.`,
-      priorKnowledge: `Student zná základní kontext zdroje ${sourceName}, ale potřebuje vedenou praxi.`,
-      tone: 'jasný, praktický a konkrétní',
-    };
-  }
-  return {
-    ...emptyCoursePreparation(language),
-    activityMixPreference: 'Short retrieval checks, practical tasks, and scenario decisions.',
-    audience: `Learners who need to apply the material in ${sourceName}.`,
-    constraints: `Stay grounded in ${sourceName} and clearly mark inferred material.`,
-    depth: 'practical',
-    desiredOutcome: `Learners can apply ${focus} in a concrete practical situation.`,
-    priorKnowledge: `Learners know the basic context of ${sourceName}, but need guided practice.`,
-    tone: 'clear, practical, and specific',
-  };
-};
+  Option.getOrNull(activityTypeFromUnknown(value));
 
 const preparationFromDraft = (
   draft: CourseDraft,
-  generated: Record<string, unknown> = {},
+  generated: Record<string, unknown>,
+  outputLanguage: CourseDraft['language'],
 ): LearningBlueprint['coursePreparation'] => {
-  const outputLanguage = courseOutputLanguage(draft);
   const existing = draft.learningBlueprint.coursePreparation;
-  const fallback = fallbackPreparationFor(draft, outputLanguage);
+  const generatedOrExistingText = (
+    fieldName: keyof Omit<
+      LearningBlueprint['coursePreparation'],
+      'language' | 'languagePreference' | 'sourceStrictness'
+    >,
+  ) => {
+    const text = firstNonEmptyText(asText(generated[fieldName]), existing[fieldName]);
+    if (text.length === 0) {
+      throwAiProviderContractError(
+        `AI provider returned coursePreparation without ${fieldName}.`,
+        String(fieldName),
+      );
+    }
+    return text;
+  };
   return {
-    activityMixPreference: firstNonEmptyText(
-      asText(generated['activityMixPreference']),
-      existing.activityMixPreference,
-      fallback.activityMixPreference,
-    ),
-    audience: firstNonEmptyText(
-      asText(generated['audience']),
-      existing.audience,
-      fallback.audience,
-    ),
-    constraints: firstNonEmptyText(
-      asText(generated['constraints']),
-      existing.constraints,
-      fallback.constraints,
-    ),
-    depth: firstNonEmptyText(asText(generated['depth']), existing.depth, fallback.depth),
-    desiredOutcome: firstNonEmptyText(
-      asText(generated['desiredOutcome']),
-      existing.desiredOutcome,
-      fallback.desiredOutcome,
-    ),
+    activityMixPreference: generatedOrExistingText('activityMixPreference'),
+    audience: generatedOrExistingText('audience'),
+    constraints: generatedOrExistingText('constraints'),
+    depth: generatedOrExistingText('depth'),
+    desiredOutcome: generatedOrExistingText('desiredOutcome'),
     language: outputLanguage,
     languagePreference: existing.languagePreference,
-    priorKnowledge: firstNonEmptyText(
-      asText(generated['priorKnowledge']),
-      existing.priorKnowledge,
-      fallback.priorKnowledge,
-    ),
+    priorKnowledge: generatedOrExistingText('priorKnowledge'),
     sourceStrictness:
       generated['sourceStrictness'] === 'strict' || existing.sourceStrictness === 'strict'
         ? 'strict'
         : 'standard',
-    tone: firstNonEmptyText(asText(generated['tone']), existing.tone, fallback.tone),
+    tone: generatedOrExistingText('tone'),
   };
 };
+
+const generatedAssumptions = (value: unknown): string[] =>
+  typeof value === 'string'
+    ? value
+        .split(/\n+/u)
+        .map((assumption) => assumption.trim())
+        .filter(Boolean)
+    : asArray(value).map(asText).filter(Boolean);
 
 const normalizeObjectives = (
   draft: CourseDraft,
   generatedObjectives: unknown[],
   timestamp: string,
 ): LearningObjective[] => {
-  const objectiveInputs =
-    generatedObjectives.length > 0
-      ? generatedObjectives.map((objective) => {
-          const record = asRecord(objective) as GeneratedObjectiveObject;
-          return {
-            capability: asText(record.capability),
-            title: asText(record.title),
-            topicName: asText(record.topicName),
-          };
-        })
-      : Array.from({ length: 4 }, (_, index) => ({
-          capability:
-            draft.language === 'cs'
-              ? `Student umí prakticky použít ${fallbackTitle(draft, index)}.`
-              : `Learner can apply ${fallbackTitle(draft, index)} in a practical situation.`,
-          title: fallbackTitle(draft, index),
-          topicName: fallbackTitle(draft, index),
-        }));
+  if (generatedObjectives.length === 0) {
+    throwAiProviderContractError('AI provider returned no learning objectives.', 'objectives');
+  }
 
   const usedTitles = new Set<string>();
-  return objectiveInputs.slice(0, 6).flatMap((objective, index): LearningObjective[] => {
-    const title = firstNonEmptyText(
-      objective.title,
-      objective.topicName,
-      fallbackTitle(draft, index),
-    );
+  return generatedObjectives.slice(0, 6).map((generatedObjective, index): LearningObjective => {
+    const objective = asRecord(generatedObjective);
+    const title = firstNonEmptyText(asText(objective['title']), asText(objective['topicName']));
+    if (title.length === 0) {
+      throwAiProviderContractError(
+        `AI provider returned objective ${index + 1} without a title.`,
+        'objectives',
+      );
+    }
     const normalizedTitle = title.toLowerCase();
     if (usedTitles.has(normalizedTitle)) {
-      return [];
+      throwAiProviderContractError(
+        `AI provider returned duplicate objective title: ${title}.`,
+        'objectives',
+      );
     }
     usedTitles.add(normalizedTitle);
-    const capability = firstNonEmptyText(
-      objective.capability,
-      draft.language === 'cs'
-        ? `Student umí prakticky použít ${title}.`
-        : `Learner can apply ${title} in a practical situation.`,
-    );
-    const evidence = objectiveEvidenceFor(draft, `${title} ${capability} ${objective.topicName}`);
-    return [
-      {
-        capability,
-        id: `objective_${draft.id}_${index + 1}`,
-        sourceConfidence: evidence.sourceConfidence,
-        sourceReferences: evidence.sourceReferences,
-        sourceSupport: evidence.sourceSupport,
-        status: 'generated',
-        title,
-        topicName: firstNonEmptyText(objective.topicName, title),
-        updatedAt: timestamp,
-      },
-    ];
-  });
-};
-
-const activityBriefCopy = (
-  draft: CourseDraft,
-  objective: LearningObjective,
-  type: ActivityType,
-) => {
-  if (draft.language === 'cs') {
-    const learnerAction =
-      type === 'retrieval_check'
-        ? `Vybavit si nebo rozpoznat klíčové prvky pro ${objective.title}.`
-        : `Použít ${objective.title} v praktické situaci.`;
+    const capability = requiredText(objective['capability'], `objective ${index + 1} capability`);
+    const topicName = firstNonEmptyText(asText(objective['topicName']), title);
+    const evidence = objectiveEvidenceFor(draft, `${title} ${capability} ${topicName}`);
     return {
-      feedbackGuidance: `Zpětná vazba má porovnat odpověď s cílem: ${objective.capability}`,
-      instructions: `Vypracujte úkol k cíli ${objective.title}.`,
-      learnerAction,
-      successCriteria: `Odpověď musí prokázat, že student zvládá: ${objective.capability}`,
-      title: `${objective.title}: ${type.replaceAll('_', ' ')}`,
+      capability,
+      id: `objective_${draft.id}_${index + 1}`,
+      sourceConfidence: evidence.sourceConfidence,
+      sourceReferences: evidence.sourceReferences,
+      sourceSupport: evidence.sourceSupport,
+      status: 'generated',
+      title,
+      topicName,
+      updatedAt: timestamp,
     };
-  }
-  const learnerAction =
-    type === 'retrieval_check'
-      ? `Recall or recognize the key elements of ${objective.title}.`
-      : `Apply ${objective.title} to a practical situation.`;
-  return {
-    feedbackGuidance: `Feedback should compare the answer against this objective: ${objective.capability}`,
-    instructions: `Complete the task for ${objective.title}.`,
-    learnerAction,
-    successCriteria: `The response must show that the learner can: ${objective.capability}`,
-    title: `${objective.title}: ${type.replaceAll('_', ' ')}`,
-  };
+  });
 };
 
 const normalizeActivityBriefs = (
@@ -618,10 +995,10 @@ const normalizeActivityBriefs = (
   generatedBriefs: unknown[],
   timestamp: string,
 ): ActivityBrief[] => {
-  const briefsByObjectiveTitle = new Map<string, GeneratedActivityBriefObject>();
+  const briefsByObjectiveTitle = new Map<string, Record<string, unknown>>();
   for (const brief of generatedBriefs) {
-    const record = asRecord(brief) as GeneratedActivityBriefObject;
-    const objectiveTitle = asText(record.objectiveTitle).toLowerCase();
+    const record = asRecord(brief);
+    const objectiveTitle = asText(record['objectiveTitle']).toLowerCase();
     if (objectiveTitle.length > 0) {
       briefsByObjectiveTitle.set(objectiveTitle, record);
     }
@@ -629,30 +1006,45 @@ const normalizeActivityBriefs = (
 
   return objectives.map((objective, index): ActivityBrief => {
     const generatedBrief =
-      briefsByObjectiveTitle.get(objective.title.toLowerCase()) ??
-      (asRecord(generatedBriefs[index]) as GeneratedActivityBriefObject | undefined) ??
-      {};
-    const type = normalizedActivityType(generatedBrief.type, index);
-    const copy = activityBriefCopy(draft, objective, type);
+      briefsByObjectiveTitle.get(objective.title.toLowerCase()) ?? asRecord(generatedBriefs[index]);
+    if (generatedBrief === undefined) {
+      throwAiProviderContractError(
+        `AI provider returned no activity brief for objective: ${objective.title}.`,
+        'activityBriefs',
+      );
+    }
+    const type = generatedActivityType(generatedBrief['type']);
+    if (type === null) {
+      return throwAiProviderContractError(
+        `AI provider returned invalid activity type for: ${objective.title}.`,
+        'activityBriefs',
+      );
+    }
     const sourceReferences = objective.sourceReferences ?? [];
     return {
-      feedbackGuidance: firstNonEmptyText(
-        asText(generatedBrief.feedbackGuidance),
-        copy.feedbackGuidance,
+      feedbackGuidance: requiredText(
+        generatedBrief['feedbackGuidance'],
+        `activity brief ${index + 1} feedbackGuidance`,
       ),
       id: `activity_brief_${draft.id}_${index + 1}`,
-      instructions: firstNonEmptyText(asText(generatedBrief.instructions), copy.instructions),
-      learnerAction: firstNonEmptyText(asText(generatedBrief.learnerAction), copy.learnerAction),
+      instructions: requiredText(
+        generatedBrief['instructions'],
+        `activity brief ${index + 1} instructions`,
+      ),
+      learnerAction: requiredText(
+        generatedBrief['learnerAction'],
+        `activity brief ${index + 1} learnerAction`,
+      ),
       objectiveId: objective.id,
       objectiveIds: [objective.id],
       sourceConfidence: objective.sourceConfidence,
       sourceReferences,
       status: 'generated',
-      successCriteria: firstNonEmptyText(
-        asText(generatedBrief.successCriteria),
-        copy.successCriteria,
+      successCriteria: requiredText(
+        generatedBrief['successCriteria'],
+        `activity brief ${index + 1} successCriteria`,
       ),
-      title: firstNonEmptyText(asText(generatedBrief.title), copy.title),
+      title: requiredText(generatedBrief['title'], `activity brief ${index + 1} title`),
       type,
       updatedAt: timestamp,
     };
@@ -671,16 +1063,23 @@ const generatedActivityBaseFromBrief = (brief: ActivityBrief) => ({
   objectiveIds: brief.objectiveIds.length > 0 ? brief.objectiveIds : [brief.objectiveId],
   sourceConfidence: brief.sourceConfidence,
   sourceReferences: brief.sourceReferences ?? [],
-  status: brief.status === 'stale' ? ('stale' as const) : ('generated' as const),
+  status: 'generated' as const,
 });
 
-const notPlayableActivityFromBrief = (brief: ActivityBrief): GeneratedActivity => ({
+const notPlayableActivityFromBrief = (
+  brief: ActivityBrief,
+  reason?: string,
+): GeneratedActivity => ({
   ...generatedActivityBaseFromBrief(brief),
   interaction: {
-    feedback: 'Regenerate the activity plan through Ax so it produces a real playable interaction.',
+    feedback:
+      reason === undefined
+        ? 'Regenerate the activity plan through Ax so it produces a real playable interaction.'
+        : reason,
     kind: 'not_playable',
     prompt: 'The playable activity was not generated.',
-    reason: 'The Ax-generated playable activity is missing or failed the validation contract.',
+    reason:
+      reason ?? 'The Ax-generated playable activity is missing or failed the validation contract.',
   },
   status: 'stale',
   type: 'not_playable',
@@ -701,29 +1100,133 @@ const generatedBoolean = (value: unknown) => (typeof value === 'boolean' ? value
 const generatedPosition = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
 
-const hasAssessorOnlyShape = (value: string) =>
-  /\b(?:assessment-only|target-answer|evaluator|hodnot[ií]m|d[aá]v[aá]m body|pova[zž]uj za spr[aá]vn[eé]|spr[aá]vn[eé] pl[aá]ny|target answer)\b/iu.test(
-    value,
-  );
+const nonEmptyText = (value: string) => value.trim().length > 0;
 
-const validLearnerText = (value: string) => value.trim().length > 0 && !hasAssessorOnlyShape(value);
+const normalizedTextKey = (value: string) => value.trim().toLowerCase();
+
+const hasDuplicateNormalizedTexts = (values: readonly string[]) => {
+  const normalized = values.map(normalizedTextKey).filter(nonEmptyText);
+  return new Set(normalized).size !== normalized.length;
+};
+
+const exactlyOne = <Value>(values: readonly Value[], predicate: (value: Value) => boolean) =>
+  values.filter(predicate).length === 1;
+
+const generatedEvaluationBoolean = (value: unknown) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', 'yes', 'met'].includes(normalized)) {
+      return true;
+    }
+    if (['false', 'no', 'not met', 'unmet'].includes(normalized)) {
+      return false;
+    }
+  }
+  return false;
+};
+
+const normalizedEvaluationScore = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, value));
+};
+
+const evaluationCriteriaForActivity = (activity: GeneratedActivity): readonly string[] => {
+  switch (activity.type) {
+    case 'practice_task': {
+      return activity.interaction.checklist;
+    }
+    case 'rubric_answer': {
+      return activity.interaction.criteria;
+    }
+    default: {
+      return [];
+    }
+  }
+};
+
+const evaluationQuestionForActivity = (activity: GeneratedActivity) => {
+  switch (activity.type) {
+    case 'practice_task':
+    case 'ordering_matching':
+    case 'rubric_answer': {
+      return activity.interaction.prompt;
+    }
+    case 'retrieval_check': {
+      return activity.interaction.question;
+    }
+    case 'scenario_decision': {
+      return activity.interaction.scenario;
+    }
+    case 'not_playable': {
+      return activity.interaction.prompt;
+    }
+    default: {
+      const unsupportedActivity: never = activity;
+      return unsupportedActivity;
+    }
+  }
+};
+
+const normalizeActivityEvaluationResult = (
+  activity: GeneratedActivity,
+  flowValue: ActivityEvaluationFlowOutput,
+): ActivityEvaluationResponse => {
+  const sourceCriteria = evaluationCriteriaForActivity(activity).filter(nonEmptyText);
+  const criteria = parseGeneratedRecordArrayValue(
+    flowValue.criteriaEvaluationJson,
+    'criteriaEvaluationJson',
+  )
+    .map((criterion): ActivityEvaluationCriterion | null => {
+      const criterionText = asText(criterion['criterion']);
+      const feedback = asText(criterion['feedback']);
+      if (!nonEmptyText(criterionText) || !nonEmptyText(feedback)) {
+        return null;
+      }
+      return {
+        criterion: criterionText,
+        feedback,
+        met: generatedEvaluationBoolean(criterion['met']),
+      };
+    })
+    .filter((criterion): criterion is ActivityEvaluationCriterion => criterion !== null);
+  const fallbackCriteria = sourceCriteria.map((criterion) => ({
+    criterion,
+    feedback: flowValue.feedbackMarkdown,
+    met: false,
+  }));
+  const feedbackMarkdown = requiredText(flowValue.feedbackMarkdown, 'feedbackMarkdown');
+  const nextStep = requiredText(flowValue.nextStep, 'nextStep');
+  return {
+    criteria: criteria.length > 0 ? criteria : fallbackCriteria,
+    feedbackMarkdown,
+    nextStep,
+    score: normalizedEvaluationScore(flowValue.score),
+  };
+};
+
+export const activityEvaluationFromAxResult = normalizeActivityEvaluationResult;
 
 const normalizeGeneratedRetrievalActivity = (
   brief: ActivityBrief,
-  generated: GeneratedPlayableActivityObject,
+  generated: Record<string, unknown>,
 ): GeneratedActivity | null => {
-  const question = asText(generated.question);
-  const feedback = asText(generated.feedback);
-  const explanationPrompt = asText(generated.explanationPrompt);
-  const choices = asArray(generated.choices)
+  const question = asText(generated['question']);
+  const feedback = asText(generated['feedback']);
+  const explanationPrompt = asText(generated['explanationPrompt']);
+  const choices = asArray(generated['choices'])
     .map((choice, index) => {
-      const record = asRecord(choice) as GeneratedPlayableChoiceObject;
-      const text = asText(record.text);
-      const choiceFeedback = asText(record.feedback);
-      if (!validLearnerText(text) || !validLearnerText(choiceFeedback)) {
+      const record = asRecord(choice);
+      const text = asText(record['text']);
+      const choiceFeedback = asText(record['feedback']);
+      if (!nonEmptyText(text) || !nonEmptyText(choiceFeedback)) {
         return null;
       }
-      const isCorrect = generatedBoolean(record.isCorrect);
+      const isCorrect = generatedBoolean(record['isCorrect']);
       if (isCorrect === null) {
         return null;
       }
@@ -736,11 +1239,13 @@ const normalizeGeneratedRetrievalActivity = (
     })
     .filter((choice): choice is NonNullable<typeof choice> => choice !== null);
   if (
-    !validLearnerText(question) ||
-    !validLearnerText(feedback) ||
-    !validLearnerText(explanationPrompt) ||
-    choices.length < 2 ||
-    !choices.some((choice) => choice.isCorrect)
+    !nonEmptyText(question) ||
+    !nonEmptyText(feedback) ||
+    !nonEmptyText(explanationPrompt) ||
+    choices.length < 3 ||
+    choices.length > 4 ||
+    hasDuplicateNormalizedTexts(choices.map((choice) => choice.text)) ||
+    !exactlyOne(choices, (choice) => choice.isCorrect)
   ) {
     return null;
   }
@@ -759,25 +1264,25 @@ const normalizeGeneratedRetrievalActivity = (
 
 const normalizeGeneratedOrderingMatchingActivity = (
   brief: ActivityBrief,
-  generated: GeneratedPlayableActivityObject,
+  generated: Record<string, unknown>,
 ): GeneratedActivity | null => {
-  if (generated.mode !== 'matching' && generated.mode !== 'ordering') {
+  const { mode } = generated;
+  if (mode !== 'matching' && mode !== 'ordering') {
     return null;
   }
-  const { mode } = generated;
-  const prompt = asText(generated.prompt);
-  const feedback = asText(generated.feedback);
-  const items = asArray(generated.items)
+  const prompt = asText(generated['prompt']);
+  const feedback = asText(generated['feedback']);
+  const items = asArray(generated['items'])
     .map((item, index) => {
-      const record = asRecord(item) as GeneratedPlayableItemObject;
-      const text = asText(record.text);
-      if (!validLearnerText(text)) {
+      const record = asRecord(item);
+      const text = asText(record['text']);
+      if (!nonEmptyText(text)) {
         return null;
       }
       if (mode === 'matching') {
-        const { matchLabel: generatedMatchLabel } = record;
+        const generatedMatchLabel = record['matchLabel'];
         const validMatchLabel = asText(generatedMatchLabel);
-        if (!validLearnerText(validMatchLabel)) {
+        if (!nonEmptyText(validMatchLabel)) {
           return null;
         }
         return {
@@ -786,7 +1291,7 @@ const normalizeGeneratedOrderingMatchingActivity = (
           text,
         };
       }
-      const correctPosition = generatedPosition(record.correctPosition);
+      const correctPosition = generatedPosition(record['correctPosition']);
       if (correctPosition === null) {
         return null;
       }
@@ -799,16 +1304,22 @@ const normalizeGeneratedOrderingMatchingActivity = (
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
   const enoughItems = mode === 'matching' ? items.length >= 2 : items.length >= 3;
+  const matchLabelCount = new Set(
+    items.map((item) => item.matchLabel ?? '').filter((label) => label.trim().length > 0),
+  ).size;
+  const enoughLabels = mode === 'ordering' || matchLabelCount >= 2;
   const orderPositions = mode === 'ordering' ? items.map((item) => item.correctPosition) : [];
   const positionsAreUnique =
     mode !== 'ordering' ||
     (orderPositions.every((position): position is number => typeof position === 'number') &&
       new Set(orderPositions).size === orderPositions.length);
   if (
-    !validLearnerText(prompt) ||
-    !validLearnerText(feedback) ||
+    !nonEmptyText(prompt) ||
+    !nonEmptyText(feedback) ||
     !enoughItems ||
-    !positionsAreUnique
+    !positionsAreUnique ||
+    !enoughLabels ||
+    hasDuplicateNormalizedTexts(items.map((item) => item.text))
   ) {
     return null;
   }
@@ -827,25 +1338,21 @@ const normalizeGeneratedOrderingMatchingActivity = (
 
 const normalizeGeneratedScenarioActivity = (
   brief: ActivityBrief,
-  generated: GeneratedPlayableActivityObject,
+  generated: Record<string, unknown>,
 ): GeneratedActivity | null => {
-  const scenario = asText(generated.prompt);
-  const feedback = asText(generated.feedback);
-  const justificationPrompt = asText(generated.justificationPrompt);
-  const choices = asArray(generated.choices)
+  const scenario = asText(generated['prompt']);
+  const feedback = asText(generated['feedback']);
+  const justificationPrompt = asText(generated['justificationPrompt']);
+  const choices = asArray(generated['choices'])
     .map((choice, index) => {
-      const record = asRecord(choice) as GeneratedPlayableChoiceObject;
-      const text = asText(record.text);
-      const consequence = asText(record.consequence);
-      const choiceFeedback = asText(record.feedback);
-      if (
-        !validLearnerText(text) ||
-        !validLearnerText(consequence) ||
-        !validLearnerText(choiceFeedback)
-      ) {
+      const record = asRecord(choice);
+      const text = asText(record['text']);
+      const consequence = asText(record['consequence']);
+      const choiceFeedback = asText(record['feedback']);
+      if (!nonEmptyText(text) || !nonEmptyText(consequence) || !nonEmptyText(choiceFeedback)) {
         return null;
       }
-      const isPreferred = generatedBoolean(record.isPreferred);
+      const isPreferred = generatedBoolean(record['isPreferred']);
       if (isPreferred === null) {
         return null;
       }
@@ -859,11 +1366,13 @@ const normalizeGeneratedScenarioActivity = (
     })
     .filter((choice): choice is NonNullable<typeof choice> => choice !== null);
   if (
-    !validLearnerText(scenario) ||
-    !validLearnerText(feedback) ||
-    !validLearnerText(justificationPrompt) ||
+    !nonEmptyText(scenario) ||
+    !nonEmptyText(feedback) ||
+    !nonEmptyText(justificationPrompt) ||
     choices.length < 2 ||
-    !choices.some((choice) => choice.isPreferred)
+    choices.length > 4 ||
+    hasDuplicateNormalizedTexts(choices.map((choice) => choice.text)) ||
+    !exactlyOne(choices, (choice) => choice.isPreferred)
   ) {
     return null;
   }
@@ -882,17 +1391,18 @@ const normalizeGeneratedScenarioActivity = (
 
 const normalizeGeneratedPracticeActivity = (
   brief: ActivityBrief,
-  generated: GeneratedPlayableActivityObject,
+  generated: Record<string, unknown>,
 ): GeneratedActivity | null => {
-  const prompt = asText(generated.prompt);
-  const feedback = asText(generated.feedback);
-  const submissionLabel = asText(generated.submissionLabel);
-  const checklist = lineItemsFrom(generated.criteria).filter(validLearnerText);
+  const prompt = asText(generated['prompt']);
+  const feedback = asText(generated['feedback']);
+  const submissionLabel = asText(generated['submissionLabel']);
+  const checklist = lineItemsFrom(generated['criteria']).filter(nonEmptyText);
   if (
-    !validLearnerText(prompt) ||
-    !validLearnerText(feedback) ||
-    !validLearnerText(submissionLabel) ||
-    checklist.length === 0
+    !nonEmptyText(prompt) ||
+    !nonEmptyText(feedback) ||
+    !nonEmptyText(submissionLabel) ||
+    checklist.length < 2 ||
+    hasDuplicateNormalizedTexts(checklist)
   ) {
     return null;
   }
@@ -911,12 +1421,17 @@ const normalizeGeneratedPracticeActivity = (
 
 const normalizeGeneratedRubricActivity = (
   brief: ActivityBrief,
-  generated: GeneratedPlayableActivityObject,
+  generated: Record<string, unknown>,
 ): GeneratedActivity | null => {
-  const prompt = asText(generated.prompt);
-  const feedback = asText(generated.feedback);
-  const criteria = lineItemsFrom(generated.criteria).filter(validLearnerText);
-  if (!validLearnerText(prompt) || !validLearnerText(feedback) || criteria.length === 0) {
+  const prompt = asText(generated['prompt']);
+  const feedback = asText(generated['feedback']);
+  const criteria = lineItemsFrom(generated['criteria']).filter(nonEmptyText);
+  if (
+    !nonEmptyText(prompt) ||
+    !nonEmptyText(feedback) ||
+    criteria.length < 2 ||
+    hasDuplicateNormalizedTexts(criteria)
+  ) {
     return null;
   }
   return {
@@ -935,8 +1450,12 @@ const normalizeGeneratedPlayableActivity = (
   brief: ActivityBrief,
   generated: unknown,
 ): GeneratedActivity | null => {
-  const record = asRecord(generated) as GeneratedPlayableActivityObject;
-  const type = generatedActivityType(record.type);
+  const decoded = Schema.decodeUnknownOption(unknownRecordSchema)(generated);
+  if (Option.isNone(decoded)) {
+    return null;
+  }
+  const record = decoded.value;
+  const type = generatedActivityType(record['type']);
   if (type === null) {
     return null;
   }
@@ -963,34 +1482,14 @@ const normalizeGeneratedPlayableActivity = (
   }
 };
 
-const normalizeGeneratedPlayableActivities = (
-  activityBriefs: readonly ActivityBrief[],
-  objectives: readonly LearningObjective[],
-  generatedActivities: unknown[],
-): GeneratedActivity[] => {
-  const byObjectiveTitle = new Map<string, unknown>();
-  for (const generated of generatedActivities) {
-    const record = asRecord(generated) as GeneratedPlayableActivityObject;
-    const objectiveTitle = asText(record.objectiveTitle).toLowerCase();
-    if (objectiveTitle.length > 0) {
-      byObjectiveTitle.set(objectiveTitle, generated);
-    }
-  }
-  return activityBriefs.map((brief, index) => {
-    const generated =
-      byObjectiveTitle.get(objectives[index]?.title.toLowerCase() ?? '') ??
-      generatedActivities[index];
-    return (
-      normalizeGeneratedPlayableActivity(brief, generated) ?? notPlayableActivityFromBrief(brief)
-    );
-  });
-};
-
 export const generatedActivityFromAxSpec = (
   brief: ActivityBrief,
   generated: unknown,
 ): GeneratedActivity =>
   normalizeGeneratedPlayableActivity(brief, generated) ?? notPlayableActivityFromBrief(brief);
+
+export const failedActivityFromBrief = (brief: ActivityBrief, reason: string): GeneratedActivity =>
+  notPlayableActivityFromBrief(brief, reason);
 
 const sourceCoverageFor = (objectives: readonly LearningObjective[]): SourceSupport => {
   if (objectives.length === 0) {
@@ -1005,60 +1504,243 @@ const sourceCoverageFor = (objectives: readonly LearningObjective[]): SourceSupp
   return 'inferred';
 };
 
-const normalizeLearningBlueprint = (
+const normalizeLearningPlan = (
   draft: CourseDraft,
-  generated: GeneratedLearningBlueprintObject,
+  generated: Record<string, unknown>,
 ): LearningBlueprint => {
   const timestamp = currentIsoTimestamp();
-  const generatedPreparation = asRecord(generated.coursePreparation);
-  const coursePreparation = preparationFromDraft(draft, generatedPreparation);
-  const objectives = normalizeObjectives(draft, asArray(generated.objectives), timestamp);
+  const outputLanguage = generatedOutputLanguage(generated['outputLanguage']);
+  const generatedPreparation = asRecord(generated['coursePreparation']);
+  const coursePreparation = preparationFromDraft(draft, generatedPreparation, outputLanguage);
+  const objectives = normalizeObjectives(draft, asArray(generated['objectives']), timestamp);
   const activityBriefs = normalizeActivityBriefs(
     { ...draft, language: coursePreparation.language },
     objectives,
-    asArray(generated.activityBriefs),
+    asArray(generated['activityBriefs']),
     timestamp,
   );
-  const assumptions =
-    typeof generated.assumptions === 'string'
-      ? generated.assumptions
-          .split(/\n+/u)
-          .map((assumption) => assumption.trim())
-          .filter(Boolean)
-      : asArray(generated.assumptions).map(asText).filter(Boolean);
+  const assumptions = generatedAssumptions(generated['assumptions']);
   return {
     activityBriefs,
     assumptions,
     coursePreparation,
     createdAt: timestamp,
-    generatedActivities: normalizeGeneratedPlayableActivities(
-      activityBriefs,
-      objectives,
-      asArray(generated.generatedActivities),
-    ),
+    generatedActivities: [],
     objectives,
     sourceCoverage: sourceCoverageFor(objectives),
     updatedAt: timestamp,
   };
 };
 
-export const generateLearningBlueprintWithAi = (
+export const coursePreparationFromAxPlanningResult = (
+  draft: CourseDraft,
+  flowValue: CoursePreparationFlowOutput,
+): Pick<LearningBlueprint, 'assumptions' | 'coursePreparation'> => {
+  const outputLanguage = generatedOutputLanguage(flowValue.outputLanguage);
+  return {
+    assumptions: generatedAssumptions(flowValue.assumptions),
+    coursePreparation: preparationFromDraft(
+      draft,
+      parseGeneratedRecordValue(flowValue.coursePreparation, 'coursePreparation'),
+      outputLanguage,
+    ),
+  };
+};
+
+export const learningBlueprintFromAxPlanningResult = (
+  draft: CourseDraft,
+  flowValue: ActivityGenerationFlowOutput,
+): LearningBlueprint => {
+  const generated = {
+    activityBriefs: parseGeneratedArrayValue(flowValue.activityBriefs, 'activityBriefs'),
+    assumptions: flowValue.assumptions,
+    coursePreparation: parseGeneratedRecordValue(flowValue.coursePreparation, 'coursePreparation'),
+    objectives: parseGeneratedArrayValue(flowValue.objectives, 'objectives'),
+    outputLanguage: flowValue.outputLanguage,
+  };
+  return normalizeLearningPlan(draft, generated);
+};
+
+export const generateLearningPlanWithAi = (
   draft: CourseDraft,
 ): Promise<AiJsonResult<LearningBlueprint>> =>
   Effect.runPromise(
-    generateStructuredObjectEffect(learningBlueprintProgram, {
+    generateStructuredObjectEffect(coursitionActivityGenerationFlow, {
+      activityPolicy: activityPolicyForDraft(draft),
       courseTitle: draft.title,
       existingPreparation: jsonTextFrom(draft.learningBlueprint.coursePreparation),
-      languageCode: courseOutputLanguage(draft),
+      languageCode: requestedOutputLanguage(draft),
       sourceEvidence: processedSourceEvidence(draft),
     }).pipe(
-      Effect.map((structuredResult) => ({
-        ...structuredResult,
-        value: normalizeLearningBlueprint(
-          { ...draft, language: courseOutputLanguage(draft) },
-          structuredResult.value as GeneratedLearningBlueprintObject,
-        ),
-      })),
+      Effect.flatMap((flowResult) =>
+        Effect.try({
+          catch: toAiProviderEffectError,
+          try: () => {
+            const learningBlueprint = learningBlueprintFromAxPlanningResult(
+              draft,
+              flowResult.value,
+            );
+
+            return {
+              ...flowResult,
+              text: jsonTextFrom({
+                ...flowResult.value,
+                generated: learningBlueprint,
+              }),
+              value: learningBlueprint,
+            };
+          },
+        }),
+      ),
+    ),
+  );
+
+export const generateCoursePreparationWithAi = (
+  draft: CourseDraft,
+): Promise<AiJsonResult<Pick<LearningBlueprint, 'assumptions' | 'coursePreparation'>>> =>
+  Effect.runPromise(
+    generateStructuredObjectEffect(coursitionCoursePreparationFlow, {
+      activityPolicy: activityPolicyForDraft(draft),
+      courseTitle: draft.title,
+      existingPreparation: jsonTextFrom(draft.learningBlueprint.coursePreparation),
+      languageCode: requestedOutputLanguage(draft),
+      sourceEvidence: processedSourceEvidence(draft),
+    }).pipe(
+      Effect.flatMap((flowResult) =>
+        Effect.try({
+          catch: toAiProviderEffectError,
+          try: () => {
+            const coursePreparation = coursePreparationFromAxPlanningResult(
+              draft,
+              flowResult.value,
+            );
+
+            return {
+              ...flowResult,
+              text: jsonTextFrom({
+                ...flowResult.value,
+                generated: coursePreparation,
+              }),
+              value: coursePreparation,
+            };
+          },
+        }),
+      ),
+    ),
+  );
+
+export const generateActivityWithAi = (
+  draft: CourseDraft,
+  objective: LearningObjective,
+  brief: ActivityBrief,
+): Promise<AiJsonResult<GeneratedActivity>> =>
+  Effect.runPromise(
+    generateStructuredObjectEffect(coursitionPlayableActivityFlow, {
+      activityBriefJson: jsonTextFrom(brief),
+      activityPolicy: [activityPolicyForDraft(draft), playableActivityOutputContract].join('\n\n'),
+      objectiveJson: jsonTextFrom(objective),
+      outputLanguage: courseContentLanguage(draft),
+      sourceEvidence: processedSourceEvidence(draft),
+    }).pipe(
+      Effect.flatMap((flowResult) =>
+        Effect.gen(function* generatedActivityProgram() {
+          const playableGeneration = yield* Effect.try({
+            catch: toAiProviderEffectError,
+            try: () => {
+              const playableGeneratedRecord = parseGeneratedRecordValue(
+                flowResult.value.generatedActivityJson,
+                'generatedActivityJson',
+              );
+              const playableActivity = normalizeGeneratedPlayableActivity(
+                brief,
+                playableGeneratedRecord,
+              );
+              return {
+                playableActivity,
+                playableGeneratedRecord,
+              };
+            },
+          });
+          if (playableGeneration.playableActivity === null) {
+            return yield* aiProviderContractError(
+              `AI provider returned invalid playable activity for: ${brief.title}.`,
+              'generatedActivityJson',
+            );
+          }
+          return {
+            ...flowResult,
+            text: jsonTextFrom({
+              ...flowResult.value,
+              generated: playableGeneration.playableGeneratedRecord,
+            }),
+            value: playableGeneration.playableActivity,
+          };
+        }),
+      ),
+    ),
+  );
+
+const objectiveContextForActivity = (draft: CourseDraft, activity: GeneratedActivity) =>
+  draft.learningBlueprint.objectives.filter((objective) =>
+    activity.objectiveIds.includes(objective.id),
+  );
+
+const activityBriefContextForActivity = (draft: CourseDraft, activity: GeneratedActivity) =>
+  draft.learningBlueprint.activityBriefs.find((brief) => brief.id === activity.briefId) ?? null;
+
+const evaluationActivityContext = (draft: CourseDraft, activity: GeneratedActivity) =>
+  jsonTextFrom({
+    activity,
+    activityBrief: activityBriefContextForActivity(draft, activity),
+    coursePreparation: draft.learningBlueprint.coursePreparation,
+    courseTitle: draft.title,
+    objectives: objectiveContextForActivity(draft, activity),
+  });
+
+const evaluationInputMaterial = (draft: CourseDraft) =>
+  [
+    draft.learningBlueprint.coursePreparation.desiredOutcome,
+    draft.learningBlueprint.coursePreparation.audience,
+    draft.learningBlueprint.coursePreparation.constraints,
+    ...draft.sources.map((source) => `${source.name}\n${source.content}`),
+  ]
+    .filter((value) => value.trim().length > 0)
+    .join('\n\n');
+
+export const evaluateActivityAnswerWithAi = (
+  draft: CourseDraft,
+  activity: GeneratedActivity,
+  answer: string,
+  checkedCriteria: readonly string[],
+): Promise<AiJsonResult<ActivityEvaluationResponse>> =>
+  Effect.runPromise(
+    generateStructuredObjectEffect(coursitionActivityEvaluationFlow, {
+      activityContextJson: evaluationActivityContext(draft, activity),
+      answer,
+      checkedCriteriaJson: jsonTextFrom(checkedCriteria),
+      criteriaInputJson: jsonTextFrom(evaluationCriteriaForActivity(activity)),
+      evaluatorPolicy: activityEvaluationOutputContract,
+      inputMaterial: evaluationInputMaterial(draft),
+      outputLanguage: courseContentLanguage(draft),
+      question: evaluationQuestionForActivity(activity),
+      sourceEvidence: processedSourceEvidence(draft),
+    }).pipe(
+      Effect.flatMap((flowResult) =>
+        Effect.try({
+          catch: toAiProviderEffectError,
+          try: () => {
+            const evaluation = normalizeActivityEvaluationResult(activity, flowResult.value);
+            return {
+              ...flowResult,
+              text: jsonTextFrom({
+                ...flowResult.value,
+                generated: evaluation,
+              }),
+              value: evaluation,
+            };
+          },
+        }),
+      ),
     ),
   );
 
@@ -1083,10 +1765,7 @@ const sourceExplanationBody = (
   return 'This section is inferred from course preparation and should be checked against stronger source material.';
 };
 
-const activityPrompt = (activity: GeneratedActivity | undefined, fallback: string) => {
-  if (activity === undefined) {
-    return fallback;
-  }
+const activityPrompt = (activity: GeneratedActivity) => {
   switch (activity.type) {
     case 'retrieval_check': {
       return activity.interaction.question;
@@ -1109,13 +1788,12 @@ const activityPrompt = (activity: GeneratedActivity | undefined, fallback: strin
   }
 };
 
-const activityFeedback = (activity: GeneratedActivity | undefined, fallback: string) =>
-  activity?.interaction.feedback ?? fallback;
+const activityFeedback = (activity: GeneratedActivity) => activity.interaction.feedback;
 
 const sectionBlocksFor = (
   draft: CourseDraft,
   objective: LearningObjective,
-  activity: GeneratedActivity | undefined,
+  activity: GeneratedActivity,
   index: number,
 ): CourseContentBlock[] => {
   const references = sourceReferencesForObjective(objective);
@@ -1143,21 +1821,18 @@ const sectionBlocksFor = (
       type: 'source_explanation' as const,
     },
     {
-      activityId: activity?.id,
-      body: activityPrompt(activity, objective.capability),
+      activityId: activity.id,
+      body: activityPrompt(activity),
       id: `content_block_${objective.id}_activity`,
       objectiveIds: [objective.id],
-      sourceConfidence: activity?.sourceConfidence ?? sourceConfidence,
-      sourceReferences: activity?.sourceReferences ?? references,
+      sourceConfidence: activity.sourceConfidence,
+      sourceReferences: activity.sourceReferences,
       status: 'generated' as const,
-      title: activityPrompt(
-        activity,
-        draft.language === 'cs' ? 'Interaktivní úkol' : 'Interactive task',
-      ),
+      title: activityPrompt(activity),
       type: 'interactive_activity' as const,
     },
     {
-      body: activityFeedback(activity, objective.capability),
+      body: activityFeedback(activity),
       id: `content_block_${objective.id}_summary`,
       objectiveIds: [objective.id],
       sourceConfidence,
@@ -1171,35 +1846,42 @@ const sectionBlocksFor = (
 
 export const generateCourseContentWithAi = (
   draft: CourseDraft,
-): Promise<AiJsonResult<CourseContent>> => {
-  const timestamp = currentIsoTimestamp();
-  const activitiesByObjective = new Map(
-    draft.learningBlueprint.generatedActivities.flatMap((activity) =>
-      activity.objectiveIds.map((objectiveId) => [objectiveId, activity] as const),
-    ),
-  );
-  const sections: CourseSection[] = draft.learningBlueprint.objectives.map((objective, index) => {
-    const activity = activitiesByObjective.get(objective.id);
-    const references = sourceReferencesForObjective(objective);
-    return {
-      blocks: sectionBlocksFor(draft, objective, activity, index),
-      id: `content_section_${objective.id}`,
-      objectiveIds: [objective.id],
-      sourceConfidence: objective.sourceConfidence,
-      sourceReferences: references,
-      status: 'generated' as const,
-      summary: objective.capability,
-      title: objective.title,
-    };
-  });
-  return Effect.runPromise(
-    Effect.succeed(
-      localCourseContentRendererResult({
+): Promise<AiJsonResult<CourseContent>> =>
+  Effect.runPromise(
+    Effect.gen(function* generateCourseContentProgram() {
+      const timestamp = currentIsoTimestamp();
+      const outputDraft = { ...draft, language: courseContentLanguage(draft) };
+      const activitiesByObjective = new Map(
+        draft.learningBlueprint.generatedActivities.flatMap((activity) =>
+          activity.objectiveIds.map((objectiveId) => [objectiveId, activity] as const),
+        ),
+      );
+      const sections: CourseSection[] = [];
+      for (const [index, objective] of draft.learningBlueprint.objectives.entries()) {
+        const activity = activitiesByObjective.get(objective.id);
+        if (activity === undefined) {
+          return yield* aiProviderContractError(
+            `Missing generated activity for objective: ${objective.title}.`,
+            'generatedActivities',
+          );
+        }
+        const references = sourceReferencesForObjective(objective);
+        sections.push({
+          blocks: sectionBlocksFor(outputDraft, objective, activity, index),
+          id: `content_section_${objective.id}`,
+          objectiveIds: [objective.id],
+          sourceConfidence: objective.sourceConfidence,
+          sourceReferences: references,
+          status: 'generated' as const,
+          summary: objective.capability,
+          title: objective.title,
+        });
+      }
+      return localCourseContentRendererResult({
         createdAt: timestamp,
         sections,
         status: sections.length > 0 ? 'generated' : 'empty',
         updatedAt: timestamp,
-      }),
-    ),
+      });
+    }),
   );
-};

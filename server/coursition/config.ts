@@ -53,6 +53,8 @@ export interface CoursitionSourceProviderConfig {
 const hasText = (value: string | undefined): value is string =>
   typeof value === 'string' && value.length > 0;
 
+export const providerKeyConfigured = (value: string | undefined): value is string => hasText(value);
+
 const runtimeEnv = () =>
   (
     globalThis as typeof globalThis & {
@@ -149,7 +151,7 @@ export const loadCoursitionSourceProviderConfig = (): CoursitionSourceProviderCo
   firecrawlBaseUrl: stringWithDefault('FIRECRAWL_BASE_URL', 'https://api.firecrawl.dev'),
   llamaCloudApiKey: optionalTrimmedString('LLAMA_CLOUD_API_KEY'),
   llamaCloudBaseUrl: stringWithDefault('LLAMA_CLOUD_BASE_URL', 'https://api.cloud.llamaindex.ai'),
-  llamaParseTier: stringWithDefault('LLAMA_PARSE_TIER', 'cost_effective'),
+  llamaParseTier: stringWithDefault('LLAMA_PARSE_TIER', 'agentic'),
   llamaParseVersion: stringWithDefault('LLAMA_PARSE_VERSION', 'latest'),
   nodeEnv: stringWithDefault('NODE_ENV', 'development'),
   tavilyApiKey: optionalTrimmedString('TAVILY_API_KEY'),

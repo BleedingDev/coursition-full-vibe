@@ -5,11 +5,13 @@ import { Helmet } from '@modern-js/runtime/head';
 import { Button } from '@techsio/ui-kit/atoms/button';
 import * as Data from 'effect/Data';
 import * as Effect from 'effect/Effect';
+import * as Option from 'effect/Option';
 
 import effectBff from '@api/effect/index';
 import { CoursitionWorkflowApp } from '@/features/coursition/coursition-workflow-app';
 import type { SupportedLanguage } from '@/features/coursition/i18n';
 import { resolveCurrentLanguage, supportedLanguages } from '@/features/coursition/i18n';
+import { coursePageLoaderDataFromUnknown } from '@/features/coursition/route-data';
 import type { CoursePageLoaderData } from '@/features/coursition/route-data';
 import {
   courseRoutePattern,
@@ -32,11 +34,6 @@ class PageEffectError extends Data.TaggedError('PageEffectError')<{
 const selectedMarkerClass = 'sr-only';
 const stateToken = (label: string) => ` - ${label}`;
 const recoverEffect = Effect.catch;
-const foreignPromise = <Value,>(evaluate: () => PromiseLike<Value>) =>
-  Effect.tryPromise({
-    catch: (cause) => new PageEffectError({ cause }),
-    try: evaluate,
-  });
 
 const createTranslate = (
   i18nInstance: ModernI18nInstance,
@@ -136,7 +133,9 @@ const resolvedThemeFor = (theme: Theme, mounted: boolean): Exclude<Theme, 'syste
 const Index = () => {
   const { i18nInstance, language } = useModernI18n();
   const location = useLocation();
-  const loaderData = useLoaderData({ strict: false }) as CoursePageLoaderData | undefined;
+  const loaderData = Option.getOrUndefined(
+    coursePageLoaderDataFromUnknown(useLoaderData({ strict: false })),
+  );
   const { language: loaderLanguage } = loaderData ?? {};
   const currentLanguage = resolveCurrentLanguage({
     loaderLanguage,
@@ -181,7 +180,10 @@ const Index = () => {
   const signOut = () => {
     setIsSigningOut(true);
     Effect.runFork(
-      foreignPromise(() => effectBff.client.auth.signOut({})).pipe(
+      Effect.tryPromise({
+        catch: (cause) => new PageEffectError({ cause }),
+        try: () => effectBff.client.auth.signOut({}),
+      }).pipe(
         Effect.asVoid,
         Effect.flatMap(() =>
           Effect.sync(() => globalThis.location.assign(dashboardRoutePath(currentLanguage))),

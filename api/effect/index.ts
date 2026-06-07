@@ -15,7 +15,8 @@ import {
   sessionPayloadSchema,
 } from '../../shared/coursition/effect-api.ts';
 import { auth } from '../../server/coursition/auth.ts';
-import { applyWorkflowAction } from '../../server/coursition/store.ts';
+import { evaluateActivityAnswerWithAi } from '../../server/coursition/ai-provider.ts';
+import { applyWorkflowAction, draftForOwner } from '../../server/coursition/store.ts';
 
 const messageFrom = (cause: unknown) =>
   cause instanceof Error ? cause.message : 'Coursition API request failed.';
@@ -245,9 +246,57 @@ const workflowLayer = HttpApiBuilder.group(coursitionEffectApi, 'workflow', (han
   ),
 );
 
+const activityEvaluationLayer = HttpApiBuilder.group(
+  coursitionEffectApi,
+  'activityEvaluation',
+  (handlers) =>
+    handlers.handle('evaluate', ({ payload, request }) =>
+      ownerIdForRequest(request).pipe(
+        Effect.flatMap((ownerId) =>
+          Effect.gen(function* evaluateActivityProgram() {
+            const draft = yield* Effect.tryPromise({
+              catch: (cause) => new CoursitionServerError({ message: messageFrom(cause) }),
+              try: () => draftForOwner(ownerId, payload.draftId),
+            });
+            const activity = draft.learningBlueprint.generatedActivities.find(
+              (candidate) => candidate.id === payload.activityId,
+            );
+            if (activity === undefined) {
+              return yield* new CoursitionServerError({
+                message: 'Activity is not available for evaluation.',
+              });
+            }
+            if (activity.type !== 'practice_task' && activity.type !== 'rubric_answer') {
+              return yield* new CoursitionServerError({
+                message: 'Only open-ended activities can be evaluated with AI.',
+              });
+            }
+            if (payload.answer.trim().length === 0) {
+              return yield* new CoursitionServerError({
+                message: 'Write an answer before requesting AI feedback.',
+              });
+            }
+            const evaluation = yield* Effect.tryPromise({
+              catch: (cause) => new CoursitionServerError({ message: messageFrom(cause) }),
+              try: () =>
+                evaluateActivityAnswerWithAi(
+                  draft,
+                  activity,
+                  payload.answer,
+                  payload.checkedCriteria,
+                ),
+            });
+            return evaluation.value;
+          }),
+        ),
+      ),
+    ),
+);
+
 const layer = HttpApiBuilder.layer(coursitionEffectApi).pipe(
   Layer.provide(authLayer),
   Layer.provide(workflowLayer),
+  Layer.provide(activityEvaluationLayer),
 );
 
 export default defineEffectBff({

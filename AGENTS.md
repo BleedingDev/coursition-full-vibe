@@ -18,6 +18,10 @@ Runtime i18n is enabled by default. Agents must put user-visible UI copy in `loc
 
 Routes are locale-prefixed by default through `localePathRedirect: true`. Keep localized pages under `src/routes/[lang]`, use links for language switching, and preserve canonical plus `hreflang` metadata. Production builds fail unless `MODERN_PUBLIC_SITE_URL` is set, so deployed canonical URLs always use the production origin.
 
+## Compatibility
+
+Do not add backwards-compatibility shims, legacy fallbacks, migration branches, or old-schema support unless the user explicitly asks for them. Prefer removing obsolete fields and failing clearly over silently preserving old behavior.
+
 ## Private Skills
 
 Private orchestration skills are installed automatically during `pnpm install` when the current developer is authorized for `TechsioCZ/skills`. The installer clones that private repository and copies only the allowlisted skills from `.agents/skills-lock.json`; unauthorized developers get a warning and can continue with the public contract.

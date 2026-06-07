@@ -103,6 +103,7 @@ describe.sequential('source-first Coursition workflow contract', () => {
       fileProcessors: string[];
       finalStep?: string;
       noteStatus?: string;
+      originalInputExposed: boolean;
       retriedSourceStatus?: string;
       sourceNames: string[];
       sourceTypes: string[];
@@ -125,6 +126,7 @@ describe.sequential('source-first Coursition workflow contract', () => {
     expect(result.spoofedStatus).toBe('unsupported');
     expect(result.deletedSourceStatus).toBe('deleted');
     expect(result.retriedSourceStatus).toBe('processed');
+    expect(result.originalInputExposed).toBe(false);
     expect(result.sourceTypes).toEqual(expect.arrayContaining(['notes', 'url', 'file']));
     expect(result.sourceNames).not.toContain('Deleted notes');
   }, 60_000);
@@ -132,6 +134,7 @@ describe.sequential('source-first Coursition workflow contract', () => {
   test('PDF sources use LlamaParse for initial parsing and retry', async () => {
     const result = await runScenario<{
       jobBodies: { file_id?: string; tier?: string; version?: string }[];
+      originalInputExposed: boolean;
       parsedContent?: string;
       parsedProcessor?: string;
       parsedProviderJobId?: string;
@@ -139,10 +142,10 @@ describe.sequential('source-first Coursition workflow contract', () => {
       pollCount: number;
       pollExpands: (string | null)[];
       retriedContent?: string;
-      retriedOriginalInputPreserved: boolean;
       retriedProviderJobId?: string;
       retriedStatus?: string;
       sameSourceId: boolean;
+      storageReferencePreserved: boolean;
       uploadCount: number;
     }>('llamaParsePdfLifecycle');
 
@@ -154,7 +157,8 @@ describe.sequential('source-first Coursition workflow contract', () => {
     expect(result.retriedProviderJobId).toBe('job-2');
     expect(result.retriedContent).toContain('Parsed PDF job-2');
     expect(result.sameSourceId).toBe(true);
-    expect(result.retriedOriginalInputPreserved).toBe(true);
+    expect(result.originalInputExposed).toBe(false);
+    expect(result.storageReferencePreserved).toBe(true);
     expect(result.uploadCount).toBe(2);
     expect(result.pollCount).toBe(2);
     expect(result.pollExpands).toEqual(['markdown', 'markdown']);
@@ -227,5 +231,47 @@ describe.sequential('source-first Coursition workflow contract', () => {
     expect(result.blockingFindingCount).toBe(0);
     expect(result.stepAfterPreparationEdit).toBe('objectives');
     expect(result.stepAfterSourceEdit).toBe('activityPlan');
+  }, 60_000);
+
+  test('course content waits for the reusable activity phase', async () => {
+    const result = await runScenario<{
+      blockedContentError: string;
+      generatedActivityCount: number;
+      sectionCount: number;
+      stepAfterContent?: string;
+    }>('activityPhaseBlocksContent');
+
+    expect(result.blockedContentError).toBe('Generate the activity plan before continuing.');
+    expect(result.generatedActivityCount).toBeGreaterThan(0);
+    expect(result.sectionCount).toBeGreaterThan(0);
+    expect(result.stepAfterContent).toBe('courseContent');
+  }, 60_000);
+
+  test('generate mode full-course action can create content after activities', async () => {
+    const result = await runScenario<{
+      courseGenerationStatus?: string;
+      generatedActivityCount: number;
+      sectionCount: number;
+      stepAfterGenerateCourse?: string;
+    }>('generateModeFullCourseAction');
+
+    expect(result.courseGenerationStatus).toBe('applied');
+    expect(result.generatedActivityCount).toBeGreaterThan(0);
+    expect(result.sectionCount).toBeGreaterThan(0);
+    expect(result.stepAfterGenerateCourse).toBe('preview');
+  }, 60_000);
+
+  test('activity plan completion requires playable generated activities', async () => {
+    const result = await runScenario<{
+      coverageAfterNotPlayable: boolean;
+      coverageAfterPlayable: boolean;
+      notPlayableType?: string;
+      playableType?: string;
+    }>('activityCoverageRequiresPlayableGeneration');
+
+    expect(result.notPlayableType).toBe('not_playable');
+    expect(result.coverageAfterNotPlayable).toBe(false);
+    expect(result.playableType).toBe('retrieval_check');
+    expect(result.coverageAfterPlayable).toBe(true);
   }, 60_000);
 });

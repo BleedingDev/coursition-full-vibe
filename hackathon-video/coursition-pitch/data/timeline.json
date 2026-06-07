@@ -1,0 +1,130 @@
+{
+  "voice": "Daniel",
+  "audio": "assets/voiceover.mp3",
+  "total": 83.327,
+  "audioDuration": 83.327,
+  "lines": {
+    "hook-1": {
+      "scene": "hook",
+      "start": 0.6,
+      "dur": 2.659,
+      "end": 3.259,
+      "text": "Course text is easy. Good learning is hard."
+    },
+    "pos-1": {
+      "scene": "positioning",
+      "start": 3.959,
+      "dur": 6.959,
+      "end": 10.918,
+      "text": "Teachable, Thinkific, and Moodle help you host and sell courses. Coursition helps you prepare better learning."
+    },
+    "fight-1": {
+      "scene": "fight",
+      "start": 11.618,
+      "dur": 7.958,
+      "end": 19.576,
+      "text": "I came in with a rough prototype and one risky bet: that A.I. could turn source material into activities that actually help people learn."
+    },
+    "fight-2": {
+      "scene": "fight",
+      "start": 19.896,
+      "dur": 8.406,
+      "end": 28.302,
+      "text": "The surprise? Generating content is easy. Generating practice is hard. So I stopped asking the model to invent random mini-games."
+    },
+    "eng-1": {
+      "scene": "engines",
+      "start": 29.002,
+      "dur": 10.557,
+      "end": 39.558,
+      "text": "Instead, it fills reusable activity engines: retrieval checks, scenario decisions, ordering and matching, practice tasks, and rubric answers."
+    },
+    "demo-1": {
+      "scene": "demo",
+      "start": 40.258,
+      "dur": 6.727,
+      "end": 46.986,
+      "text": "Here is the flow. Choose how much help you want, then add a source — a dense German statistics PDF."
+    },
+    "demo-2": {
+      "scene": "demo",
+      "start": 47.306,
+      "dur": 5.041,
+      "end": 52.346,
+      "text": "Coursition writes the course preparation — who it is for and what they should be able to do."
+    },
+    "demo-3": {
+      "scene": "demo",
+      "start": 52.666,
+      "dur": 1.721,
+      "end": 54.388,
+      "text": "It maps the learning objectives,"
+    },
+    "demo-4": {
+      "scene": "demo",
+      "start": 54.708,
+      "dur": 5.007,
+      "end": 59.715,
+      "text": "and an activity plan, where every activity is one of those reusable engines."
+    },
+    "demo-5": {
+      "scene": "demo",
+      "start": 60.035,
+      "dur": 4.76,
+      "end": 64.795,
+      "text": "Then a playable preview — where the course stops being text and becomes practice."
+    },
+    "res-1": {
+      "scene": "result",
+      "start": 65.495,
+      "dur": 10.499,
+      "end": 75.994,
+      "text": "It is not sold yet, and it is not finished. But the wedge is sharper. Next, I test it with real creators — two thousand on my newsletter, ten thousand on LinkedIn."
+    },
+    "close-1": {
+      "scene": "close",
+      "start": 76.694,
+      "dur": 5.533,
+      "end": 82.227,
+      "text": "Coursition. AI-native course preparation for reusable, interactive learning."
+    }
+  },
+  "scenes": {
+    "hook": {
+      "start": 0.6,
+      "end": 3.259,
+      "lineIds": ["hook-1"]
+    },
+    "positioning": {
+      "start": 3.959,
+      "end": 10.918,
+      "lineIds": ["pos-1"]
+    },
+    "fight": {
+      "start": 11.618,
+      "end": 28.302,
+      "lineIds": ["fight-1", "fight-2"]
+    },
+    "engines": {
+      "start": 29.002,
+      "end": 39.558,
+      "lineIds": ["eng-1"]
+    },
+    "demo": {
+      "start": 40.258,
+      "end": 64.795,
+      "lineIds": ["demo-1", "demo-2", "demo-3", "demo-4", "demo-5"]
+    },
+    "result": {
+      "start": 65.495,
+      "end": 75.994,
+      "lineIds": ["res-1"]
+    },
+    "close": {
+      "start": 76.694,
+      "end": 82.227,
+      "lineIds": ["close-1"]
+    }
+  },
+  "sceneOrder": ["hook", "positioning", "fight", "engines", "demo", "result", "close"]
+}

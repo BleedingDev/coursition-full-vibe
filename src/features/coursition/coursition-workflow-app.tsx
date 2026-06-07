@@ -14,12 +14,14 @@ import * as Cause from 'effect/Cause';
 import * as Data from 'effect/Data';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
+import * as Option from 'effect/Option';
+import * as Schema from 'effect/Schema';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent, ComponentType, FormEvent } from 'react';
+import type { ChangeEvent, ComponentType, FocusEvent, FormEvent } from 'react';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
 import effectBff from '@api/effect/index';
 import type {
-  ActivityType,
+  ActivityEvaluationResponse,
   AiMode,
   CourseLanguagePreference,
   DraftStep,
@@ -32,21 +34,28 @@ import {
   emptyCoursePreparation,
   getWorkflowPreviewGate,
   getWorkflowStepGate,
-  hasActivityPlan as draftHasActivityPlan,
   hasCourseContent as draftHasCourseContent,
   hasCoursePreparation as draftHasCoursePreparation,
   hasGeneratedCourse as draftHasGeneratedCourse,
   hasObjectiveMap as draftHasObjectiveMap,
+  hasPlayableGeneratedActivityCoverage as draftHasPlayableGeneratedActivityCoverage,
   hasUsableSourceMaterial,
   workflowStepIndex,
   workflowSteps,
 } from '@shared/coursition/workflow';
 import type {
   CoursePreparation,
-  SessionPayload,
   SessionUser,
   WorkflowAction,
   WorkflowSnapshot,
+} from '@shared/coursition/effect-api';
+import {
+  activityEvaluationRequestSchema,
+  activityEvaluationResponseSchema,
+  coursePreparationSchema,
+  sessionPayloadSchema,
+  workflowActionSchema,
+  workflowSnapshotSchema,
 } from '@shared/coursition/effect-api';
 import type { CourseRouteLanguage, CourseRouteMatch } from '@shared/coursition/routes';
 import { courseRoutePattern, courseRouteStepSlug } from '@shared/coursition/routes';
@@ -63,7 +72,9 @@ interface CoursitionWorkflowAppProps {
 type AuthMode = 'signIn' | 'signUp';
 type BusyAction = WorkflowAction['action'] | 'auth' | 'file';
 type CourseDraft = NonNullable<WorkflowSnapshot['draft']>;
+type AiRun = CourseDraft['aiRuns'][number];
 type GeneratedActivity = CourseDraft['learningBlueprint']['generatedActivities'][number];
+type PlayableGeneratedActivityType = Exclude<GeneratedActivity['type'], 'not_playable'>;
 type WorkflowRunner = (action: WorkflowAction, shouldNavigate?: boolean) => void;
 type InputChangeEvent = ChangeEvent<HTMLInputElement>;
 type TextareaChangeEvent = ChangeEvent<HTMLTextAreaElement>;
@@ -123,9 +134,35 @@ interface NavigationStepVisualState {
   isStale: boolean;
 }
 
-type FileReaderResume = (effect: Effect.Effect<string, CoursitionUiEffectError>) => void;
-
 const workflowApiPath = '/api/coursition/workflow';
+const activityEvaluationApiPath = '/api/coursition/activity-evaluation';
+const workflowActionJsonSchema = Schema.fromJsonString(workflowActionSchema);
+const activityEvaluationRequestJsonSchema = Schema.fromJsonString(activityEvaluationRequestSchema);
+const workflowSnapshotFromUnknown = Schema.decodeUnknownEffect(workflowSnapshotSchema);
+const activityEvaluationResponseFromUnknown = Schema.decodeUnknownEffect(
+  activityEvaluationResponseSchema,
+);
+const sessionPayloadFromUnknown = Schema.decodeUnknownEffect(sessionPayloadSchema);
+const workflowErrorBodyJsonSchema = Schema.fromJsonString(
+  Schema.Struct({ message: Schema.optional(Schema.String) }),
+);
+const coursePreparationKeyJsonSchema = Schema.fromJsonString(coursePreparationSchema);
+const objectiveEditKeyJsonSchema = Schema.fromJsonString(
+  Schema.Struct({
+    capability: Schema.String,
+    title: Schema.String,
+  }),
+);
+const activityBriefEditKeyJsonSchema = Schema.fromJsonString(
+  Schema.Struct({
+    feedbackGuidance: Schema.String,
+    instructions: Schema.String,
+    learnerAction: Schema.String,
+    successCriteria: Schema.String,
+    title: Schema.String,
+    type: Schema.String,
+  }),
+);
 const sourceTypes = ['notes', 'url', 'file'] as const satisfies readonly SourceType[];
 const navigationSteps = [...workflowSteps, 'preview'] as const satisfies readonly DraftStep[];
 const languagePreferences = [
@@ -150,7 +187,19 @@ const formString = (formData: FormData, field: string) => {
 const activeSources = (draft: CourseDraft | null) =>
   draft?.sources.filter((source) => source.status !== 'deleted') ?? [];
 
-const coursePreparationKey = (preparation: CoursePreparation) => JSON.stringify(preparation);
+const coursePreparationKey = Schema.encodeSync(coursePreparationKeyJsonSchema);
+
+const objectiveEditKey = (title: string, capability: string) =>
+  Schema.encodeSync(objectiveEditKeyJsonSchema)({ capability, title });
+
+const activityBriefEditKey = (brief: {
+  feedbackGuidance: string;
+  instructions: string;
+  learnerAction: string;
+  successCriteria: string;
+  title: string;
+  type: string;
+}) => Schema.encodeSync(activityBriefEditKeyJsonSchema)(brief);
 
 const hasAnyCourseContent = (draft: CourseDraft | null) =>
   draft?.courseContent.sections.some((section) => section.blocks.length > 0) ?? false;
@@ -160,6 +209,50 @@ const hasActivityPlan = (draft: CourseDraft | null) =>
 
 const hasObjectives = (draft: CourseDraft | null) =>
   (draft?.learningBlueprint.objectives.length ?? 0) > 0;
+
+const failedAiRunNotice = (run: AiRun, fallback: string) => {
+  const failureReason = run.failureReason?.trim() ?? '';
+  return failureReason.length > 0 ? failureReason : fallback;
+};
+
+const generationRunTypeFor = (action: WorkflowAction['action']) => {
+  if (action === 'generateCourse') {
+    return 'course_generation' as const;
+  }
+  if (action === 'goToStep') {
+    return 'course_preparation_generation' as const;
+  }
+  if (action === 'generateLearningBlueprint') {
+    return 'learning_blueprint_generation' as const;
+  }
+  if (action === 'generateActivities') {
+    return 'activity_generation' as const;
+  }
+  if (action === 'generateCourseContent') {
+    return 'course_content_generation' as const;
+  }
+  return null;
+};
+
+const failedGenerationRunFor = (
+  previousDraft: CourseDraft | null,
+  nextDraft: CourseDraft | null,
+  action: WorkflowAction['action'],
+) => {
+  const runType = generationRunTypeFor(action);
+  if (nextDraft === null || runType === null) {
+    return null;
+  }
+  const previousRunIds =
+    previousDraft === null ? new Set<string>() : new Set(previousDraft.aiRuns.map((run) => run.id));
+  return (
+    nextDraft.aiRuns
+      .toReversed()
+      .find(
+        (run) => run.type === runType && run.status === 'failed' && !previousRunIds.has(run.id),
+      ) ?? null
+  );
+};
 
 const shouldShowSourcePreview = (content: string) =>
   content.trim().length !== 0 && !sourceDataUrlPattern.test(content);
@@ -243,7 +336,7 @@ const isNavigationStepComplete = (draft: CourseDraft, step: DraftStep) => {
       return draftHasObjectiveMap(draft);
     }
     case 'activityPlan': {
-      return draftHasActivityPlan(draft);
+      return draftHasPlayableGeneratedActivityCoverage(draft);
     }
     case 'courseContent': {
       return draftHasCourseContent(draft);
@@ -363,92 +456,158 @@ const errorMessageFrom = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-const foreignPromise = <Value,>(
-  evaluate: () => PromiseLike<Value>,
-  fallback = 'Operation failed.',
-) =>
-  Effect.tryPromise({
-    catch: (cause) =>
-      new CoursitionUiEffectError({
-        cause,
-        message: errorMessageFrom(cause, fallback),
-      }),
-    try: evaluate,
-  });
-
 const workflowErrorMessageFromBody = (body: string, fallback: string) => {
   if (body.trim().length === 0) {
     return fallback;
   }
-  let message = body;
-  try {
-    const { message: payloadMessage } = JSON.parse(body) as { message?: unknown };
-    if (typeof payloadMessage === 'string') {
-      message = payloadMessage;
-    }
-  } catch {
-    message = body;
+  const payload = Schema.decodeUnknownOption(workflowErrorBodyJsonSchema)(body);
+  if (Option.isSome(payload) && typeof payload.value.message === 'string') {
+    return payload.value.message;
   }
-  return message;
+  return body;
 };
 
-const workflowRequestEffect = (
-  action: WorkflowAction,
-  fallback: string,
-): Effect.Effect<WorkflowSnapshot, CoursitionUiEffectError> =>
+const workflowRequestEffect = (action: WorkflowAction, fallback: string) =>
   Effect.gen(function* workflowRequestProgram() {
-    const response = yield* foreignPromise(() =>
-      globalThis['fetch'](workflowApiPath, {
-        body: JSON.stringify(action),
-        credentials: 'same-origin',
-        headers: {
-          accept: 'application/json',
-          'content-type': 'application/json',
-        },
-        method: 'POST',
-      }),
-    );
+    const requestBody = yield* Schema.encodeEffect(workflowActionJsonSchema)(action);
+    const response = yield* Effect.tryPromise({
+      catch: (cause) =>
+        new CoursitionUiEffectError({
+          cause,
+          message: errorMessageFrom(cause, fallback),
+        }),
+      try: () =>
+        globalThis['fetch'](workflowApiPath, {
+          body: requestBody,
+          credentials: 'same-origin',
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+          },
+          method: 'POST',
+        }),
+    });
     if (!response.ok) {
-      const body = yield* foreignPromise(() => response.text());
+      const body = yield* Effect.tryPromise({
+        catch: (cause) =>
+          new CoursitionUiEffectError({
+            cause,
+            message: errorMessageFrom(cause, fallback),
+          }),
+        try: () => response.text(),
+      });
       return yield* new CoursitionUiEffectError({
         cause: response.status,
         message: workflowErrorMessageFromBody(body, fallback),
       });
     }
-    return yield* foreignPromise(() => response.json() as Promise<WorkflowSnapshot>);
+    const body = yield* Effect.tryPromise({
+      catch: (cause) =>
+        new CoursitionUiEffectError({
+          cause,
+          message: errorMessageFrom(cause, fallback),
+        }),
+      try: () => response.json(),
+    });
+    return yield* workflowSnapshotFromUnknown(body).pipe(
+      Effect.mapError(
+        (cause) =>
+          new CoursitionUiEffectError({
+            cause,
+            message: errorMessageFrom(cause, fallback),
+          }),
+      ),
+    );
+  });
+
+const activityEvaluationRequestEffect = (
+  payload: {
+    activityId: string;
+    answer: string;
+    checkedCriteria: readonly string[];
+    draftId: string;
+  },
+  fallback: string,
+) =>
+  Effect.gen(function* activityEvaluationRequestProgram() {
+    const requestBody = yield* Schema.encodeEffect(activityEvaluationRequestJsonSchema)({
+      ...payload,
+      checkedCriteria: [...payload.checkedCriteria],
+    });
+    const response = yield* Effect.tryPromise({
+      catch: (cause) =>
+        new CoursitionUiEffectError({
+          cause,
+          message: errorMessageFrom(cause, fallback),
+        }),
+      try: () =>
+        globalThis['fetch'](activityEvaluationApiPath, {
+          body: requestBody,
+          credentials: 'same-origin',
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+          },
+          method: 'POST',
+        }),
+    });
+    if (!response.ok) {
+      const body = yield* Effect.tryPromise({
+        catch: (cause) =>
+          new CoursitionUiEffectError({
+            cause,
+            message: errorMessageFrom(cause, fallback),
+          }),
+        try: () => response.text(),
+      });
+      return yield* new CoursitionUiEffectError({
+        cause: response.status,
+        message: workflowErrorMessageFromBody(body, fallback),
+      });
+    }
+    const body = yield* Effect.tryPromise({
+      catch: (cause) =>
+        new CoursitionUiEffectError({
+          cause,
+          message: errorMessageFrom(cause, fallback),
+        }),
+      try: () => response.json(),
+    });
+    return yield* activityEvaluationResponseFromUnknown(body).pipe(
+      Effect.mapError(
+        (cause) =>
+          new CoursitionUiEffectError({
+            cause,
+            message: errorMessageFrom(cause, fallback),
+          }),
+      ),
+    );
   });
 
 const fileReadFailureMessage = 'Unable to read selected file.';
 
-const fileReadFailure = (cause: unknown) =>
-  new CoursitionUiEffectError({
-    cause,
-    message: errorMessageFrom(cause, fileReadFailureMessage),
-  });
+const bytesToBase64 = (bytes: Uint8Array) => {
+  const chunkSize = 32_768;
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCodePoint(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+};
 
 const readFileAsDataUrlEffect = (file: File) =>
-  Effect.callback((resume: FileReaderResume) => {
-    const reader = new FileReader();
-    const fail = (cause: unknown) => resume(Effect.fail(fileReadFailure(cause)));
-    reader.addEventListener('error', () => fail(reader.error ?? new Error(fileReadFailureMessage)));
-    reader.addEventListener('load', () => {
-      if (typeof reader.result === 'string') {
-        resume(Effect.succeed(reader.result));
-        return;
-      }
-      fail(new Error(fileReadFailureMessage));
-    });
-    reader.readAsDataURL(file);
-    return Effect.sync(() => {
-      if (reader.readyState === FileReader.LOADING) {
-        reader.abort();
-      }
-    });
+  Effect.tryPromise({
+    catch: (cause) =>
+      new CoursitionUiEffectError({
+        cause,
+        message: errorMessageFrom(cause, fileReadFailureMessage),
+      }),
+    try: () => file.arrayBuffer(),
   }).pipe(
-    Effect.map((content) => ({
-      content,
-      sizeLabel: `${file.size} bytes`,
-    })),
+    Effect.map((buffer) => {
+      const mimeType = file.type.length > 0 ? file.type : 'application/octet-stream';
+      return `data:${mimeType};base64,${bytesToBase64(new Uint8Array(buffer))}`;
+    }),
   );
 
 const filePayloadFromEffect = readFileAsDataUrlEffect;
@@ -618,21 +777,15 @@ const MarkdownEditorClient = lazy(() =>
   ),
 );
 
-const SourceMarkdownPreview = ({
-  loadingLabel,
-  value,
-}: {
-  loadingLabel: string;
-  value: string;
-}) => (
+const SourceTextPreview = ({ value }: { value: string }) => (
   <div className="max-h-72 overflow-auto rounded-md bg-base p-3">
-    <Suspense
-      fallback={
-        <div className="grid min-h-24 place-items-center text-sm font-medium text-fg-secondary">
-          {loadingLabel}
-        </div>
-      }
-    >
+    <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-fg-primary">{value}</pre>
+  </div>
+);
+
+const MarkdownText = ({ className = '', value }: { className?: string; value: string }) => (
+  <div className={`coursition-markdown-text text-sm leading-6 text-fg-primary ${className}`}>
+    <Suspense fallback={<p className="whitespace-pre-wrap">{value}</p>}>
       <MarkdownEditorClient readOnly value={value} />
     </Suspense>
   </div>
@@ -674,38 +827,6 @@ const NavigationStepIndicatorContent = ({
   );
 };
 
-const CourseContentView = ({ draft, t }: { draft: CourseDraft; t: Translate }) => (
-  <div className="grid gap-6">
-    {draft.courseContent.sections.map((section, sectionIndex) => (
-      <section
-        className="grid gap-4 border-t border-border-primary pt-4 first:border-t-0 first:pt-0"
-        key={section.id}
-      >
-        <header className="grid gap-2">
-          <p className={tinyMetaClass}>
-            {t('coursition.app.courseContent.section')} {sectionIndex + 1}
-          </p>
-          <h3 className="text-lg font-bold text-fg-primary">{section.title}</h3>
-          <p className="text-sm leading-6 text-fg-primary">{section.summary}</p>
-        </header>
-        <div className="grid gap-4">
-          {section.blocks.map((block) => {
-            const body = contentBlockBody(block);
-            return (
-              <article className="grid gap-2" key={block.id}>
-                <h4 className="text-base font-bold text-fg-primary">
-                  {t(`coursition.app.blockTypes.${block.type}`)}
-                </h4>
-                <p className="whitespace-pre-wrap text-sm leading-6 text-fg-primary">{body}</p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-    ))}
-  </div>
-);
-
 type RetrievalCheckActivity = Extract<GeneratedActivity, { type: 'retrieval_check' }>;
 type PracticeTaskActivity = Extract<GeneratedActivity, { type: 'practice_task' }>;
 type ScenarioDecisionActivity = Extract<GeneratedActivity, { type: 'scenario_decision' }>;
@@ -714,8 +835,13 @@ type RubricAnswerActivity = Extract<GeneratedActivity, { type: 'rubric_answer' }
 
 interface ActivityEngineProps<Activity> {
   activity: Activity;
+  draftId?: string;
   showPrompt?: boolean;
   t: Translate;
+}
+
+interface OpenEndedActivityEngineProps<Activity> extends ActivityEngineProps<Activity> {
+  draftId: string;
 }
 
 const FeedbackPanel = ({
@@ -728,14 +854,14 @@ const FeedbackPanel = ({
   tone: 'success' | 'warning';
 }) => (
   <output
-    className={`rounded-md p-3 text-sm leading-6 ${
+    className={`coursition-feedback-panel rounded-md p-3 text-sm leading-6 ${
       tone === 'success'
-        ? 'bg-button-bg-primary-light text-button-fg-primary-light'
-        : 'bg-button-bg-warning-light text-button-fg-warning-light'
+        ? 'coursition-feedback-panel--success'
+        : 'coursition-feedback-panel--warning'
     }`}
   >
     <p className="font-semibold">{title}</p>
-    <p className="whitespace-pre-wrap">{body}</p>
+    <MarkdownText value={body} />
   </output>
 );
 
@@ -748,6 +874,107 @@ type IncompleteActivityReason =
   | 'prompt';
 
 const hasText = (value: string) => value.trim().length > 0;
+
+const evaluationFeedbackBody = (evaluation: ActivityEvaluationResponse, t: Translate) => {
+  const criteriaFeedback = evaluation.criteria.map(
+    (criterion) =>
+      `- [${criterion.met ? 'x' : ' '}] **${criterion.criterion}**: ${criterion.feedback}`,
+  );
+  return [
+    evaluation.feedbackMarkdown,
+    criteriaFeedback.length > 0 ? criteriaFeedback.join('\n') : '',
+    `${t('coursition.app.preview.nextStep')}: ${evaluation.nextStep}`,
+  ]
+    .filter(hasText)
+    .join('\n\n');
+};
+
+const evaluationFeedbackTone = (evaluation: ActivityEvaluationResponse): 'success' | 'warning' =>
+  evaluation.score >= 0.7 ? 'success' : 'warning';
+
+const EvaluationFeedbackPanel = ({
+  evaluation,
+  t,
+}: {
+  evaluation: ActivityEvaluationResponse | null;
+  t: Translate;
+}) => {
+  if (evaluation === null) {
+    return null;
+  }
+  return (
+    <FeedbackPanel
+      body={evaluationFeedbackBody(evaluation, t)}
+      title={t('coursition.app.preview.aiFeedback')}
+      tone={evaluationFeedbackTone(evaluation)}
+    />
+  );
+};
+
+const useActivityEvaluation = ({
+  activityId,
+  draftId,
+  t,
+}: {
+  activityId: string;
+  draftId: string;
+  t: Translate;
+}) => {
+  const [evaluation, setEvaluation] = useState<ActivityEvaluationResponse | null>(null);
+  const [evaluationError, setEvaluationError] = useState('');
+  const [isEvaluating, setIsEvaluating] = useState(false);
+
+  const resetEvaluation = useCallback(() => {
+    setEvaluation(null);
+    setEvaluationError('');
+  }, []);
+
+  const evaluateAnswer = useCallback(
+    (answer: string, checkedCriteria: readonly string[] = []) => {
+      Effect.runFork(
+        Effect.gen(function* evaluateActivityProgram() {
+          yield* Effect.sync(() => {
+            setIsEvaluating(true);
+            setEvaluationError('');
+          });
+          const resultExit = yield* Effect.exit(
+            activityEvaluationRequestEffect(
+              {
+                activityId,
+                answer,
+                checkedCriteria,
+                draftId,
+              },
+              t('coursition.app.preview.evaluationFailed'),
+            ),
+          );
+          yield* Effect.sync(() => {
+            if (Exit.isFailure(resultExit)) {
+              setEvaluation(null);
+              setEvaluationError(
+                errorMessageFrom(
+                  resultExit.cause.pipe(Cause.squash),
+                  t('coursition.app.preview.evaluationFailed'),
+                ),
+              );
+              return;
+            }
+            setEvaluation(resultExit.value);
+          });
+        }).pipe(Effect.ensuring(Effect.sync(() => setIsEvaluating(false)))),
+      );
+    },
+    [activityId, draftId, t],
+  );
+
+  return {
+    evaluateAnswer,
+    evaluation,
+    evaluationError,
+    isEvaluating,
+    resetEvaluation,
+  };
+};
 
 const hasValidOrderingPositions = (
   items: OrderingMatchingActivity['interaction']['items'],
@@ -865,9 +1092,7 @@ const RetrievalCheckEngine = ({
   return (
     <div className="grid gap-3">
       {showPrompt ? (
-        <p className="whitespace-pre-wrap text-sm leading-6 text-fg-primary">
-          {interaction.question}
-        </p>
+        <MarkdownText className="text-sm leading-6 text-fg-primary" value={interaction.question} />
       ) : null}
       <RadioCard
         className="grid gap-2"
@@ -925,26 +1150,33 @@ const RetrievalCheckEngine = ({
 
 const PracticeTaskEngine = ({
   activity,
+  draftId,
   showPrompt = true,
   t,
-}: ActivityEngineProps<PracticeTaskActivity>) => {
+}: OpenEndedActivityEngineProps<PracticeTaskActivity>) => {
   const { interaction } = activity;
   const [answer, setAnswer] = useState('');
-  const [hasCompared, setHasCompared] = useState(false);
+  const { evaluateAnswer, evaluation, evaluationError, isEvaluating, resetEvaluation } =
+    useActivityEvaluation({
+      activityId: activity.id,
+      draftId,
+      t,
+    });
+  const submitEvaluation = () => {
+    evaluateAnswer(answer.trim());
+  };
 
   return (
     <div className="grid gap-3">
       {showPrompt ? (
-        <p className="whitespace-pre-wrap text-sm leading-6 text-fg-primary">
-          {interaction.prompt}
-        </p>
+        <MarkdownText className="text-sm leading-6 text-fg-primary" value={interaction.prompt} />
       ) : null}
       <FormTextarea
         id={`${activity.id}-practice-answer`}
         label={interaction.submissionLabel}
         onChange={(event) => {
           setAnswer(event.currentTarget.value);
-          setHasCompared(false);
+          resetEvaluation();
         }}
         rows={6}
         value={answer}
@@ -961,19 +1193,22 @@ const PracticeTaskEngine = ({
       </div>
       <div>
         <Button
-          disabled={answer.trim().length === 0}
-          onClick={() => setHasCompared(true)}
+          disabled={answer.trim().length === 0 || isEvaluating}
+          onClick={submitEvaluation}
           type="button"
           variant="primary"
         >
-          {t('coursition.app.preview.compareWithCriteria')}
+          {isEvaluating
+            ? t('coursition.app.preview.evaluating')
+            : t('coursition.app.preview.evaluateWithAi')}
         </Button>
       </div>
-      {hasCompared ? (
+      <EvaluationFeedbackPanel evaluation={evaluation} t={t} />
+      {evaluationError.length > 0 ? (
         <FeedbackPanel
-          body={interaction.feedback}
-          title={t('coursition.app.preview.revise')}
-          tone="success"
+          body={evaluationError}
+          title={t('coursition.app.preview.keepWorking')}
+          tone="warning"
         />
       ) : null}
     </div>
@@ -995,9 +1230,7 @@ const ScenarioDecisionEngine = ({
   return (
     <div className="grid gap-3">
       {showPrompt ? (
-        <p className="whitespace-pre-wrap text-sm leading-6 text-fg-primary">
-          {interaction.scenario}
-        </p>
+        <MarkdownText className="text-sm leading-6 text-fg-primary" value={interaction.scenario} />
       ) : null}
       <RadioCard
         className="grid gap-2"
@@ -1133,9 +1366,7 @@ const OrderingMatchingEngine = ({
     return (
       <div className="grid gap-3">
         {showPrompt ? (
-          <p className="whitespace-pre-wrap text-sm leading-6 text-fg-primary">
-            {interaction.prompt}
-          </p>
+          <MarkdownText className="text-sm leading-6 text-fg-primary" value={interaction.prompt} />
         ) : null}
         <p className={mutedTextClass}>
           {t('coursition.app.preview.matchingInstruction', {
@@ -1240,9 +1471,7 @@ const OrderingMatchingEngine = ({
   return (
     <div className="grid gap-3">
       {showPrompt ? (
-        <p className="whitespace-pre-wrap text-sm leading-6 text-fg-primary">
-          {interaction.prompt}
-        </p>
+        <MarkdownText className="text-sm leading-6 text-fg-primary" value={interaction.prompt} />
       ) : null}
       <p className={mutedTextClass}>
         {t('coursition.app.preview.orderingInstruction', {
@@ -1335,28 +1564,35 @@ const OrderingMatchingEngine = ({
 
 const RubricAnswerEngine = ({
   activity,
+  draftId,
   showPrompt = true,
   t,
-}: ActivityEngineProps<RubricAnswerActivity>) => {
+}: OpenEndedActivityEngineProps<RubricAnswerActivity>) => {
   const { interaction } = activity;
   const [answer, setAnswer] = useState('');
   const [checkedCriteria, setCheckedCriteria] = useState<readonly string[]>([]);
-  const [hasCompared, setHasCompared] = useState(false);
+  const { evaluateAnswer, evaluation, evaluationError, isEvaluating, resetEvaluation } =
+    useActivityEvaluation({
+      activityId: activity.id,
+      draftId,
+      t,
+    });
   const checkedCount = checkedCriteria.length;
+  const runEvaluation = () => {
+    evaluateAnswer(answer.trim(), checkedCriteria);
+  };
 
   return (
     <div className="grid gap-3">
       {showPrompt ? (
-        <p className="whitespace-pre-wrap text-sm leading-6 text-fg-primary">
-          {interaction.prompt}
-        </p>
+        <MarkdownText className="text-sm leading-6 text-fg-primary" value={interaction.prompt} />
       ) : null}
       <FormTextarea
         id={`${activity.id}-rubric-answer`}
         label={t('coursition.app.preview.answer')}
         onChange={(event) => {
           setAnswer(event.currentTarget.value);
-          setHasCompared(false);
+          resetEvaluation();
         }}
         rows={5}
         value={answer}
@@ -1373,7 +1609,7 @@ const RubricAnswerEngine = ({
               setCheckedCriteria((current) =>
                 isChecked ? [...current, criterion] : current.filter((item) => item !== criterion),
               );
-              setHasCompared(false);
+              resetEvaluation();
             }}
           />
         ))}
@@ -1386,19 +1622,22 @@ const RubricAnswerEngine = ({
       </div>
       <div>
         <Button
-          disabled={answer.trim().length === 0 || checkedCount === 0}
-          onClick={() => setHasCompared(true)}
+          disabled={answer.trim().length === 0 || isEvaluating}
+          onClick={runEvaluation}
           type="button"
           variant="primary"
         >
-          {t('coursition.app.preview.compareWithRubric')}
+          {isEvaluating
+            ? t('coursition.app.preview.evaluating')
+            : t('coursition.app.preview.evaluateWithAi')}
         </Button>
       </div>
-      {hasCompared ? (
+      <EvaluationFeedbackPanel evaluation={evaluation} t={t} />
+      {evaluationError.length > 0 ? (
         <FeedbackPanel
-          body={interaction.feedback}
-          title={t('coursition.app.preview.revise')}
-          tone={checkedCount === interaction.criteria.length ? 'success' : 'warning'}
+          body={evaluationError}
+          title={t('coursition.app.preview.keepWorking')}
+          tone="warning"
         />
       ) : null}
     </div>
@@ -1438,20 +1677,33 @@ const activityPromptFor = (activity: GeneratedActivity): string => {
   }
 };
 
-const activityPromptPartsFor = (activity: GeneratedActivity) => {
-  const [lead = '', ...details] = activityPromptFor(activity).split(/\n\n/u);
-  return {
-    details: details.join('\n\n'),
-    lead,
-  };
+const activitySkinTypeFor = (activity: GeneratedActivity): PlayableGeneratedActivityType | null => {
+  switch (activity.type) {
+    case 'retrieval_check':
+    case 'practice_task':
+    case 'scenario_decision':
+    case 'ordering_matching':
+    case 'rubric_answer': {
+      return activity.type;
+    }
+    case 'not_playable': {
+      return null;
+    }
+    default: {
+      const unsupportedActivity: never = activity;
+      return unsupportedActivity;
+    }
+  }
 };
 
 const ActivityPreviewCard = ({
   activity,
+  draftId,
   index,
   t,
 }: {
   activity: GeneratedActivity;
+  draftId: string;
   index: number;
   t: Translate;
 }) => {
@@ -1461,7 +1713,9 @@ const ActivityPreviewCard = ({
         return <RetrievalCheckEngine activity={activity} showPrompt={false} t={t} />;
       }
       case 'practice_task': {
-        return <PracticeTaskEngine activity={activity} showPrompt={false} t={t} />;
+        return (
+          <PracticeTaskEngine activity={activity} draftId={draftId} showPrompt={false} t={t} />
+        );
       }
       case 'scenario_decision': {
         return <ScenarioDecisionEngine activity={activity} showPrompt={false} t={t} />;
@@ -1470,7 +1724,9 @@ const ActivityPreviewCard = ({
         return <OrderingMatchingEngine activity={activity} showPrompt={false} t={t} />;
       }
       case 'rubric_answer': {
-        return <RubricAnswerEngine activity={activity} showPrompt={false} t={t} />;
+        return (
+          <RubricAnswerEngine activity={activity} draftId={draftId} showPrompt={false} t={t} />
+        );
       }
       case 'not_playable': {
         return null;
@@ -1483,11 +1739,11 @@ const ActivityPreviewCard = ({
   };
 
   const typeLabel = t(`coursition.app.activityPlan.types.${activity.type}`);
-  const promptParts = activityPromptPartsFor(activity);
+  const prompt = activityPromptFor(activity).trim();
   const incompleteReason = incompleteActivityReasonFor(activity);
-  const promptLead = promptParts.lead.trim();
-  const heading = hasText(promptLead)
-    ? promptLead
+  const activitySkinType = activitySkinTypeFor(activity);
+  const heading = hasText(prompt)
+    ? typeLabel
     : t('coursition.app.preview.incompleteActivityHeading');
 
   return (
@@ -1497,18 +1753,24 @@ const ActivityPreviewCard = ({
           <p className={tinyMetaClass}>
             {t('coursition.app.preview.activityNumber', { number: index + 1 })}
           </p>
-          <p className="rounded-md bg-base px-2 py-1 text-xs font-semibold text-fg-secondary">
-            {typeLabel}
-          </p>
         </div>
-        <h4 className="whitespace-pre-wrap text-base font-bold leading-6 text-fg-primary">
-          {heading}
-        </h4>
-        {promptParts.details.length > 0 ? (
-          <p className="whitespace-pre-wrap text-sm leading-6 text-fg-primary">
-            {promptParts.details}
-          </p>
+        <h4 className="text-base font-bold leading-6 text-fg-primary">{heading}</h4>
+        {hasText(prompt) ? (
+          <MarkdownText className="text-sm leading-6 text-fg-primary" value={prompt} />
         ) : null}
+        {activitySkinType === null ? null : (
+          <div className="grid gap-1 rounded-md bg-base p-2">
+            <p className="text-sm font-semibold text-fg-primary">
+              {t(`coursition.app.preview.skins.${activitySkinType}.label`)}
+            </p>
+            <p className={mutedTextClass}>
+              {t(`coursition.app.preview.skins.${activitySkinType}.what`)}
+            </p>
+            <p className={tinyMetaClass}>
+              {t(`coursition.app.preview.skins.${activitySkinType}.why`)}
+            </p>
+          </div>
+        )}
       </header>
       {incompleteReason === null ? (
         renderEngine()
@@ -1517,6 +1779,126 @@ const ActivityPreviewCard = ({
       )}
     </article>
   );
+};
+
+const linkedActivityIdsFor = (draft: CourseDraft) =>
+  new Set(
+    draft.courseContent.sections.flatMap((section) =>
+      section.blocks.flatMap((block) =>
+        block.type === 'interactive_activity' && block.activityId !== undefined
+          ? [block.activityId]
+          : [],
+      ),
+    ),
+  );
+
+const unlinkedGeneratedActivitiesFor = (draft: CourseDraft) => {
+  const linkedActivityIds = linkedActivityIdsFor(draft);
+  return draft.learningBlueprint.generatedActivities.filter(
+    (activity) => !linkedActivityIds.has(activity.id),
+  );
+};
+
+const normalizedPreviewText = (value: string) => value.replaceAll(/\s+/gu, ' ').trim();
+
+const CourseContentView = ({ draft, t }: { draft: CourseDraft; t: Translate }) => {
+  const generatedActivitiesById = new Map(
+    draft.learningBlueprint.generatedActivities.map((activity) => [activity.id, activity]),
+  );
+  const activityIndexById = new Map(
+    draft.learningBlueprint.generatedActivities.map((activity, index) => [activity.id, index]),
+  );
+
+  return (
+    <div className="grid gap-6">
+      {draft.courseContent.sections.map((section, sectionIndex) => (
+        <section
+          className="grid gap-4 border-t border-border-primary pt-4 first:border-t-0 first:pt-0"
+          key={section.id}
+        >
+          <header className="grid gap-2">
+            <p className={tinyMetaClass}>
+              {t('coursition.app.courseContent.section')} {sectionIndex + 1}
+            </p>
+            <h3 className="text-lg font-bold text-fg-primary">{section.title}</h3>
+            <MarkdownText className="text-sm leading-6 text-fg-primary" value={section.summary} />
+          </header>
+          <div className="grid gap-4">
+            {section.blocks.map((block) => {
+              const activity =
+                block.type === 'interactive_activity' && block.activityId !== undefined
+                  ? generatedActivitiesById.get(block.activityId)
+                  : undefined;
+              if (activity !== undefined) {
+                return (
+                  <ActivityPreviewCard
+                    activity={activity}
+                    draftId={draft.id}
+                    index={activityIndexById.get(activity.id) ?? 0}
+                    key={block.id}
+                    t={t}
+                  />
+                );
+              }
+
+              const body = contentBlockBody(block);
+              if (
+                normalizedPreviewText(body) === normalizedPreviewText(section.summary) &&
+                section.blocks.findIndex((candidate) => candidate.id === block.id) === 0
+              ) {
+                return null;
+              }
+              return (
+                <article className="grid gap-2" key={block.id}>
+                  <h4 className="text-base font-bold text-fg-primary">
+                    {t(`coursition.app.blockTypes.${block.type}`)}
+                  </h4>
+                  <MarkdownText className="text-sm leading-6 text-fg-primary" value={body} />
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+};
+
+const UnlinkedGeneratedActivitiesView = ({ draft, t }: { draft: CourseDraft; t: Translate }) => {
+  const unlinkedActivities = unlinkedGeneratedActivitiesFor(draft);
+  if (unlinkedActivities.length > 0) {
+    return (
+      <section className="grid gap-3">
+        <h3 className="text-lg font-bold text-fg-primary">
+          {t('coursition.app.preview.activities')}
+        </h3>
+        <div className="grid gap-3">
+          {unlinkedActivities.map((activity, index) => (
+            <ActivityPreviewCard
+              activity={activity}
+              draftId={draft.id}
+              index={index}
+              key={activity.id}
+              t={t}
+            />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (draft.learningBlueprint.generatedActivities.length === 0) {
+    return (
+      <section className="grid gap-3">
+        <h3 className="text-lg font-bold text-fg-primary">
+          {t('coursition.app.preview.activities')}
+        </h3>
+        <p className={mutedTextClass}>{t('coursition.app.preview.noActivities')}</p>
+      </section>
+    );
+  }
+
+  return null;
 };
 
 const ReviewView = ({
@@ -1618,6 +2000,9 @@ export const CoursitionWorkflowApp = ({
   const activeNavigationStepRef = useRef<HTMLDivElement>(null);
   const courseTitleAutosaveSequenceRef = useRef(0);
   const lastSubmittedCourseTitleRef = useRef<string | null>(null);
+  const objectiveAutosaveSequenceRef = useRef(new Map<string, number>());
+  const lastSubmittedObjectiveKeyRef = useRef(new Map<string, string>());
+  const lastSubmittedActivityBriefKeyRef = useRef(new Map<string, string>());
   const preparationAutosaveSequenceRef = useRef(0);
   const lastSubmittedPreparationKeyRef = useRef<string | null>(null);
   const busyAction = busyActions.at(-1) ?? null;
@@ -1642,6 +2027,7 @@ export const CoursitionWorkflowApp = ({
   const isRouteActionBusy = isBusyAction(
     'deleteDraft',
     'generateCourse',
+    'generateActivities',
     'generateCourseContent',
     'goToStep',
     'openPreview',
@@ -1653,8 +2039,7 @@ export const CoursitionWorkflowApp = ({
   const isSourceDeleteBusy = isBusyAction('deleteSource');
   const isSourceRetryBusy = isBusyAction('retrySource');
   const isObjectiveGenerationBusy = isBusyAction('generateLearningBlueprint');
-  const isObjectiveSaveBusy = isBusyAction('updateLearningObjective');
-  const isActivityBriefSaveBusy = isBusyAction('updateActivityBrief');
+  const isActivityGenerationBusy = isBusyAction('generateActivities');
   const isCourseContentGenerationBusy = isBusyAction('generateCourseContent');
 
   useEffect(() => {
@@ -1750,14 +2135,12 @@ export const CoursitionWorkflowApp = ({
     [navigateTo],
   );
 
-  const runWorkflowEffect = (
-    action: WorkflowAction,
-    shouldNavigate = true,
-  ): Effect.Effect<WorkflowSnapshot | null, never> =>
+  const runWorkflowEffect = (action: WorkflowAction, shouldNavigate = true) =>
     Effect.gen(function* runWorkflowProgram() {
       yield* Effect.sync(() => {
         beginBusyAction(action.action);
       });
+      const previousDraft = snapshot?.draft ?? null;
       const resultExit = yield* Effect.exit(
         workflowRequestEffect(action, t('coursition.app.errors.generic')),
       );
@@ -1774,6 +2157,12 @@ export const CoursitionWorkflowApp = ({
       }
       const result = resultExit.value;
       yield* Effect.sync(() => applySnapshot(result, shouldNavigate));
+      const failedRun = failedGenerationRunFor(previousDraft, result.draft, action.action);
+      if (failedRun !== null) {
+        yield* Effect.sync(() => {
+          setNotice(failedAiRunNotice(failedRun, t('coursition.app.errors.aiRunFailed')));
+        });
+      }
       return result;
     }).pipe(Effect.ensuring(Effect.sync(() => endBusyAction(action.action))));
 
@@ -1902,6 +2291,54 @@ export const CoursitionWorkflowApp = ({
     runPreparationAutosave(draft.id, preparation, localPreparationKey);
   };
 
+  const runObjectiveAutosave = useCallback(
+    (
+      draftId: string,
+      objectiveId: string,
+      title: string,
+      capability: string,
+      submittedObjectiveKey: string,
+    ) => {
+      const autosaveSequence = (objectiveAutosaveSequenceRef.current.get(objectiveId) ?? 0) + 1;
+      objectiveAutosaveSequenceRef.current.set(objectiveId, autosaveSequence);
+      Effect.runFork(
+        Effect.gen(function* objectiveAutosaveProgram() {
+          const resultExit = yield* Effect.exit(
+            workflowRequestEffect(
+              {
+                action: 'updateLearningObjective',
+                capability,
+                draftId,
+                objectiveId,
+                title,
+              },
+              t('coursition.app.errors.generic'),
+            ),
+          );
+          if (objectiveAutosaveSequenceRef.current.get(objectiveId) !== autosaveSequence) {
+            return;
+          }
+          if (Exit.isFailure(resultExit)) {
+            yield* Effect.sync(() => {
+              if (lastSubmittedObjectiveKeyRef.current.get(objectiveId) === submittedObjectiveKey) {
+                lastSubmittedObjectiveKeyRef.current.delete(objectiveId);
+              }
+              setNotice(
+                errorMessageFrom(
+                  resultExit.cause.pipe(Cause.squash),
+                  t('coursition.app.errors.generic'),
+                ),
+              );
+            });
+            return;
+          }
+          yield* Effect.sync(() => applySnapshot(resultExit.value, false));
+        }),
+      );
+    },
+    [applySnapshot, t],
+  );
+
   const refreshSnapshot = useCallback(() => {
     Effect.runFork(
       Effect.gen(function* refreshSnapshotProgram() {
@@ -1932,12 +2369,43 @@ export const CoursitionWorkflowApp = ({
       setNotice(errorMessageFrom(error, t('coursition.app.errors.generic')));
     });
 
-  const sessionRequestEffect = (): Effect.Effect<SessionPayload, CoursitionUiEffectError> =>
-    foreignPromise(() => effectBff.client.auth.session({}) as PromiseLike<SessionPayload>);
+  const sessionRequestEffect = () =>
+    Effect.tryPromise({
+      catch: (cause) =>
+        new CoursitionUiEffectError({
+          cause,
+          message: errorMessageFrom(cause, t('coursition.app.errors.generic')),
+        }),
+      try: () => Promise.resolve(effectBff.client.auth.session({})),
+    }).pipe(
+      Effect.flatMap((payload) =>
+        sessionPayloadFromUnknown(payload).pipe(
+          Effect.mapError(
+            (cause) =>
+              new CoursitionUiEffectError({
+                cause,
+                message: errorMessageFrom(cause, t('coursition.app.errors.generic')),
+              }),
+          ),
+        ),
+      ),
+    );
 
-  const authRequestEffect = (): Effect.Effect<void, CoursitionUiEffectError> =>
-    foreignPromise(
-      () =>
+  const authRequestEffect = () =>
+    Effect.tryPromise({
+      catch: (cause) =>
+        new CoursitionUiEffectError({
+          cause,
+          message: errorMessageFrom(
+            cause,
+            t(
+              authMode === 'signUp'
+                ? 'coursition.app.auth.signUpFailed'
+                : 'coursition.app.auth.signInFailed',
+            ),
+          ),
+        }),
+      try: () =>
         authMode === 'signUp'
           ? effectBff.client.auth.signUp({
               payload: { email: authEmail, name: authName, password: authPassword },
@@ -1945,14 +2413,9 @@ export const CoursitionWorkflowApp = ({
           : effectBff.client.auth.signIn({
               payload: { email: authEmail, password: authPassword },
             }),
-      t(
-        authMode === 'signUp'
-          ? 'coursition.app.auth.signUpFailed'
-          : 'coursition.app.auth.signInFailed',
-      ),
-    ).pipe(Effect.asVoid);
+    }).pipe(Effect.asVoid);
 
-  const authEffect = (): Effect.Effect<void, never> =>
+  const authEffect = () =>
     Effect.gen(function* authProgram() {
       yield* Effect.sync(() => {
         beginBusyAction('auth');
@@ -2045,12 +2508,15 @@ export const CoursitionWorkflowApp = ({
     if (draft === null) {
       return;
     }
-    const name = sourceName.trim() || (sourceFile?.name ?? '');
+    const formData = new FormData(event.currentTarget);
+    const submittedName = formString(formData, 'sourceName');
+    const submittedContent = formString(formData, 'sourceContent');
+    const name = submittedName || sourceName.trim() || (sourceFile?.name ?? '');
     if (name.length === 0) {
       setNotice(t('coursition.app.sources.sourceNameRequired'));
       return;
     }
-    const submitSource = (content: string, sizeLabel?: string): Effect.Effect<void, never> => {
+    const submitSource = (content: string) => {
       if (sourceType !== 'file' && content.trim().length === 0) {
         return Effect.sync(() => setNotice(t('coursition.app.errors.generic')));
       }
@@ -2060,7 +2526,6 @@ export const CoursitionWorkflowApp = ({
         source: {
           content,
           name,
-          ...(sizeLabel === undefined ? {} : { sizeLabel }),
           type: sourceType,
         },
       }).pipe(
@@ -2088,12 +2553,12 @@ export const CoursitionWorkflowApp = ({
             yield* showEffectError(payloadExit.cause.pipe(Cause.squash));
             return;
           }
-          yield* submitSource(payloadExit.value.content, payloadExit.value.sizeLabel);
+          yield* submitSource(payloadExit.value);
         }).pipe(Effect.ensuring(Effect.sync(() => endBusyAction('file')))),
       );
       return;
     }
-    Effect.runFork(submitSource(sourceContent));
+    Effect.runFork(submitSource(submittedContent || sourceContent));
   };
 
   const updatePreparationField = <Field extends keyof CoursePreparation>(
@@ -2106,39 +2571,103 @@ export const CoursitionWorkflowApp = ({
     }));
   };
 
-  const updateObjective = (event: FormEvent<HTMLFormElement>, objectiveId: string) => {
-    event.preventDefault();
+  const saveObjectiveForm = (form: HTMLFormElement, objectiveId: string) => {
     if (draft === null) {
       return;
     }
-    const formData = new FormData(event.currentTarget);
-    void runWorkflow({
-      action: 'updateLearningObjective',
-      capability: formString(formData, 'capability'),
-      draftId: draft.id,
-      objectiveId,
-      title: formString(formData, 'title'),
-    });
+    const objective = draft.learningBlueprint.objectives.find(
+      (candidate) => candidate.id === objectiveId,
+    );
+    if (objective === undefined) {
+      return;
+    }
+    const formData = new FormData(form);
+    const capability = formString(formData, 'capability');
+    const title = formString(formData, 'title');
+    const savedObjectiveKey = objectiveEditKey(objective.title, objective.capability);
+    const localObjectiveKey = objectiveEditKey(title, capability);
+    if (localObjectiveKey === savedObjectiveKey) {
+      lastSubmittedObjectiveKeyRef.current.set(objectiveId, localObjectiveKey);
+      return;
+    }
+    if (localObjectiveKey === lastSubmittedObjectiveKeyRef.current.get(objectiveId)) {
+      return;
+    }
+    lastSubmittedObjectiveKeyRef.current.set(objectiveId, localObjectiveKey);
+    runObjectiveAutosave(draft.id, objectiveId, title, capability, localObjectiveKey);
   };
 
-  const updateActivityBrief = (event: FormEvent<HTMLFormElement>, briefId: string) => {
+  const saveObjectiveOnBlur = (event: FocusEvent<HTMLFormElement>, objectiveId: string) => {
+    const nextFocusedElement = event.relatedTarget;
+    if (nextFocusedElement instanceof Node && event.currentTarget.contains(nextFocusedElement)) {
+      return;
+    }
+    saveObjectiveForm(event.currentTarget, objectiveId);
+  };
+
+  const saveObjectiveOnSubmit = (event: FormEvent<HTMLFormElement>, objectiveId: string) => {
     event.preventDefault();
+    saveObjectiveForm(event.currentTarget, objectiveId);
+  };
+
+  const saveActivityBriefForm = (form: HTMLFormElement, briefId: string) => {
     if (draft === null) {
       return;
     }
-    const formData = new FormData(event.currentTarget);
-    const type = formString(formData, 'type') as ActivityType;
-    void runWorkflow({
-      action: 'updateActivityBrief',
-      briefId,
-      draftId: draft.id,
+    const brief = draft.learningBlueprint.activityBriefs.find(
+      (candidate) => candidate.id === briefId,
+    );
+    if (brief === undefined) {
+      return;
+    }
+    const formData = new FormData(form);
+    const submittedType = formString(formData, 'type');
+    const type =
+      activityTypes.find((activityType) => activityType === submittedType) ?? activityTypes[1];
+    const submittedBrief = {
       feedbackGuidance: formString(formData, 'feedbackGuidance'),
       instructions: formString(formData, 'instructions'),
       learnerAction: formString(formData, 'learnerAction'),
       successCriteria: formString(formData, 'successCriteria'),
       title: formString(formData, 'title'),
-      type: activityTypes.includes(type) ? type : 'practice_task',
+      type,
+    };
+    const savedActivityBriefKey = activityBriefEditKey({
+      feedbackGuidance: brief.feedbackGuidance,
+      instructions: brief.instructions,
+      learnerAction: brief.learnerAction,
+      successCriteria: brief.successCriteria,
+      title: brief.title,
+      type: brief.type,
     });
+    const submittedActivityBriefKey = activityBriefEditKey(submittedBrief);
+    if (submittedActivityBriefKey === savedActivityBriefKey) {
+      lastSubmittedActivityBriefKeyRef.current.set(briefId, submittedActivityBriefKey);
+      return;
+    }
+    if (submittedActivityBriefKey === lastSubmittedActivityBriefKeyRef.current.get(briefId)) {
+      return;
+    }
+    lastSubmittedActivityBriefKeyRef.current.set(briefId, submittedActivityBriefKey);
+    runWorkflow({
+      action: 'updateActivityBrief',
+      briefId,
+      draftId: draft.id,
+      ...submittedBrief,
+    });
+  };
+
+  const saveActivityBriefOnBlur = (event: FocusEvent<HTMLFormElement>, briefId: string) => {
+    const nextFocusedElement = event.relatedTarget;
+    if (nextFocusedElement instanceof Node && event.currentTarget.contains(nextFocusedElement)) {
+      return;
+    }
+    saveActivityBriefForm(event.currentTarget, briefId);
+  };
+
+  const saveActivityBriefOnSubmit = (event: FormEvent<HTMLFormElement>, briefId: string) => {
+    event.preventDefault();
+    saveActivityBriefForm(event.currentTarget, briefId);
   };
 
   const goToStep = (step: DraftStep) => {
@@ -2656,7 +3185,6 @@ export const CoursitionWorkflowApp = ({
                                 {t(`coursition.app.sources.statuses.${source.status}`)}
                               </Badge>
                             </div>
-                            <p className={tinyMetaClass}>{source.sizeLabel}</p>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {canPreview ? (
@@ -2714,10 +3242,7 @@ export const CoursitionWorkflowApp = ({
                         )}
                         {canPreview && isPreviewExpanded ? (
                           <div id={previewId}>
-                            <SourceMarkdownPreview
-                              loadingLabel={t('coursition.app.sources.editorLoading')}
-                              value={source.content}
-                            />
+                            <SourceTextPreview value={source.content} />
                           </div>
                         ) : null}
                       </li>
@@ -2833,9 +3358,12 @@ export const CoursitionWorkflowApp = ({
           {activeStep === 'objectives' ? (
             <section className={`${cardClass} ${panelClass}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-xl font-bold text-fg-primary">
-                  {t('coursition.app.objectives.title')}
-                </h2>
+                <div className="grid gap-1">
+                  <h2 className="text-xl font-bold text-fg-primary">
+                    {t('coursition.app.objectives.title')}
+                  </h2>
+                  <p className={mutedTextClass}>{t('coursition.app.objectives.purpose')}</p>
+                </div>
                 <Button
                   disabled={isObjectiveGenerationBusy}
                   onClick={() =>
@@ -2870,7 +3398,8 @@ export const CoursitionWorkflowApp = ({
                     <form
                       className="grid gap-2 rounded-md bg-fill-base p-3"
                       key={objective.id}
-                      onSubmit={(event) => updateObjective(event, objective.id)}
+                      onBlur={(event) => saveObjectiveOnBlur(event, objective.id)}
+                      onSubmit={(event) => saveObjectiveOnSubmit(event, objective.id)}
                     >
                       <p className={tinyMetaClass}>
                         {t('coursition.app.objectives.objectiveNumber', { number: index + 1 })}
@@ -2893,9 +3422,6 @@ export const CoursitionWorkflowApp = ({
                       <p className={mutedTextClass}>
                         {t(`coursition.app.objectives.sourceSupport.${objective.sourceSupport}`)}
                       </p>
-                      <Button disabled={isObjectiveSaveBusy} type="submit" variant="secondary">
-                        {t('coursition.app.objectives.saveObjective')}
-                      </Button>
                     </form>
                   ))}
                 </div>
@@ -2910,14 +3436,14 @@ export const CoursitionWorkflowApp = ({
                   {t('coursition.app.activityPlan.title')}
                 </h2>
                 <Button
-                  disabled={isObjectiveGenerationBusy}
+                  disabled={isActivityGenerationBusy}
                   onClick={() =>
-                    void runWorkflow({ action: 'generateLearningBlueprint', draftId: draft.id })
+                    void runWorkflow({ action: 'generateActivities', draftId: draft.id })
                   }
                   type="button"
                   variant="primary"
                 >
-                  {busyAction === 'generateLearningBlueprint'
+                  {busyAction === 'generateActivities'
                     ? t('coursition.app.activityPlan.generating')
                     : t(
                         hasActivityPlan(draft)
@@ -2934,7 +3460,8 @@ export const CoursitionWorkflowApp = ({
                     <form
                       className="grid gap-2 rounded-md bg-fill-base p-3"
                       key={brief.id}
-                      onSubmit={(event) => updateActivityBrief(event, brief.id)}
+                      onBlur={(event) => saveActivityBriefOnBlur(event, brief.id)}
+                      onSubmit={(event) => saveActivityBriefOnSubmit(event, brief.id)}
                     >
                       <p className={tinyMetaClass}>
                         {t('coursition.app.activityPlan.activityNumber', { number: index + 1 })}
@@ -2990,9 +3517,6 @@ export const CoursitionWorkflowApp = ({
                         placeholder={t('coursition.app.activityPlan.feedbackGuidancePlaceholder')}
                         rows={4}
                       />
-                      <Button disabled={isActivityBriefSaveBusy} type="submit" variant="secondary">
-                        {t('coursition.app.activityPlan.save')}
-                      </Button>
                     </form>
                   ))}
                 </div>
@@ -3037,25 +3561,7 @@ export const CoursitionWorkflowApp = ({
                 {t('coursition.app.preview.title')}
               </h2>
               <CourseContentView draft={draft} t={t} />
-              <section className="grid gap-3">
-                <h3 className="text-lg font-bold text-fg-primary">
-                  {t('coursition.app.preview.activities')}
-                </h3>
-                {draft.learningBlueprint.generatedActivities.length === 0 ? (
-                  <p className={mutedTextClass}>{t('coursition.app.preview.noActivities')}</p>
-                ) : (
-                  <div className="grid gap-3">
-                    {draft.learningBlueprint.generatedActivities.map((activity, index) => (
-                      <ActivityPreviewCard
-                        activity={activity}
-                        index={index}
-                        key={activity.id}
-                        t={t}
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
+              <UnlinkedGeneratedActivitiesView draft={draft} t={t} />
               <ReviewView draft={draft} runWorkflow={runWorkflow} t={t} />
             </section>
           ) : null}

@@ -23,4 +23,7 @@ export default defineConfig({
     '**/*.gen.d.ts',
     '**/*.gen.ts',
   ],
+  rules: {
+    'max-classes-per-file': 'off',
+  },
 });

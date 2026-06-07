@@ -1,3 +1,4 @@
+import { workflowSteps } from './workflow';
 import type { DraftStep } from './workflow';
 
 export type CourseRouteLanguage = 'en' | 'cs';
@@ -32,6 +33,8 @@ const stepSlugByLanguage = {
     sources: 'sources',
   },
 } as const satisfies Record<CourseRouteLanguage, Record<DraftStep, string>>;
+
+const routeSteps = [...workflowSteps, 'preview'] as const satisfies readonly DraftStep[];
 
 export interface CourseRouteMatch {
   draftId: string;
@@ -87,16 +90,16 @@ export const parseCourseRoutePath = (pathname: string): CourseRouteMatch | null 
   ) {
     return null;
   }
-  const stepEntry = Object.entries(stepSlugByLanguage[language]).find(
-    ([, slug]) => slug === stepSegment,
+  const step = routeSteps.find(
+    (draftStep) => stepSlugByLanguage[language][draftStep] === stepSegment,
   );
-  if (stepEntry === undefined) {
+  if (step === undefined) {
     return null;
   }
   return {
     draftId: decodeURIComponent(draftIdSegment),
     language,
-    step: stepEntry[0] as DraftStep,
+    step,
   };
 };
 
