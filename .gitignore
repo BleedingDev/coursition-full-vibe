@@ -16,6 +16,7 @@ node_modules/
 .agents/skills/
 
 dist/
+.output/
 coverage/
 .coursition-data/
 .scratch/

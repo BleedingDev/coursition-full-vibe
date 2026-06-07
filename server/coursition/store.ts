@@ -274,7 +274,16 @@ const configuredDataDirectory = () => {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '.coursition-data';
 };
 
-let activeBackend: StoreBackend = jsonFileStoreBackend(configuredDataDirectory());
+const configuredStoreBackend = () => {
+  const value = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env?.['COURSITION_STORE_BACKEND'];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : 'json-file';
+};
+
+let activeBackend: StoreBackend =
+  configuredStoreBackend() === 'memory'
+    ? inMemoryStoreBackend()
+    : jsonFileStoreBackend(configuredDataDirectory());
 let activeBackendSeedsDefaults = true;
 
 export const setStoreBackend = (backend: StoreBackend) => {
