@@ -1,0 +1,426 @@
+/*
+ * Coursition Slidev theme — light, spacious, product-led.
+ *
+ * Structure follows the BleedingDev toolchain theme: one token block, one
+ * shared atmosphere template driven by per-layout custom properties, and an
+ * explicit flattening path for PDF export. The visual language is Coursition's
+ * own: cream paper, plum ink, magenta accent, real product screenshots doing
+ * most of the talking.
+ */
+
+:root {
+  --cs-bg: #faf7f2;
+  --cs-panel: #f2ede6;
+  --cs-ink: #2b0a2e;
+  --cs-plum: #4a044e;
+  --cs-accent: #a21caf;
+  --cs-muted: #6e6068;
+  --cs-line: #e5ded6;
+
+  --cs-dark-bg: #2b0a2e;
+  --cs-dark-ink: #faf7f2;
+  --cs-dark-muted: #d9cdd9;
+  --cs-dark-line: #532c56;
+
+  --cs-font:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans',
+    sans-serif;
+
+  --slidev-theme-primary: var(--cs-accent);
+}
+
+html,
+body,
+#app,
+#page-root,
+#slide-content,
+.slidev-page,
+.slidev-slide-content {
+  background-color: var(--cs-bg);
+}
+
+.slidev-layout {
+  position: relative;
+  isolation: isolate;
+  height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  background-color: transparent;
+  color: var(--cs-ink);
+  font-family: var(--cs-font);
+  padding: 3rem 3.6rem 4.2rem;
+
+  /* Warm directional wash — barely-there paper light, never a gradient poster. */
+  --cs-glow-x: 88%;
+  --cs-glow-y: 6%;
+  --cs-glow-size: 55%;
+  --cs-glow-strength: 7%;
+  /* Faint measuring grid, felt at the frame and cleared under the copy. */
+  --cs-grid-size: 4rem;
+  --cs-grid-strength: 42%;
+  --cs-field-center-strength: 30%;
+}
+
+/* Layer 1 — paper grid. */
+.slidev-layout::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    linear-gradient(
+        color-mix(in oklab, var(--cs-line) var(--cs-grid-strength), transparent) 1px,
+        transparent 1px
+      )
+      0 0 / 100% var(--cs-grid-size),
+    linear-gradient(
+        90deg,
+        color-mix(in oklab, var(--cs-line) var(--cs-grid-strength), transparent) 1px,
+        transparent 1px
+      )
+      0 0 / var(--cs-grid-size) 100%;
+  -webkit-mask-image: radial-gradient(
+    ellipse 120% 120% at 50% 46%,
+    color-mix(in oklab, #000 var(--cs-field-center-strength), transparent) 0%,
+    #000 66%
+  );
+  mask-image: radial-gradient(
+    ellipse 120% 120% at 50% 46%,
+    color-mix(in oklab, #000 var(--cs-field-center-strength), transparent) 0%,
+    #000 66%
+  );
+  pointer-events: none;
+}
+
+/* Layer 2 — single soft accent wash for depth. */
+.slidev-layout::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    ellipse at var(--cs-glow-x) var(--cs-glow-y),
+    color-mix(in oklab, var(--cs-accent) var(--cs-glow-strength), transparent),
+    transparent var(--cs-glow-size)
+  );
+  pointer-events: none;
+}
+
+/* Per-layout composition. */
+.cs-cover {
+  --cs-glow-x: 78%;
+  --cs-glow-y: 12%;
+  --cs-glow-strength: 10%;
+  --cs-field-center-strength: 22%;
+}
+.cs-default {
+  --cs-glow-x: 96%;
+  --cs-glow-y: -4%;
+  --cs-glow-strength: 6%;
+  --cs-field-center-strength: 24%;
+}
+.cs-statement {
+  --cs-glow-x: 8%;
+  --cs-glow-y: 92%;
+  --cs-glow-strength: 12%;
+  --cs-grid-size: 3.2rem;
+  --cs-field-center-strength: 40%;
+}
+.cs-end {
+  background-color: var(--cs-dark-bg);
+  color: var(--cs-dark-ink);
+  --cs-glow-x: 12%;
+  --cs-glow-y: 94%;
+  --cs-glow-strength: 26%;
+  --cs-grid-strength: 0%;
+}
+
+/* PDF export must be flat and deterministic. */
+html.print .slidev-layout::before,
+html.print .slidev-layout::after {
+  display: none !important;
+}
+html.print .cs-end {
+  background-color: var(--cs-dark-bg) !important;
+}
+
+@media print {
+  .slidev-layout::before,
+  .slidev-layout::after {
+    display: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------- typography */
+
+.slidev-layout :where(h1, h2, h3) {
+  font-family: var(--cs-font);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  color: var(--cs-ink);
+  text-wrap: balance;
+  margin: 0;
+}
+.slidev-layout :where(h1) {
+  font-size: 2.6rem;
+}
+.slidev-layout :where(h2) {
+  font-size: 1.9rem;
+}
+.slidev-layout :where(h3) {
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+}
+.slidev-layout :where(p) {
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: var(--cs-muted);
+  margin: 0.5rem 0 0;
+  max-width: 62ch;
+}
+.slidev-layout strong {
+  color: var(--cs-ink);
+  font-weight: 700;
+}
+.slidev-layout em {
+  color: var(--cs-accent);
+  font-style: normal;
+}
+.slidev-layout a {
+  color: var(--cs-accent);
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------- chrome */
+
+.cs-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cs-accent);
+}
+
+/* MDC wraps slot content in a paragraph; keep the label's own scale and colour. */
+.cs-kicker :where(p) {
+  margin: 0;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.cs-rule {
+  width: 3rem;
+  height: 3px;
+  background: var(--cs-accent);
+  margin: 1rem 0 0;
+  border-radius: 2px;
+}
+
+.cs-footer {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 3.6rem;
+  right: 3.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--cs-muted);
+  z-index: 5;
+}
+.cs-end .cs-footer {
+  color: var(--cs-dark-muted);
+}
+
+.cs-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--cs-accent);
+  z-index: 6;
+}
+
+/* ---------------------------------------------------------------- primitives */
+
+/* Product screenshot: full viewport, never cropped, flat on paper.
+   No drop shadow — Chromium flattens it into a hard grey rectangle in the PDF
+   export, so the rounded border on the image itself carries the edge instead. */
+.cs-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.cs-shot--phone {
+  width: auto;
+  height: 100%;
+}
+
+.cs-caption {
+  margin-top: 0.7rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--cs-muted);
+  max-width: 46ch;
+}
+
+.cs-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+.cs-label img {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+.cs-label span {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cs-plum);
+}
+
+/* Icon + heading + body, used for annotation columns. */
+.cs-points {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.cs-point {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+.cs-point img {
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-top: 0.15rem;
+}
+.cs-point h3 {
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--cs-ink);
+  line-height: 1.25;
+}
+.cs-point p {
+  margin-top: 0.3rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--cs-muted);
+}
+
+/* Product screen beside its annotations. The screen keeps the wider column so
+   the real UI stays the argument; the points only label what is on it. */
+.shot-left,
+.shot-right {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  gap: 2.4rem;
+  align-items: center;
+}
+.shot-left {
+  grid-template-columns: minmax(0, 1.34fr) minmax(0, 1fr);
+}
+.shot-right {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.34fr);
+}
+.shot-left .cs-points,
+.shot-right .cs-points {
+  gap: 1.2rem;
+}
+/* Clamp by both axes so the whole viewport stays visible and the row never
+   grows past the slide, whichever constraint binds first. */
+.shot-left > .cs-shot,
+.shot-right > .cs-shot {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  justify-self: center;
+}
+
+/* Evidence chips — one verified fact each. */
+.cs-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.4rem;
+}
+.cs-fact {
+  display: grid;
+  grid-template-columns: 1.1rem minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--cs-ink);
+}
+.cs-fact img {
+  width: 0.95rem;
+  height: 0.95rem;
+  margin-top: 0.18rem;
+}
+
+/* Before / after panels. */
+.cs-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0;
+}
+.cs-panel {
+  border-radius: 14px;
+  padding: 1.5rem 1.6rem;
+  min-height: 11rem;
+}
+.cs-panel--before {
+  border: 1px solid var(--cs-line);
+}
+.cs-panel--before h2,
+.cs-panel--before p,
+.cs-panel--before .cs-kicker {
+  color: var(--cs-muted);
+}
+.cs-panel--after {
+  background: var(--cs-panel);
+}
+.cs-panel h2 {
+  font-size: 1.5rem;
+  margin-top: 0.6rem;
+}
+.cs-panel p {
+  font-size: 0.92rem;
+  margin-top: 0.7rem;
+}
+.cs-panels-arrow {
+  display: flex;
+  justify-content: center;
+}
+.cs-panels-arrow img {
+  width: 2rem;
+  height: 2rem;
+}
+
+.cs-hairline {
+  height: 1px;
+  background: var(--cs-line);
+  border: 0;
+  margin: 0;
+}
+.cs-end .cs-hairline {
+  background: var(--cs-dark-line);
+}
+
+@media (forced-colors: active) {
+  .cs-rule,
+  .cs-progress {
+    background: CanvasText;
+  }
+}

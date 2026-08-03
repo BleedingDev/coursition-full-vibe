@@ -1,0 +1,19 @@
+{
+  "name": "coursition-czechinvest-deck",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Coursition presentation for CzechInvest (Ivo Stanček), 3. 8. 2026.",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/normalize-slides.mjs && slidev slides.md --port 3131",
+    "build": "node scripts/normalize-slides.mjs && slidev build slides.md --out dist",
+    "export": "node scripts/normalize-slides.mjs && slidev export slides.md --output ../coursition-czechinvest-ivo-2026-08-03.pdf --format pdf --timeout 120000",
+    "export:png": "node scripts/normalize-slides.mjs && slidev export slides.md --output export/slide --format png --timeout 120000"
+  },
+  "dependencies": {
+    "@slidev/cli": "52.16.0",
+    "@slidev/client": "52.16.0",
+    "playwright-chromium": "1.61.1",
+    "vue": "3.5.39"
+  }
+}

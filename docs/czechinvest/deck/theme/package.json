@@ -1,0 +1,13 @@
+{
+  "name": "slidev-theme-coursition",
+  "version": "1.0.0",
+  "private": true,
+  "keywords": [
+    "slidev",
+    "slidev-theme"
+  ],
+  "slidev": {
+    "colorSchema": "light",
+    "highlighter": "shiki"
+  }
+}

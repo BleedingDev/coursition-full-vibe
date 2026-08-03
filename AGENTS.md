@@ -25,3 +25,16 @@ Do not add backwards-compatibility shims, legacy fallbacks, migration branches, 
 ## Private Skills
 
 Private orchestration skills are installed automatically during `pnpm install` when the current developer is authorized for `TechsioCZ/skills`. The installer clones that private repository and copies only the allowlisted skills from `.agents/skills-lock.json`; unauthorized developers get a warning and can continue with the public contract.
+
+## CzechInvest continuity
+
+For every CzechInvest, final-report, or funded-activity-output task, begin by reading these repository files in order:
+
+1. `docs/czechinvest/README.md`
+2. `docs/czechinvest/CURRENT-STATUS.md`
+3. `docs/czechinvest/WORKING-CHECKLIST.md`
+4. `docs/czechinvest/INPUTS-FROM-PETR.md`
+
+Continue from the first relevant unchecked item instead of reconstructing the project from chat history. Treat the current application and source code as the source of truth for product claims. Update `CURRENT-STATUS.md` and `WORKING-CHECKLIST.md` whenever CzechInvest work materially advances.
+
+Supplier selection, procurement limits, AIS approvals, and the single binding-output arrangement have already been handled with CzechInvest. Do not reopen them unless the user explicitly asks. The active scope is the final-report content and credible, application-grounded outputs for the funded activities; do not invent historical work, dates, metrics, authorship, testing, or handovers.
