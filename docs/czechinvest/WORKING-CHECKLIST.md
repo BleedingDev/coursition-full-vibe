@@ -66,12 +66,15 @@ Celková přímá podpora: **4 500 000 Kč**.
 ### Průzkum trhu - 250 000 Kč - hotovo
 
 - [x] Aktivita označena jako dokončená.
-- [ ] Najít a uložit finální tržní analýzu.
+- [x] Petr 5. 8. 2026 potvrdil, že tržní analýza byla doložena v předchozí zprávě; nevytvářet ji znovu.
+- [x] Připravit společný solo-agent [handoff](workflows/completed-activity-evidence/HANDOFF.md) pro dohledání předchozí zprávy a příloh A1/A3/A7.
+- [ ] Najít a lokálně propojit finální tržní analýzu z předchozí zprávy.
 - [ ] Připravit jednu stručnou větu: jak analýza změnila priority, cílové segmenty nebo roadmapu.
 
 ### Ochranná známka - 50 171 Kč - hotovo
 
 - [x] Aktivita označena jako dokončená.
+- [x] Evidenční dohledání je zahrnuto ve společném solo-agent [handoffu A1/A3/A7](workflows/completed-activity-evidence/HANDOFF.md).
 - [ ] Doložit ochrannou známku EU.
 - [ ] Doložit IP scan.
 
@@ -103,10 +106,9 @@ Rozsah oproti vzoru Martiny Libřické (ten měl 10 listů, 142 klíčových slo
 | URL konkurence      | 193                      | 3 998 v sešitě z 19 264 sebraných                   |
 | Zdroj hledanosti    | Dragon Metrics (placený) | bezplatné zdroje, přesná hledanost vědomě neuváděna |
 
-Nejdůležitější zjištění, které je potřeba předat vývoji hned: **produkční doména
-coursition.com neservíruje současný produkt.** Vrací 544bajtový prázdný shell, v prohlížeči
-na `/cs` i `/en` klientskou 404 a na kořeni starší produkt pro přepis audia. Aplikace je
-přitom v pořádku — na origin workeru běží správně. Podrobnosti v nálezech T-01 až T-03.
+Technický crawl `coursition.com` potvrzuje serverově vykreslené lokalizované stránky se
+správnými metadaty, kanonickými adresami a jazykovým párováním. Hlavním SEO omezením je
+malá veřejná obsahová vrstva: sitemapa má šest adres, z toho čtyři právní stránky.
 
 ### UX/UI Design - 380 000 Kč - částečně hotovo
 
@@ -131,7 +133,9 @@ Existující technické podklady: [akceptační audit](../czechinvest-acceptance
 ### Právní poradenství - 170 000 Kč - hotovo
 
 - [x] Aktivita označena jako dokončená.
-- [ ] Doložit GDPR metodiku.
+- [x] Petr 5. 8. 2026 potvrdil, že právní spolupráce byla doložena v předchozí zprávě; právní výstupy nevytvářet znovu.
+- [x] Evidenční dohledání je zahrnuto ve společném solo-agent [handoffu A1/A3/A7](workflows/completed-activity-evidence/HANDOFF.md).
+- [ ] Propojit GDPR metodiku z předchozí zprávy.
 - [ ] Doložit smlouvy, dohody, podmínky užívání a další smluvní ujednání.
 
 ### Tvorba metodik - 70 000 Kč - hotovo 4. 8. 2026
@@ -146,9 +150,11 @@ Výstupy jsou v [`methodologies/`](methodologies/). Dokumenty se přegenerují p
 - [x] Vytvořit [`A8-podklady-pro-Janu.md`](methodologies/A8-podklady-pro-Janu.md), finální DOCX/PDF a doložit Fable 5 + GPT-5.6 Sol + Opus 5 review. Brána prošla bez otevřených blokujících nálezů; doložení v evidenčním záznamu.
 - [x] Opravit datum vypracování obou metodik v MD/DOCX/PDF na potvrzené datum 27. 7. 2026; samostatné datum ověření aplikace a testů 4. 8. 2026 zůstává zachováno.
 - [x] Vyčistit branding obou metodik ve zdrojích i MD/DOCX/PDF: wordmark je jediným označením firmy na obálce, názvy a patičky neopakují Coursition a není použit co-branding poskytovatele podpory.
+- [x] Přegenerovat všech deset obrázků v [`figures/`](methodologies/figures/) po rebrandu aplikace do fialové na krémovém podkladu (WCAG 2.1 AAA) a znovu sestavit DOCX/PDF. Hotovo 5. 8. 2026; snímky 10-14 vznikly reálným průchodem kurzu "Bezpečnost práce ve výrobě" proti Cloudflare worker preview.
 
 ### Branding + Marketing + Copywriting - 349 900 Kč - částečně hotovo
 
+- [x] Připravit samostatný solo-agent [handoff](workflows/branding-marketing-copywriting/HANDOFF.md) pro dokončení celého strategického balíčku bez zásahu do paralelní práce na landing page a aplikaci.
 - [ ] Dokončit brand a grafický manuál.
 - [ ] Vytvořit komunikační strategii a stručný komunikační manuál.
 - [ ] Vytvořit marketingovou strategii.
