@@ -1,5 +1,12 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+/* Geist is the corporate typeface the design manual mandates, with Inter as its
+ * named fallback. Both are self-hosted variable faces: the manual calls for
+ * Thin, Light, SemiBold and Black, and one variable file covers that range
+ * without four separate downloads. Nothing was previously loaded at all, so the
+ * whole site had been rendering in a system fallback. */
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/inter';
 @source '../../node_modules/@techsio/ui-kit/dist';
 @import '@techsio/ui-kit/tokens';
 @import '@techsio/ui-kit/theme.css';

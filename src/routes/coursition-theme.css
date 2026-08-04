@@ -17,10 +17,11 @@ html.dark {
 }
 
 :root {
-  /* Editorial typography. IBM Plex Sans is preferred when available, with a
-   * high-quality variable system stack as a zero-network fallback. */
+  /* Corporate typeface per the design manual: Geist, falling back to Inter.
+   * Both ship with the app, so the system stack behind them only ever applies
+   * while the webfonts are still loading. */
   --font-sans:
-    'IBM Plex Sans', 'Segoe UI Variable', Inter, ui-sans-serif, system-ui, -apple-system,
+    'Geist Variable', Geist, 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-body: var(--font-sans);
   --font-heading: var(--font-sans);
@@ -30,30 +31,54 @@ html.dark {
   --font-weight-badge-sm: var(--font-weight-medium);
   --font-weight-badge-md: var(--font-weight-semibold);
 
-  /* Deep forest interaction ramp. Darker values are intentionally retained
-   * for solid controls so white labels preserve strong APCA contrast. */
-  --color-primary-100: light-dark(oklch(96% 0.025 154), oklch(24% 0.035 154));
-  --color-primary-200: light-dark(oklch(91% 0.05 154), oklch(31% 0.05 154));
-  --color-primary-300: light-dark(oklch(82% 0.085 154), oklch(79% 0.09 154));
-  --color-primary-400: light-dark(oklch(67% 0.13 154), oklch(72% 0.12 154));
-  --color-primary-500: light-dark(oklch(48% 0.13 154), oklch(66% 0.105 154));
-  --color-primary-600: light-dark(oklch(36% 0.105 154), oklch(58% 0.09 154));
-  --color-primary-700: light-dark(oklch(30% 0.085 154), oklch(47% 0.075 154));
-  --color-primary-800: light-dark(oklch(25% 0.065 154), oklch(36% 0.06 154));
-  --color-primary-900: light-dark(oklch(21% 0.045 154), oklch(27% 0.045 154));
+  /* Brand interaction ramp, hue 324. That is the hue the design manual's plum
+   * and magenta share (#4a044e reads as 325.7, #a01daf as 323.2), so the app
+   * and the landing page draw from one family instead of two.
+   *
+   * Every pairing below is measured against the page canvas for WCAG 2.1 AAA:
+   * 7:1 for body text, 4.5:1 for large text, and 7:1 for control labels sitting
+   * on a solid fill. The steps are ordered light-to-dark in light mode and the
+   * reverse in dark mode, so the same step number always means the same
+   * emphasis rather than the same lightness. */
+  --color-primary-100: light-dark(oklch(96% 0.02 324), oklch(24% 0.05 324));
+  --color-primary-200: light-dark(oklch(91% 0.045 324), oklch(31% 0.07 324));
+  --color-primary-300: light-dark(oklch(82% 0.085 324), oklch(79% 0.12 324));
+  --color-primary-400: light-dark(oklch(67% 0.15 324), oklch(72% 0.16 324));
+  --color-primary-500: light-dark(oklch(51.6% 0.224 324), oklch(66% 0.185 324));
+  --color-primary-600: light-dark(oklch(40% 0.18 324), oklch(58% 0.2 324));
+  --color-primary-700: light-dark(oklch(34.9% 0.152 324), oklch(47.8% 0.22 324));
+  --color-primary-800: light-dark(oklch(29.3% 0.131 324), oklch(36% 0.16 324));
+  --color-primary-900: light-dark(oklch(25% 0.11 324), oklch(27% 0.12 324));
 
-  --color-primary: light-dark(oklch(29% 0.085 154), oklch(91% 0.055 154));
-  --color-primary-hover: light-dark(oklch(24% 0.075 154), oklch(96% 0.04 154));
-  --color-primary-active: light-dark(oklch(20% 0.06 154), oklch(98% 0.025 154));
-  --color-primary-disabled: light-dark(oklch(42% 0.025 154), oklch(76% 0.025 154));
-  --color-primary-light: light-dark(oklch(94% 0.025 154), oklch(22% 0.025 154));
-  --color-primary-light-hover: light-dark(oklch(91% 0.035 154), oklch(26% 0.035 154));
-  --color-primary-light-active: light-dark(oklch(87% 0.045 154), oklch(30% 0.045 154));
+  /* Accent text. 13.8:1 on the light canvas, 11.0:1 on the dark one; these are
+   * the manual's plum and its light-on-dark counterpart. */
+  --color-primary: light-dark(oklch(29.3% 0.131 324), oklch(82% 0.122 324));
+  --color-primary-hover: light-dark(oklch(34.9% 0.152 324), oklch(88% 0.09 324));
+  --color-primary-active: light-dark(oklch(25% 0.11 324), oklch(92% 0.07 324));
+  --color-primary-disabled: light-dark(oklch(52% 0.04 324), oklch(60% 0.05 324));
+  --color-primary-light: light-dark(oklch(96.5% 0.018 324), oklch(24% 0.045 324));
+  --color-primary-light-hover: light-dark(oklch(93.5% 0.03 324), oklch(28% 0.055 324));
+  --color-primary-light-active: light-dark(oklch(90.5% 0.04 324), oklch(32% 0.065 324));
   --color-primary-light-disabled: var(--color-bg-disabled);
 
-  --color-bg-primary-base: light-dark(oklch(36% 0.105 154), oklch(38% 0.085 154));
-  --color-bg-primary-hover: light-dark(oklch(31% 0.09 154), oklch(43% 0.09 154));
-  --color-bg-primary-active: light-dark(oklch(26% 0.07 154), oklch(34% 0.07 154));
+  /* Solid controls, and the label colour that always sits on them.
+   *
+   * Light mode is the manual's plum: a white label on it measures 14.8:1.
+   *
+   * Dark mode cannot use the manual's magenta as-is. A white label on it is
+   * 6.4:1 and a plum one is 2.3:1, so no label passes AAA over that fill. The
+   * fix is to keep the magenta's exact hue and chroma and only take it seven
+   * points darker, which is still recognisably the same brand colour but lifts
+   * a white label to 8.3:1. Going darker costs edge contrast against the page —
+   * the fill alone is 2.4:1, under the 3:1 that SC 1.4.11 wants for a control
+   * boundary — so the button carries the manual's lighter magenta as its
+   * border, which reads 4.4:1 against the page. Fill, label and edge then all
+   * clear their thresholds without inventing a colour outside the manual. */
+  --color-bg-primary-base: light-dark(oklch(29.3% 0.131 324), oklch(44.5% 0.224 324));
+  --color-bg-primary-hover: light-dark(oklch(34.9% 0.152 324), oklch(49% 0.224 324));
+  --color-bg-primary-active: light-dark(oklch(25% 0.11 324), oklch(40% 0.2 324));
+  --color-on-primary: var(--color-white);
+  --color-border-primary-solid: light-dark(var(--color-bg-primary-base), oklch(59.2% 0.221 324));
   --color-bg-light-primary-base: var(--color-primary-light);
   --color-bg-light-primary-hover: var(--color-primary-light-hover);
   --color-bg-light-primary-active: var(--color-primary-light-active);
@@ -85,7 +110,7 @@ html.dark {
   --color-fg-light: var(--color-white);
   --color-fg-dark: light-dark(oklch(17% 0.012 72), oklch(13% 0.008 72));
   --color-fg-reverse: light-dark(var(--color-white), oklch(13% 0.008 72));
-  --color-fg-accent-primary: light-dark(oklch(27% 0.08 154), oklch(92% 0.05 154));
+  --color-fg-accent-primary: light-dark(oklch(29.3% 0.131 324), oklch(82% 0.122 324));
   --color-primary-accent-fg: var(--color-fg-accent-primary);
   --opacity-placeholder: 100%;
   --opacity-text-secondary: 100%;
@@ -148,7 +173,7 @@ html.dark {
   --color-bg-warning-hover: light-dark(oklch(87% 0.115 82), oklch(87% 0.105 82));
   --color-bg-warning-active: light-dark(oklch(85% 0.11 82), oklch(85% 0.1 82));
 
-  /* Buttons: one confident forest CTA; non-primary variants recede through
+  /* Buttons: one confident brand CTA; non-primary variants recede through
    * transparent or subtle fills instead of becoming competing boxes. */
   --border-width-button-sm: 1px;
   --border-width-button-md: 1px;
@@ -156,8 +181,8 @@ html.dark {
   --color-button-bg-primary-base: var(--color-bg-primary-base);
   --color-button-bg-primary-hover: var(--color-bg-primary-hover);
   --color-button-bg-primary-active: var(--color-bg-primary-active);
-  --color-button-border-primary: var(--color-bg-primary-base);
-  --color-button-fg-primary: var(--color-white);
+  --color-button-border-primary: var(--color-border-primary-solid);
+  --color-button-fg-primary: var(--color-on-primary);
   --color-button-fg-primary-borderless: var(--color-fg-accent-primary);
   --color-button-bg-primary-light-base: var(--color-primary-light);
   --color-button-bg-primary-light-hover: var(--color-primary-light-hover);
@@ -224,7 +249,7 @@ html.dark {
   --color-checkbox-border-base: var(--color-border-primary);
   --color-checkbox-bg-checked: var(--color-bg-primary-base);
   --color-checkbox-border-checked: var(--color-bg-primary-base);
-  --color-checkbox-fg-checked: var(--color-white);
+  --color-checkbox-fg-checked: var(--color-on-primary);
 
   --color-link: var(--color-fg-accent-primary);
   --color-link-base: var(--color-fg-accent-primary);
@@ -244,8 +269,8 @@ html.dark {
   --color-tabs-trigger-bg-outline-selected: transparent;
   --color-tabs-trigger-bg-selected: var(--color-bg-primary-base);
   --color-tabs-trigger-fg-base: var(--color-fg-secondary);
-  --color-tabs-trigger-fg-selected: var(--color-fg-accent-primary);
-  --color-tabs-trigger-fg-solid-selected: var(--color-white);
+  --color-tabs-trigger-fg-selected: var(--color-on-primary);
+  --color-tabs-trigger-fg-solid-selected: var(--color-on-primary);
   --color-tabs-trigger-fg-disabled: var(--color-fg-disabled);
   --radius-tabs: 0;
   --radius-tabs-indicator: 999px;
@@ -305,7 +330,7 @@ html.dark {
   --color-radio-card-item-indicator-border-solid-checked: var(--color-bg-primary-base);
   --color-radio-card-item-indicator-border-subtle-checked: var(--color-primary-500);
   --color-radio-card-item-indicator-content-fg-subtle-checked: var(--color-primary);
-  --color-radio-card-item-indicator-content-fg-solid-checked: var(--color-white);
+  --color-radio-card-item-indicator-content-fg-solid-checked: var(--color-on-primary);
   --color-radio-card-addon-fg-solid-checked: var(--color-fg-primary);
   --radius-radio-card-item: var(--radius-lg);
   --shadow-radio-card-item: none;
@@ -329,11 +354,11 @@ html.dark {
   --color-steps-indicator-border-current: var(--color-bg-primary-base);
   --color-steps-indicator-border-complete: var(--color-bg-primary-base);
   --color-steps-indicator-fg: var(--color-fg-secondary);
-  --color-steps-indicator-fg-current: var(--color-white);
-  --color-steps-indicator-fg-complete: var(--color-white);
+  --color-steps-indicator-fg-current: var(--color-on-primary);
+  --color-steps-indicator-fg-complete: var(--color-on-primary);
   --color-steps-indicator-fg-solid: var(--color-fg-primary);
-  --color-steps-indicator-fg-solid-current: var(--color-white);
-  --color-steps-indicator-fg-solid-complete: var(--color-white);
+  --color-steps-indicator-fg-solid-current: var(--color-on-primary);
+  --color-steps-indicator-fg-solid-complete: var(--color-on-primary);
   --color-steps-separator-bg: var(--color-border-muted);
   --color-steps-separator-bg-current: var(--color-primary-200);
   --color-steps-separator-bg-complete: var(--color-primary-500);
@@ -415,7 +440,7 @@ html.dark {
   --shadow-select-content: var(--shadow-md);
 
   /* Clear on-brand focus language, shared by kit controls. */
-  --color-ring: light-dark(oklch(41% 0.12 154), oklch(78% 0.1 154));
+  --color-ring: light-dark(oklch(41% 0.19 324), oklch(78% 0.14 324));
   --color-ring-default: var(--color-ring);
   --color-button-ring: var(--color-ring);
   --color-form-control-ring: var(--color-ring);
@@ -430,6 +455,20 @@ html.dark {
   --z-dialog-backdrop: 60;
   --z-dialog-positioner: 61;
   --color-dialog-backdrop-bg-modal: oklch(8% 0.01 72 / 0.64);
+}
+
+/* Solid brand controls need a visible edge on the dark canvas. Their fill is
+ * deliberately darker than the manual's magenta so the white label clears AAA,
+ * which leaves the fill itself at 2.4:1 against the page — under the 3:1 that
+ * SC 1.4.11 asks of a control boundary. The manual's lighter magenta as a
+ * hairline restores it to 4.4:1. In light mode the border resolves to the same
+ * plum as the fill, so nothing changes there.
+ *
+ * The hook is the kit's own token-named utility rather than a component's
+ * internal markup, and `:where` keeps specificity at zero so any deliberate
+ * override still wins. */
+:where(.bg-button-bg-primary-base) {
+  border: 1px solid var(--color-border-primary-solid);
 }
 
 /* The draft title is an editorial heading that happens to be editable. Keeping
@@ -629,15 +668,11 @@ html.dark .coursition-brand-logo--dark {
   }
 }
 
-/* Header sign-up action on the landing route. The header sits outside
- * `.coursition-landing`, so it would otherwise inherit the product's forest
- * primary and clash with the brand plum/magenta the landing page uses. */
+/* The header sign-up action used to override the primary tokens here, because
+ * the header sits outside `.coursition-landing` and the product palette was a
+ * different colour family from the landing page's. Both now share one brand
+ * ramp, so the override is gone and the CTA inherits the AAA-checked pairing
+ * instead of re-declaring an unchecked one. The class is kept as a hook. */
 .coursition-header-cta {
-  --color-bg-primary-base: light-dark(#4a044e, #a01daf);
-  --color-bg-primary-hover: light-dark(#5f0a63, #b93ec6);
-  --color-bg-primary-active: light-dark(#3a033d, #a01daf);
-  --color-button-bg-primary-base: var(--color-bg-primary-base);
-  --color-button-bg-primary-hover: var(--color-bg-primary-hover);
-  --color-button-bg-primary-active: var(--color-bg-primary-active);
-  --color-button-border-primary: var(--color-bg-primary-base);
+  font-weight: var(--font-weight-semibold);
 }

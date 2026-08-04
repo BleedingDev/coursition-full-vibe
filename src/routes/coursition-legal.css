@@ -15,7 +15,10 @@
   --legal-shell: 76rem;
   --legal-measure: 68ch;
   --legal-ink: light-dark(#4a044e, oklch(96% 0.008 84));
-  --legal-accent: light-dark(#a01daf, #eaa9f2);
+  /* The manual's magenta reaches only 5.95:1 on the cream canvas, so it cannot
+   * carry the eyebrow or the inline links at AAA. Four points of lightness off
+   * it clears 7.16:1 while keeping the full brand chroma and hue. */
+  --legal-accent: light-dark(oklch(47.2% 0.224 324), #eaa9f2);
 
   display: grid;
   inline-size: 100%;

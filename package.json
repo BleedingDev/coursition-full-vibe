@@ -34,6 +34,8 @@
     "@ax-llm/ax": "^22.0.2",
     "@better-auth/drizzle-adapter": "^1.6.13",
     "@effect/platform-node": "4.0.0-beta.94",
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/inter": "5.3.0",
     "@mdxeditor/editor": "4.0.2",
     "@modern-js/plugin-bff": "npm:@bleedingdev/modern-js-plugin-bff@3.5.0-ultramodern.98",
     "@modern-js/plugin-i18n": "npm:@bleedingdev/modern-js-plugin-i18n@3.5.0-ultramodern.98",
@@ -86,7 +88,7 @@
     "node": ">=26",
     "pnpm": ">=11"
   },
-  "packageManager": "pnpm@11.13.1",
+  "packageManager": "pnpm@11.20.0",
   "modernjs": {
     "preset": "presetUltramodern",
     "packageSource": {

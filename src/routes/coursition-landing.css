@@ -39,9 +39,14 @@
 
   /* Landing-scoped component token overrides. Inheritance keeps these off the
    * workflow surfaces: only descendants of `.coursition-landing` see them. */
-  --color-bg-primary-base: light-dark(var(--brand-plum), var(--brand-magenta));
-  --color-bg-primary-hover: light-dark(var(--brand-plum-soft), var(--brand-magenta-lift));
-  --color-bg-primary-active: light-dark(var(--brand-plum-strong), #8c1799);
+  /* The manual's magenta carries a white label at only 6.4:1, short of AAA, so
+   * the dark-mode fill is that same hue and chroma taken seven points darker
+   * (8.3:1). The lighter magenta moves to the border, where it gives the
+   * button a 4.4:1 edge against the page. Light mode is unchanged. */
+  --color-bg-primary-base: light-dark(var(--brand-plum), oklch(44.5% 0.224 324));
+  --color-bg-primary-hover: light-dark(var(--brand-plum-soft), oklch(49% 0.224 324));
+  --color-bg-primary-active: light-dark(var(--brand-plum-strong), oklch(40% 0.2 324));
+  --color-border-primary-solid: light-dark(var(--brand-plum), var(--brand-magenta-lift));
   --color-button-bg-primary-base: var(--color-bg-primary-base);
   --color-button-bg-primary-hover: var(--color-bg-primary-hover);
   --color-button-bg-primary-active: var(--color-bg-primary-active);
