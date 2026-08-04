@@ -1,0 +1,249 @@
+{
+  "generated_at": "2026-07-15T09:00:56.516020+00:00",
+  "graph_id": "coursition-ui-integration-plus-3-plans-b6ce05c88d",
+  "plan_set_hash": "5d61b99084",
+  "selection_hash": "b6ce05c88d",
+  "plan_count": 4,
+  "edge_count": 3,
+  "plans_root": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans",
+  "selected_globs": [],
+  "selected_plan_paths": [
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-integration.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-shell.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-theme.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-workflow.plan.md"
+  ],
+  "edges": [
+    {
+      "source": "coursition-ui-theme",
+      "target": "coursition-ui-integration"
+    },
+    {
+      "source": "coursition-ui-shell",
+      "target": "coursition-ui-integration"
+    },
+    {
+      "source": "coursition-ui-workflow",
+      "target": "coursition-ui-integration"
+    }
+  ],
+  "plans": [
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-integration.plan.md",
+      "slug": "coursition-ui-integration",
+      "name": "coursition-ui-integration",
+      "overview": "Integrate the three independent UI lanes, verify the combined application across themes and routes, correct only cross-lane defects, and publish the polished Cloudflare build.",
+      "todos": [
+        {
+          "id": "review-and-integrate-lanes",
+          "content": "Review each lane against its ownership contract, reconcile the combined theme/shell/workflow result, and remove any accidental overlap or regressions.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "run-affected-quality-gates",
+          "content": "Use TraceDecay to determine affected tests, run diagnostics and the relevant UltraModern, i18n, format, lint, type, and Cloudflare build checks, and fix integration defects.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "perform-visual-functional-qa",
+          "content": "Capture and inspect light/dark desktop and responsive screenshots for auth, dashboard, all seven course steps, and preview while checking URL, loading, locale, theme, and activity interactions.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "deploy-polished-build",
+          "content": "Deploy the verified build to Cloudflare and perform a final production smoke check without changing AI provider configuration.",
+          "status": "pending",
+          "ordinal": 4
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-shell.plan.md",
+      "slug": "coursition-ui-shell",
+      "name": "coursition-ui-shell",
+      "overview": "Modernize the global Coursition shell, header, width, and theme-mode behavior while preserving URL-driven navigation and authentication semantics.",
+      "todos": [
+        {
+          "id": "flatten-global-shell",
+          "content": "Refine the sticky product header and main content measure so the shell feels lighter, calmer, and aligned with the new editorial workspace hierarchy.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "fix-effective-theme-toggle",
+          "content": "Make the theme-toggle label and icon reflect the effective system/light/dark mode and preserve the existing cookie and pre-hydration behavior.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "verify-shell-navigation",
+          "content": "Verify locale links, sign-out, auth routes, sticky behavior, theme switching, and responsive header layout remain functional.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-theme.plan.md",
+      "slug": "coursition-ui-theme",
+      "name": "coursition-ui-theme",
+      "overview": "Rebuild the Coursition visual foundation as a calm civic-editorial theme using UI-kit semantic and component tokens, with strong light/dark APCA contrast and far less border-driven hierarchy.",
+      "todos": [
+        {
+          "id": "define-civic-editorial-tokens",
+          "content": "Replace the current neutral card-heavy theme values with a coherent civic-editorial palette, surface ladder, typography, radii, depth, and focus language in coursition-theme.css.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "tune-ui-kit-component-tokens",
+          "content": "Tune buttons, form controls, tabs, accordions, radio cards, steps, badges, and feedback surfaces through supported UI-kit component tokens without page-specific selectors.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "verify-theme-contrast",
+          "content": "Verify representative light and dark states preserve high APCA contrast and usable focus, disabled, hover, selected, and destructive states.",
+          "status": "pending",
+          "ordinal": 3
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-workflow.plan.md",
+      "slug": "coursition-ui-workflow",
+      "name": "coursition-ui-workflow",
+      "overview": "Flatten and polish the authentication, dashboard, course studio, editor, and learner-preview composition using the existing UI-kit components and a small shared semantic class vocabulary.",
+      "todos": [
+        {
+          "id": "split-shared-surface-roles",
+          "content": "Replace the universal bordered card treatment with distinct shared studio-header, workspace-section, and inset surface roles that avoid nested boxes.",
+          "status": "pending",
+          "ordinal": 1
+        },
+        {
+          "id": "polish-auth-dashboard-mode-sources",
+          "content": "Refine authentication, dashboard, mode selection, and source management into calmer editorial compositions with one clear primary action per screen.",
+          "status": "pending",
+          "ordinal": 2
+        },
+        {
+          "id": "polish-editor-accordions",
+          "content": "Refine preparation, objective, and activity-plan screens with constrained reading measure, borderless list hierarchy, compact metadata, and clearer generation actions.",
+          "status": "pending",
+          "ordinal": 3
+        },
+        {
+          "id": "polish-course-preview",
+          "content": "Flatten course content and playable preview surfaces so learner content, activities, self-checks, feedback, and review states have clear hierarchy without nested card stacks.",
+          "status": "pending",
+          "ordinal": 4
+        },
+        {
+          "id": "verify-workflow-interactions",
+          "content": "Verify all seven course steps, dashboard actions, activity engines, responsive wrapping, and keyboard semantics remain behaviorally unchanged.",
+          "status": "pending",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "frontier": [
+    {
+      "plan_slug": "coursition-ui-shell",
+      "plan_name": "coursition-ui-shell",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-shell.plan.md",
+      "plan_status": "pending",
+      "state": "ready",
+      "blocked_by": [],
+      "active": [
+        {
+          "id": "flatten-global-shell",
+          "content": "Refine the sticky product header and main content measure so the shell feels lighter, calmer, and aligned with the new editorial workspace hierarchy.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "fix-effective-theme-toggle",
+          "content": "Make the theme-toggle label and icon reflect the effective system/light/dark mode and preserve the existing cookie and pre-hydration behavior.",
+          "status": "pending",
+          "ordinal": 2
+        }
+      ],
+      "completed": 0,
+      "total": 3
+    },
+    {
+      "plan_slug": "coursition-ui-theme",
+      "plan_name": "coursition-ui-theme",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-theme.plan.md",
+      "plan_status": "pending",
+      "state": "ready",
+      "blocked_by": [],
+      "active": [
+        {
+          "id": "define-civic-editorial-tokens",
+          "content": "Replace the current neutral card-heavy theme values with a coherent civic-editorial palette, surface ladder, typography, radii, depth, and focus language in coursition-theme.css.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "tune-ui-kit-component-tokens",
+          "content": "Tune buttons, form controls, tabs, accordions, radio cards, steps, badges, and feedback surfaces through supported UI-kit component tokens without page-specific selectors.",
+          "status": "pending",
+          "ordinal": 2
+        }
+      ],
+      "completed": 0,
+      "total": 3
+    },
+    {
+      "plan_slug": "coursition-ui-workflow",
+      "plan_name": "coursition-ui-workflow",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/coursition-ui-workflow.plan.md",
+      "plan_status": "pending",
+      "state": "ready",
+      "blocked_by": [],
+      "active": [
+        {
+          "id": "split-shared-surface-roles",
+          "content": "Replace the universal bordered card treatment with distinct shared studio-header, workspace-section, and inset surface roles that avoid nested boxes.",
+          "status": "pending",
+          "ordinal": 1
+        }
+      ],
+      "upcoming": [
+        {
+          "id": "polish-auth-dashboard-mode-sources",
+          "content": "Refine authentication, dashboard, mode selection, and source management into calmer editorial compositions with one clear primary action per screen.",
+          "status": "pending",
+          "ordinal": 2
+        }
+      ],
+      "completed": 0,
+      "total": 5
+    }
+  ],
+  "errors": [],
+  "warnings": [],
+  "graph_source": "matched-plan-set"
+}

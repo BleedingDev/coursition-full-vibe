@@ -4,11 +4,15 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from '@rstest/core';
 import type { CoursePreparation } from '../shared/coursition/workflow.ts';
 import {
+  inMemoryDraftRepository,
+  jsonFileDraftRepository,
+} from '../server/coursition/local-draft-repository.ts';
+import { inMemorySourceBlobStore } from '../server/coursition/source-blob-store.ts';
+import {
   applyWorkflowAction,
-  inMemoryStoreBackend,
-  jsonFileStoreBackend,
-  resetStoreBackend,
-  setStoreBackend,
+  learningBlueprintAfterPlanning,
+  resetStorageAdapters,
+  setStorageAdapters,
 } from '../server/coursition/store.ts';
 
 /*
@@ -19,9 +23,19 @@ import {
  */
 
 const owner = 'owner_alpha';
+let operationSequence = 0;
+const operationId = () => {
+  operationSequence += 1;
+  return `operation_${operationSequence}`;
+};
 
 const createDraft = (ownerId: string, title: string) =>
-  applyWorkflowAction(ownerId, { action: 'createDraft', language: 'en', title });
+  applyWorkflowAction(ownerId, {
+    action: 'createDraft',
+    language: 'en',
+    operationId: operationId(),
+    title,
+  });
 
 const preparation = (): CoursePreparation => ({
   activityMixPreference: 'retrieval checks',
@@ -38,11 +52,12 @@ const preparation = (): CoursePreparation => ({
 
 describe('Course Draft store (in-memory backend)', () => {
   beforeEach(() => {
-    setStoreBackend(inMemoryStoreBackend());
+    operationSequence = 0;
+    setStorageAdapters(inMemoryDraftRepository(), inMemorySourceBlobStore());
   });
 
   afterEach(() => {
-    resetStoreBackend();
+    resetStorageAdapters();
   });
 
   test('creates a draft and lists it back with no disk access', async () => {
@@ -57,6 +72,42 @@ describe('Course Draft store (in-memory backend)', () => {
     expect(state.drafts[0]?.title).toBe('Incident response');
   });
 
+  test('uses AI course preparation only for full generate mode', async () => {
+    const created = await createDraft(owner, 'Generated preparation');
+    const { draft } = created;
+    if (draft === null) {
+      throw new Error('Expected a created draft.');
+    }
+    const generatedPreparation = preparation();
+    const generatedBlueprint = {
+      ...draft.learningBlueprint,
+      coursePreparation: generatedPreparation,
+    };
+
+    expect(
+      learningBlueprintAfterPlanning({ ...draft, mode: 'generate' }, generatedBlueprint)
+        .coursePreparation,
+    ).toEqual(generatedPreparation);
+    expect(learningBlueprintAfterPlanning(draft, generatedBlueprint).coursePreparation).toEqual(
+      draft.learningBlueprint.coursePreparation,
+    );
+  });
+
+  test('resolves a URL route without mutating the persisted workflow step', async () => {
+    const created = await createDraft(owner, 'Deep-linked course');
+    const draftId = created.draft?.id ?? '';
+
+    const blockedRoute = await applyWorkflowAction(owner, {
+      action: 'getRouteState',
+      draftId,
+      step: 'preview',
+    });
+    expect(blockedRoute.draft?.step).toBe('sources');
+
+    const persisted = await applyWorkflowAction(owner, { action: 'getState' });
+    expect(persisted.draft?.step).toBe('mode');
+  });
+
   test('processes a notes source locally into processed, grounded content', async () => {
     const created = await createDraft(owner, 'From notes');
     const draftId = created.draft?.id ?? '';
@@ -64,6 +115,8 @@ describe('Course Draft store (in-memory backend)', () => {
     const withSource = await applyWorkflowAction(owner, {
       action: 'addSource',
       draftId,
+      expectedRevision: created.draft?.revision ?? 1,
+      operationId: operationId(),
       source: {
         content: 'Containment precedes eradication.\n\nDocument every decision.',
         name: 'Runbook notes',
@@ -86,6 +139,7 @@ describe('Course Draft store (in-memory backend)', () => {
     const updated = await applyWorkflowAction(owner, {
       action: 'updateCoursePreparation',
       draftId,
+      expectedRevision: created.draft?.revision ?? 1,
       preparation: preparation(),
     });
 
@@ -115,6 +169,8 @@ describe('Course Draft store (in-memory backend)', () => {
       action: 'deleteDraft',
       confirm: true,
       draftId,
+      expectedRevision: created.draft?.revision ?? 1,
+      operationId: operationId(),
     });
 
     expect(afterDelete.draft).toBeNull();
@@ -127,7 +183,7 @@ describe('Course Draft store (in-memory backend)', () => {
     expect(firstState.drafts).toHaveLength(1);
 
     // Swapping in a fresh adapter proves state lived in the adapter, not on disk.
-    setStoreBackend(inMemoryStoreBackend());
+    setStorageAdapters(inMemoryDraftRepository(), inMemorySourceBlobStore());
     const secondState = await applyWorkflowAction(owner, { action: 'getState' });
     expect(secondState.drafts).toHaveLength(0);
   });
@@ -141,7 +197,7 @@ describe('Course Draft store (in-memory backend)', () => {
         '{"drafts":[{"id":"legacy","title":"Old draft"}]}',
         'utf-8',
       );
-      setStoreBackend(jsonFileStoreBackend(tempRoot));
+      setStorageAdapters(jsonFileDraftRepository(tempRoot), inMemorySourceBlobStore());
 
       await expect(applyWorkflowAction(owner, { action: 'getState' })).rejects.toThrow(
         'Stored course draft data does not match the current schema.',

@@ -19,7 +19,7 @@ const readPnpmConfig = (key) => {
   return output ? JSON.parse(output) : undefined;
 };
 const enableTailwind = true;
-const expectedPnpmVersion = '11.5.2';
+const expectedPnpmVersion = '11.13.1';
 const activePnpmVersion = execFileSync('pnpm', ['--version'], {
   cwd: process.cwd(),
   encoding: 'utf-8',
@@ -105,7 +105,6 @@ const requiredPaths = [
   'scripts/check-i18n-strings.mjs',
   'server/coursition/config.ts',
 
-  'postcss.config.mjs',
   'tailwind.config.ts',
 
   'locales/en/translation.json',
@@ -130,11 +129,7 @@ if (fs.existsSync(path.resolve(process.cwd(), 'src/routes/page.tsx'))) {
   process.exit(1);
 }
 
-if (
-  !enableTailwind &&
-  (fs.existsSync(path.resolve(process.cwd(), 'postcss.config.mjs')) ||
-    fs.existsSync(path.resolve(process.cwd(), 'tailwind.config.ts')))
-) {
+if (!enableTailwind && fs.existsSync(path.resolve(process.cwd(), 'tailwind.config.ts'))) {
   console.error('Tailwind config files must not be written when Tailwind is disabled');
   process.exit(1);
 }
@@ -310,8 +305,8 @@ if (packageJson.packageManager !== `pnpm@${expectedPnpmVersion}`) {
   process.exit(1);
 }
 
-if (packageJson.engines?.pnpm !== `>=${expectedPnpmVersion} <11.6.0`) {
-  console.error(`Generated app package must require pnpm >=${expectedPnpmVersion} <11.6.0`);
+if (packageJson.engines?.pnpm !== '>=11') {
+  console.error('Generated app package must require pnpm >=11');
   process.exit(1);
 }
 
@@ -356,6 +351,7 @@ for (const [key, expected] of [
 if (
   JSON.stringify(readPnpmConfig('allowBuilds')) !==
   JSON.stringify({
+    '@ax-llm/ax': false,
     '@swc/core': true,
     'core-js': true,
     esbuild: true,
@@ -474,8 +470,7 @@ for (const dependency of [
   '@typescript/native-preview',
   'happy-dom',
 
-  '@tailwindcss/postcss',
-  'postcss',
+  '@rsbuild/plugin-tailwindcss',
   'tailwindcss',
 
   'lefthook',
@@ -490,8 +485,8 @@ for (const dependency of [
 }
 
 if (
-  packageJson.devDependencies?.tailwindcss !== '^4.3.0' ||
-  packageJson.devDependencies?.['@tailwindcss/postcss'] !== '^4.3.0'
+  packageJson.devDependencies?.tailwindcss !== '^4.3.2' ||
+  packageJson.devDependencies?.['@rsbuild/plugin-tailwindcss'] !== '^2.0.3'
 ) {
   console.error('Tailwind CSS dependencies must use the UltraModern default baseline');
   process.exit(1);

@@ -3,19 +3,11 @@
 @source '../../node_modules/@techsio/ui-kit/dist';
 @import '@techsio/ui-kit/tokens';
 @import '@techsio/ui-kit/theme.css';
+@import './coursition-theme.css';
+@import './coursition-landing.css';
+@import './coursition-footer.css';
+@import './coursition-legal.css';
 @import '@mdxeditor/editor/style.css';
-
-html[data-theme='light'] {
-  color-scheme: light;
-}
-
-html[data-theme='dark'] {
-  color-scheme: dark;
-}
-
-[data-coursition-workflow] {
-  --color-button-fg-primary: var(--color-fg-reverse);
-}
 
 @layer base {
   html,
@@ -114,13 +106,15 @@ html[data-theme='dark'] {
 }
 
 [data-coursition-workflow] .coursition-feedback-panel--success {
-  background: #dcfce7;
-  color: #052e16;
+  background: var(--color-success-light);
+  color: var(--color-success-fg);
+  border: 1px solid color-mix(in oklab, var(--color-success) 30%, transparent);
 }
 
 [data-coursition-workflow] .coursition-feedback-panel--warning {
-  background: #fee2e2;
-  color: #450a0a;
+  background: var(--color-warning-light);
+  color: var(--color-warning-fg);
+  border: 1px solid color-mix(in oklab, var(--color-warning) 30%, transparent);
 }
 
 [data-coursition-workflow] .coursition-feedback-panel .coursition-markdown-text,

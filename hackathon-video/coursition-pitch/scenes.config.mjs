@@ -1,160 +1,162 @@
 // =============================================================================
 // Coursition pitch video — single source of truth.
 //
-// This one config drives BOTH:
+// One config drives BOTH:
 //   • tools/build-voiceover.mjs  -> assets/voiceover.mp3 + data/timeline.json
+//   • tools/build-subtitles.mjs  -> coursition-pitch.en.srt (soft, toggleable)
 //   • tools/build-html.mjs       -> index.html (static HyperFrames composition)
 //
-// To re-cut the video: edit copy / narration / screenshots below, then run:
-//   npm run build      (regenerates voiceover + timeline + index.html)
-//   npm run dev        (preview)   |   npm run render   (MP4)
+// Re-cut:  npm run build   (voiceover + subtitles + index.html)
+//          npm run render  (MP4)   |   npm run package (render + soft subs)
 //
-// Keep narration short. Keep slides quiet. Let the product carry it.
+// Markup convention: wrap a word in «guillemets» to give it the red marker
+// underline, e.g. "Good learning is «hard»."
 // =============================================================================
 
-// macOS `say` voice used for the PLACEHOLDER voiceover. Swap for a real
-// founder VO later by dropping a file at assets/voiceover.mp3 and skipping
-// the voiceover build step. See README.
-export const VOICE = 'Daniel';
-// Words per minute for `say`.
-export const SPEAKING_RATE = 178;
+// Voiceover engine: "boson" (Higgs Audio v3, needs BOSON_API_KEY) or "say"
+// (macOS placeholder fallback). Auto-falls back to "say" when no key is found.
+export const TTS = {
+  provider: process.env.TTS_PROVIDER || 'auto', // auto | boson | say
+  bosonVoice: process.env.BOSON_TTS_VOICE || 'eleanor',
+  bosonModel: 'higgs-audio-v3-tts',
+  bosonEndpoint: 'https://api.boson.ai/v1/audio/speech',
+  sayVoice: 'Daniel',
+  sayRate: 178,
+};
 
-// Pacing (seconds). Tweak to taste; everything else re-flows automatically.
-// Silence before first word.
-export const PRE_ROLL = 0.6;
-// Pause between lines in the same scene.
-export const GAP_WITHIN_SCENE = 0.32;
-// Pause when the scene changes.
-export const GAP_BETWEEN_SCENES = 0.7;
-// Tail after the last word.
-export const POST_ROLL = 1.1;
+// Pacing (seconds) — tightened for a punchy cut.
+export const PRE_ROLL = 0.25;
+export const GAP_WITHIN_SCENE = 0.16;
+export const GAP_BETWEEN_SCENES = 0.38;
+export const POST_ROLL = 0.7;
 
-// -----------------------------------------------------------------------------
-// Scenes. Each `line` becomes one synthesized clip; captions + visuals are
-// timed to it. `shot` (optional) is a screenshot file under assets/screens/.
-// -----------------------------------------------------------------------------
+// Editorial section labels shown top-right per scene.
 export const SCENES = [
   {
-    eyebrow: '36 HOURS · ONE RISKY BET',
     id: 'hook',
-    lines: [{ id: 'hook-1', text: 'Course text is easy. Good learning is hard.' }],
-    title: ['Course text is easy.', 'Good learning is hard.'],
     type: 'hook',
+    section: 'The premise',
+    eyebrow: '36 hours · one risky bet',
+    title: ['Course text is easy.', 'Good learning is «hard».'],
+    lines: [{ id: 'hook-1', text: 'Course text is easy. Good learning is hard.' }],
   },
   {
     id: 'positioning',
-    kicker: 'They host courses. Coursition prepares learning.',
+    type: 'positioning',
+    section: 'The category',
+    eyebrow: 'Not another LMS',
+    rivals: 'Teachable · Thinkific · Moodle',
+    rivalsLabel: 'host & sell courses',
+    headline: 'Coursition prepares the «learning».',
+    pipeline: ['PDF / raw text', 'Objectives', 'Activities', 'Playable preview'],
     lines: [
       {
         id: 'pos-1',
-        text: 'Teachable, Thinkific, and Moodle help you host and sell courses. Coursition helps you prepare better learning.',
+        text: 'Teachable, Thinkific and Moodle host and sell courses. Coursition prepares the learning.',
       },
     ],
-    pipeline: ['PDF / raw text', 'Objectives', 'Activities', 'Playable preview'],
-    rivals: ['Teachable', 'Thinkific', 'Moodle'],
-    type: 'positioning',
   },
   {
-    contrast: [
-      { label: 'AI, invent a fun mini-game', mark: '✕', tone: 'bad' },
-      { label: 'AI, fill a learning-activity contract', mark: '✓', tone: 'good' },
-    ],
     id: 'fight',
+    type: 'fight',
+    section: 'The pivot',
+    eyebrow: 'What I learned the hard way',
+    headline: "The hard part wasn't content.",
+    em: 'It was practice.',
+    contrast: [
+      { tone: 'bad', mark: '✕', label: 'AI, invent a fun mini-game' },
+      { tone: 'good', mark: '✓', label: 'AI, fill a learning-activity contract' },
+    ],
     lines: [
       {
         id: 'fight-1',
-        text: 'I came in with a rough prototype and one risky bet: that A.I. could turn source material into activities that actually help people learn.',
+        text: 'I came in with a rough prototype and one risky bet: that A.I. could turn raw material into practice that actually teaches.',
       },
       {
         id: 'fight-2',
-        text: 'The surprise? Generating content is easy. Generating practice is hard. So I stopped asking the model to invent random mini-games.',
+        text: 'Generating content is easy. Generating practice is hard. So I stopped asking the model for random mini-games.',
       },
     ],
-    title: 'The hard part was not content.',
-    type: 'fight',
   },
   {
-    engines: [
-      'Retrieval Check',
-      'Scenario Decision',
-      'Ordering / Matching',
-      'Practice Task',
-      'Rubric Answer',
-    ],
     id: 'engines',
+    type: 'engines',
+    section: 'The engines',
+    eyebrow: 'Constrained, not random',
+    headline: 'Five reusable «engines».',
+    engines: ['Retrieval check', 'Scenario decision', 'Ordering / matching', 'Practice task', 'Rubric answer'],
     lines: [
       {
         id: 'eng-1',
-        text: 'Instead, it fills reusable activity engines: retrieval checks, scenario decisions, ordering and matching, practice tasks, and rubric answers.',
+        text: 'It fills reusable activity engines: retrieval checks, scenario decisions, ordering, practice tasks, and rubric answers.',
       },
     ],
-    note: 'Constrained activities are easier to validate, improve, and teach with.',
-    title: 'Reusable activity engines',
-    type: 'engines',
   },
   {
     id: 'demo',
+    type: 'demo',
+    section: 'The product',
+    eyebrow: 'Source to practice',
+    headline: 'One source. A whole course.',
     lines: [
       {
         id: 'demo-1',
-        label: 'Add source · real PDF',
+        text: 'Add a source — here, a dense German statistics PDF.',
         shot: '02-sources.png',
-        text: 'Here is the flow. Choose how much help you want, then add a source — a dense German statistics PDF.',
+        label: 'Add source',
       },
       {
         id: 'demo-2',
-        label: 'Course preparation',
+        text: 'Coursition drafts the course preparation,',
         shot: '03-preparation.png',
-        text: 'Coursition writes the course preparation — who it is for and what they should be able to do.',
+        label: 'Course preparation',
       },
       {
         id: 'demo-3',
-        label: 'Learning objectives',
+        text: 'the learning objectives,',
         shot: '04-objectives.png',
-        text: 'It maps the learning objectives,',
+        label: 'Objectives',
       },
       {
         id: 'demo-4',
-        label: 'Activity plan',
+        text: 'an activity plan built from those engines,',
         shot: '05-activity-plan.png',
-        text: 'and an activity plan, where every activity is one of those reusable engines.',
+        label: 'Activity plan',
       },
       {
         id: 'demo-5',
-        label: 'Playable preview',
+        text: 'and a playable preview, where content becomes practice.',
         shot: '06-preview-top.png',
-        text: 'Then a playable preview — where the course stops being text and becomes practice.',
+        label: 'Playable preview',
       },
     ],
-    title: 'Source material to practice',
-    type: 'demo',
   },
   {
     id: 'result',
+    type: 'result',
+    section: 'Honest',
+    eyebrow: 'Where it stands',
+    title: ['Not sold.', 'Not finished.'],
+    em: 'But the wedge is sharper.',
+    next: ['2k newsletter', '10k on LinkedIn', 'Test source-to-activity'],
     lines: [
       {
         id: 'res-1',
-        text: 'It is not sold yet, and it is not finished. But the wedge is sharper. Next, I test it with real creators — two thousand on my newsletter, ten thousand on LinkedIn.',
+        text: "It's not sold, and it's not finished. But the wedge is sharper. Next: real creators — two thousand on my newsletter, ten thousand on LinkedIn.",
       },
     ],
-    next: [
-      '2k newsletter subscribers',
-      '10k LinkedIn network',
-      'Test: source-to-activity vs blank builders',
-    ],
-    title: 'Not sold yet. Not finished. But sharper.',
-    type: 'result',
   },
   {
     id: 'close',
+    type: 'close',
+    section: 'Coursition',
+    wordmark: 'Coursition',
+    tagline: 'Course preparation for reusable, interactive learning.',
     lines: [
       {
         id: 'close-1',
-        text: 'Coursition. AI-native course preparation for reusable, interactive learning.',
+        text: 'Coursition. Course preparation for reusable, interactive learning.',
       },
     ],
-    tagline: 'AI-native course preparation for reusable interactive learning.',
-    type: 'close',
-    wordmark: 'Coursition',
   },
 ];

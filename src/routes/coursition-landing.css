@@ -1,0 +1,521 @@
+/*
+ * Coursition landing surface.
+ *
+ * Scoped entirely under `.coursition-landing` so the product workflow keeps its
+ * own forest/warm token set. The landing is the brand-facing page, so it
+ * re-points the primary interaction tokens at the design-manual anchors —
+ * deep plum #4A044E, magenta-purple #A01DAF, secondary blue #007AA8.
+ *
+ * Art direction: type and real product stills carry the page. No rules above
+ * content, no numbered checklists, no decorative gradients — the only large
+ * color field is the closing band.
+ */
+
+.coursition-landing {
+  /* Design-manual anchors. Dark-mode partners are the same hues lifted for
+   * contrast against the dark canvas; the anchors themselves are unchanged. */
+  --brand-plum: #4a044e;
+  --brand-plum-strong: #3a033d;
+  --brand-plum-soft: #5f0a63;
+  --brand-magenta: #a01daf;
+  --brand-magenta-lift: #b93ec6;
+  --brand-magenta-fg: #eaa9f2;
+  --brand-blue: #007aa8;
+  --brand-blue-lift: #5cc4e8;
+
+  --landing-accent: light-dark(var(--brand-magenta), var(--brand-magenta-fg));
+  --landing-path: light-dark(var(--brand-blue), var(--brand-blue-lift));
+  --landing-ink: light-dark(var(--brand-plum), oklch(96% 0.008 84));
+  --landing-shell: 76rem;
+
+  /* Still frames sit on their own mat so the product crops read as framed
+   * screens rather than as loose rectangles. In dark mode the mat is pulled
+   * close to the canvas and the markup picks a genuine dark-theme capture, so
+   * the frames need no scrim or filter to sit in the page — nothing is laid over
+   * the product shots in either theme. */
+  --landing-mat: light-dark(oklch(100% 0 0), oklch(21% 0.018 320));
+  --landing-hairline: light-dark(oklch(84% 0.02 320 / 70%), oklch(100% 0 0 / 14%));
+  --landing-card: light-dark(oklch(99.5% 0.004 84), oklch(24% 0.024 320));
+
+  /* Landing-scoped component token overrides. Inheritance keeps these off the
+   * workflow surfaces: only descendants of `.coursition-landing` see them. */
+  --color-bg-primary-base: light-dark(var(--brand-plum), var(--brand-magenta));
+  --color-bg-primary-hover: light-dark(var(--brand-plum-soft), var(--brand-magenta-lift));
+  --color-bg-primary-active: light-dark(var(--brand-plum-strong), #8c1799);
+  --color-button-bg-primary-base: var(--color-bg-primary-base);
+  --color-button-bg-primary-hover: var(--color-bg-primary-hover);
+  --color-button-bg-primary-active: var(--color-bg-primary-active);
+  --color-button-border-primary: var(--color-bg-primary-base);
+  --color-fg-accent-primary: light-dark(var(--brand-plum), var(--brand-magenta-fg));
+  --color-primary: var(--color-fg-accent-primary);
+  --color-primary-hover: light-dark(var(--brand-plum-soft), #f2c4f8);
+  --color-primary-active: light-dark(var(--brand-plum-strong), #f8ddfb);
+  --color-primary-light: light-dark(#f9effa, oklch(24% 0.045 320));
+  --color-primary-light-hover: light-dark(#f3e0f5, oklch(28% 0.055 320));
+  --color-primary-light-active: light-dark(#ecd0ef, oklch(32% 0.065 320));
+  --color-primary-500: light-dark(var(--brand-magenta), var(--brand-magenta-lift));
+
+  display: grid;
+  overflow-x: clip;
+  inline-size: 100%;
+}
+
+.coursition-landing__shell {
+  inline-size: 100%;
+  max-inline-size: var(--landing-shell);
+  margin-inline: auto;
+  padding-inline: var(--spacing-250);
+}
+
+@media (width >= 40rem) {
+  .coursition-landing__shell {
+    padding-inline: var(--spacing-300);
+  }
+}
+
+@media (width >= 64rem) {
+  .coursition-landing__shell {
+    padding-inline: var(--spacing-400);
+  }
+}
+
+.coursition-landing__section {
+  padding-block: var(--spacing-650);
+}
+
+/* --------------------------------------------------------------- typography */
+
+.coursition-landing__title {
+  color: var(--landing-ink);
+  max-inline-size: 16ch;
+  margin-block: 0;
+  font-size: clamp(2.625rem, 6vw, 4.25rem);
+  font-weight: var(--font-weight-semibold);
+  line-height: 0.98;
+  letter-spacing: -0.038em;
+  text-wrap: balance;
+}
+
+.coursition-landing__title em {
+  color: var(--landing-accent);
+  font-style: normal;
+}
+
+.coursition-landing__lead {
+  max-inline-size: 42ch;
+  margin-block: var(--spacing-300) 0;
+  color: var(--color-fg-secondary);
+  font-size: var(--text-lg);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.coursition-landing__heading {
+  color: var(--landing-ink);
+  max-inline-size: 20ch;
+  font-size: clamp(1.875rem, 3.6vw, 2.75rem);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.05;
+  letter-spacing: -0.028em;
+  text-wrap: balance;
+}
+
+.coursition-landing__intro {
+  max-inline-size: 46ch;
+  margin-block: var(--spacing-200) 0;
+  color: var(--color-fg-secondary);
+  font-size: var(--text-lg);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+/* Closes the story out. Left-aligned at a 52ch measure it sat in the bottom-left
+ * corner of a full-width alternating grid with the whole right half empty, which
+ * read as a stranded fragment. Centred under the sequence and set at lead scale
+ * it reads as the last sentence of the story, which is what it is. */
+.coursition-landing__outro {
+  max-inline-size: 48ch;
+  margin-block: var(--spacing-500) 0;
+  margin-inline: auto;
+  color: var(--color-fg-secondary);
+  font-size: var(--text-lg);
+  line-height: 1.55;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.coursition-landing__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-200);
+  margin-block-start: var(--spacing-350);
+}
+
+/* --------------------------------------------------------------------- hero */
+
+.coursition-landing__hero {
+  position: relative;
+  padding-block: var(--spacing-600) var(--spacing-450);
+}
+
+/* One placed plum bloom behind the hero still, not a full-width wash. */
+.coursition-landing__hero::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset-block-start: -12rem;
+  inset-inline-end: -18rem;
+  inline-size: 46rem;
+  block-size: 46rem;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    light-dark(oklch(62% 0.19 328 / 16%), oklch(62% 0.19 328 / 26%)),
+    transparent
+  );
+  pointer-events: none;
+}
+
+.coursition-landing__hero-grid {
+  display: grid;
+  gap: var(--spacing-500);
+  align-items: center;
+}
+
+/* The copy column is sized so both hero CTAs sit on one line at 1280px and up;
+ * a wrapped primary action is the first thing that makes a page look unfinished.
+ * 1.12fr is the smallest copy column that still holds the longer Czech CTA pair
+ * on one line, and it buys the stage column the extra width it needs to read. */
+@media (width >= 64rem) {
+  .coursition-landing__hero-grid {
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+    gap: var(--spacing-450);
+  }
+}
+
+.coursition-landing__stage {
+  position: relative;
+  display: grid;
+}
+
+/* Room for the second frame, which only exists in the two-column hero. */
+@media (width >= 64rem) {
+  .coursition-landing__stage {
+    padding-block-end: var(--spacing-500);
+  }
+}
+
+/* ------------------------------------------------------------- still frames */
+
+/*
+ * Frame model. A still is a mat with one capture in it, always at the frame's
+ * full width and its full captured height, so no sentence is ever sliced.
+ *
+ * There is no zoom and no crop any more: the phone breakpoint is served by its
+ * own 390px-viewport captures (see `stillSizes` in the landing component), so a
+ * phone shows a whole frame at roughly the size it was taken at rather than a
+ * zoomed window into a desktop screen.
+ *
+ * Which file loads is decided by `<picture>` in the markup, not here — that way
+ * each visitor downloads one file per still instead of a light one plus a dark
+ * override.
+ */
+.coursition-landing__still {
+  --still-mat: var(--spacing-150);
+
+  position: relative;
+  margin: 0;
+  padding: var(--still-mat);
+  overflow: clip;
+  border: 1px solid var(--landing-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--landing-mat);
+  box-shadow: 0 1.5rem 3.5rem light-dark(oklch(30% 0.06 320 / 14%), oklch(0% 0 0 / 45%));
+}
+
+.coursition-landing__still picture {
+  display: block;
+}
+
+.coursition-landing__still img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  border-radius: calc(var(--radius-lg) - 0.25rem);
+}
+
+/* The mat itself still needs both explicit-class and system-preference rules,
+ * because a frame around a dark capture wants a lighter hairline and a deeper
+ * shadow than the same frame around a light one. */
+html.dark .coursition-landing__still {
+  border-color: oklch(100% 0 0 / 9%);
+  box-shadow:
+    0 1.25rem 3rem oklch(0% 0 0 / 55%),
+    inset 0 0 0 1px oklch(100% 0 0 / 4%);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.light) .coursition-landing__still {
+    border-color: oklch(100% 0 0 / 9%);
+    box-shadow:
+      0 1.25rem 3rem oklch(0% 0 0 / 55%),
+      inset 0 0 0 1px oklch(100% 0 0 / 4%);
+  }
+}
+
+.coursition-landing__still--front {
+  position: relative;
+  z-index: 1;
+}
+
+/* The hero carries one confident frame. A second, part-hidden frame behind it
+ * only ever showed two stray form labels, which read as clutter rather than
+ * composition, so the stacked pair is gone. */
+@media (width >= 64rem) {
+  .coursition-landing__still--front {
+    transform: rotate(-0.8deg);
+  }
+}
+
+/* ------------------------------------------------------------ product story */
+
+.coursition-landing__story {
+  display: grid;
+  gap: var(--spacing-600);
+  margin: var(--spacing-500) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (width >= 64rem) {
+  .coursition-landing__story {
+    gap: var(--spacing-700);
+    margin-block-start: var(--spacing-600);
+  }
+}
+
+.coursition-landing__beat {
+  display: grid;
+  gap: var(--spacing-350);
+  align-items: center;
+}
+
+@media (width >= 64rem) {
+  .coursition-landing__beat {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    gap: var(--spacing-600);
+  }
+
+  /* Alternate sides so the story reads as a composition, not a stack. The track
+   * widths mirror along with the order, so every still is the same size on the
+   * page whichever side it lands on. */
+  .coursition-landing__beat:nth-child(even) {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  }
+
+  .coursition-landing__beat:nth-child(even) .coursition-landing__beat-copy {
+    order: 2;
+  }
+}
+
+/* The mark belongs to the heading it labels, so it sits on the heading's own
+ * line rather than floating a paragraph above it. Copy blocks are a two-track
+ * grid: mark in the first track, heading beside it, body underneath spanning
+ * both — the same arrangement everywhere a mark appears on this page. */
+.coursition-landing__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--radius-md);
+
+  /* Its own tint rather than the shared light-surface token: in dark mode that
+   * token lands within a few percent of the card behind it, which is what made
+   * the mark read as a smudge. */
+  background: light-dark(oklch(62% 0.19 328 / 12%), oklch(72% 0.19 328 / 20%));
+  box-shadow: inset 0 0 0 1px light-dark(oklch(52% 0.2 328 / 30%), oklch(80% 0.14 328 / 32%));
+  color: var(--landing-accent);
+}
+
+.coursition-landing__chip-icon {
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+}
+
+.coursition-landing__beat-copy {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--spacing-200);
+  align-items: center;
+}
+
+.coursition-landing__beat-title {
+  color: var(--landing-ink);
+  grid-column: 2;
+  max-inline-size: 18ch;
+  margin-block: 0;
+  font-size: clamp(1.375rem, 2.2vw, 1.75rem);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.15;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+}
+
+.coursition-landing__beat-body {
+  grid-column: 1 / -1;
+  max-inline-size: 40ch;
+  margin-block-start: var(--spacing-250);
+  color: var(--color-fg-secondary);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.coursition-landing__still--beat {
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease;
+}
+
+@media (width >= 64rem) {
+  .coursition-landing__still--beat:hover {
+    transform: translateY(-0.25rem);
+    box-shadow: 0 2rem 4rem light-dark(oklch(30% 0.06 320 / 18%), oklch(0% 0 0 / 55%));
+  }
+}
+
+/* ----------------------------------------------------------------- benefits */
+
+.coursition-landing__benefits {
+  display: grid;
+  gap: var(--spacing-300);
+  margin: var(--spacing-500) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Two cards, two tracks. A quarter-width track left each title stacking into
+ * four or five lines and pushed the mark far off its heading. */
+@media (width >= 40rem) {
+  .coursition-landing__benefits {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-350);
+  }
+}
+
+.coursition-landing__benefit {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--spacing-200);
+  align-items: center;
+  align-content: start;
+  padding: var(--spacing-350);
+  border-radius: var(--radius-xl);
+  background: var(--landing-card);
+  box-shadow: inset 0 0 0 1px var(--landing-hairline);
+}
+
+.coursition-landing__benefit-title {
+  color: var(--landing-ink);
+  grid-column: 2;
+  margin-block: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.25;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
+.coursition-landing__benefit-body {
+  grid-column: 1 / -1;
+  max-inline-size: 46ch;
+  margin-block-start: var(--spacing-250);
+  color: var(--color-fg-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+/* ------------------------------------------------------------------ closing */
+
+.coursition-landing__closing {
+  margin-block-start: var(--spacing-400);
+  padding-block: var(--spacing-700);
+  background: light-dark(var(--brand-plum), oklch(22% 0.05 320));
+  color: oklch(97% 0.01 84);
+}
+
+.coursition-landing__closing-inner {
+  display: grid;
+  justify-items: start;
+}
+
+.coursition-landing__closing-title {
+  max-inline-size: 18ch;
+  font-size: clamp(2rem, 4.2vw, 3.125rem);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.03;
+  letter-spacing: -0.032em;
+  text-wrap: balance;
+}
+
+.coursition-landing__closing-body {
+  max-inline-size: 44ch;
+  margin-block-start: var(--spacing-250);
+  color: oklch(97% 0.01 84 / 78%);
+  font-size: var(--text-lg);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+/* On the plum band the actions need their own light treatment; the inherited
+ * tokens are tuned for the page background. */
+.coursition-landing__closing .coursition-landing__actions {
+  --color-bg-primary-base: oklch(97% 0.01 84);
+  --color-bg-primary-hover: oklch(92% 0.02 84);
+  --color-bg-primary-active: oklch(88% 0.03 84);
+  --color-button-bg-primary-base: oklch(97% 0.01 84);
+  --color-button-bg-primary-hover: oklch(92% 0.02 84);
+  --color-button-bg-primary-active: oklch(88% 0.03 84);
+  --color-button-border-primary: oklch(97% 0.01 84);
+  --color-button-fg-primary: var(--brand-plum);
+  --color-button-bg-outlined: transparent;
+  --color-button-bg-outlined-secondary-hover: oklch(97% 0.01 84 / 14%);
+  --color-button-bg-outlined-secondary-active: oklch(97% 0.01 84 / 22%);
+  --color-button-border-secondary: oklch(97% 0.01 84 / 45%);
+  --color-button-fg-outlined-secondary: oklch(97% 0.01 84);
+  --color-ring: oklch(97% 0.01 84);
+}
+
+/* ------------------------------------------------------------------- motion */
+
+/* The only entrance on the page: the hero settling once, so the product still
+ * reads as the subject. Everything else is static. */
+@media (prefers-reduced-motion: no-preference) {
+  .coursition-landing__hero-copy,
+  .coursition-landing__stage {
+    animation: coursition-landing-rise 620ms cubic-bezier(0.22, 0.68, 0.31, 1) both;
+  }
+
+  .coursition-landing__stage {
+    animation-delay: 90ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coursition-landing__still--beat {
+    transition: none;
+  }
+
+  .coursition-landing__still--beat:hover {
+    transform: none;
+  }
+}
+
+@keyframes coursition-landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}

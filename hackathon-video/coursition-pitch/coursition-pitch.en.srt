@@ -1,0 +1,48 @@
+1
+00:00:00,410 --> 00:00:03,760
+Course text is easy. Good learning is hard.
+
+2
+00:00:03,700 --> 00:00:09,680
+Teachable, Thinkific and Moodle host and sell courses. Coursition prepares the learning.
+
+3
+00:00:09,530 --> 00:00:18,000
+I came in with a rough prototype and one risky bet: that A.I. could turn raw material into practice that actually teaches.
+
+4
+00:00:17,850 --> 00:00:25,680
+Generating content is easy. Generating practice is hard. So I stopped asking the model for random mini-games.
+
+5
+00:00:25,530 --> 00:00:34,150
+It fills reusable activity engines: retrieval checks, scenario decisions, ordering, practice tasks, and rubric answers.
+
+6
+00:00:34,050 --> 00:00:37,920
+Add a source — here, a dense German statistics PDF.
+
+7
+00:00:37,770 --> 00:00:40,890
+Coursition drafts the course preparation,
+
+8
+00:00:40,740 --> 00:00:42,460
+the learning objectives,
+
+9
+00:00:42,310 --> 00:00:45,020
+an activity plan built from those engines,
+
+10
+00:00:44,870 --> 00:00:48,500
+and a playable preview, where content becomes practice.
+
+11
+00:00:48,350 --> 00:00:57,680
+It's not sold, and it's not finished. But the wedge is sharper. Next: real creators — two thousand on my newsletter, ten thousand on LinkedIn.
+
+12
+00:00:57,530 --> 00:01:02,320
+Coursition. Course preparation for reusable, interactive learning.
+

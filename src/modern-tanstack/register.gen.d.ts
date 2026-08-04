@@ -7,3 +7,15 @@ declare module '@modern-js/plugin-tanstack/runtime' {
     router: typeof router0;
   }
 }
+
+declare module '@modern-js/plugin-i18n/runtime' {
+  interface UltramodernCanonicalRoutes {
+    '/': Record<string, never>;
+    '/course-creation/$courseId/$step': { "courseId": string; "step": string };
+    '/dashboard': Record<string, never>;
+    '/privacy': Record<string, never>;
+    '/sign-in': Record<string, never>;
+    '/sign-up': Record<string, never>;
+    '/terms': Record<string, never>;
+  }
+}

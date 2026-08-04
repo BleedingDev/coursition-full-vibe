@@ -1,0 +1,485 @@
+{
+  "generated_at": "2026-07-15T16:46:57.518403+00:00",
+  "graph_id": "30-coursition-integrity-contract-plus-6-plans-204c32596c",
+  "plan_set_hash": "2aaa64d858",
+  "selection_hash": "204c32596c",
+  "plan_count": 7,
+  "edge_count": 8,
+  "plans_root": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans",
+  "selected_globs": ["3[0-6]-coursition-*.plan.md"],
+  "selected_plan_paths": [
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/30-coursition-integrity-contract.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/31-coursition-d1-draft-authority.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/32-coursition-client-request-ordering.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/33-coursition-server-workflow-integrity.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/34-coursition-source-asset-lifecycle.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/35-coursition-form-autosave-integrity.plan.md",
+    "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/36-coursition-data-integrity-release.plan.md"
+  ],
+  "edges": [
+    {
+      "source": "30-coursition-integrity-contract",
+      "target": "31-coursition-d1-draft-authority"
+    },
+    {
+      "source": "30-coursition-integrity-contract",
+      "target": "32-coursition-client-request-ordering"
+    },
+    {
+      "source": "31-coursition-d1-draft-authority",
+      "target": "33-coursition-server-workflow-integrity"
+    },
+    {
+      "source": "31-coursition-d1-draft-authority",
+      "target": "34-coursition-source-asset-lifecycle"
+    },
+    {
+      "source": "32-coursition-client-request-ordering",
+      "target": "35-coursition-form-autosave-integrity"
+    },
+    {
+      "source": "33-coursition-server-workflow-integrity",
+      "target": "36-coursition-data-integrity-release"
+    },
+    {
+      "source": "34-coursition-source-asset-lifecycle",
+      "target": "36-coursition-data-integrity-release"
+    },
+    {
+      "source": "35-coursition-form-autosave-integrity",
+      "target": "36-coursition-data-integrity-release"
+    }
+  ],
+  "plans": [
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/30-coursition-integrity-contract.plan.md",
+      "slug": "30-coursition-integrity-contract",
+      "name": "coursition-integrity-contract",
+      "overview": "Establish the revisioned workflow and persistence contract that every storage, server, and client integrity repair will implement, without changing the creator-facing course flow.",
+      "todos": [
+        {
+          "id": "integrity-contract-revision-model",
+          "content": "Add an integer draft revision to CourseDraft, CourseDraftSummary, and WorkflowSnapshot and require expectedRevision on every mutating draft-scoped workflow action.",
+          "status": "completed",
+          "ordinal": 1
+        },
+        {
+          "id": "integrity-contract-operation-identity",
+          "content": "Add operationId to non-repeatable create, source, generation, and destructive actions so duplicate submissions can return the already committed result instead of repeating side effects.",
+          "status": "completed",
+          "ordinal": 2
+        },
+        {
+          "id": "integrity-contract-conflict-api",
+          "content": "Add a typed HTTP 409 workflow conflict response carrying the current draft revision and enough current snapshot data for deterministic client reconciliation.",
+          "status": "completed",
+          "ordinal": 3
+        },
+        {
+          "id": "integrity-contract-d1-schema",
+          "content": "Define the Drizzle and SQL schema for one coursition_draft row per draft with owner, JSON payload, revision, created and updated timestamps, plus owner and recency indexes.",
+          "status": "completed",
+          "ordinal": 4
+        },
+        {
+          "id": "integrity-contract-schema-tests",
+          "content": "Update shared schema round-trip and API contract tests for revisions, expected revisions, operation identity, and typed conflict responses.",
+          "status": "completed",
+          "ordinal": 5
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/31-coursition-d1-draft-authority.plan.md",
+      "slug": "31-coursition-d1-draft-authority",
+      "name": "coursition-d1-draft-authority",
+      "overview": "Replace the single global Coursition JSON row with per-draft D1 authority, atomic revision checks, coherent snapshots, and a verified one-time production migration.",
+      "todos": [
+        {
+          "id": "d1-authority-repository",
+          "content": "Implement a Drizzle draft repository that creates, reads, lists, compare-and-swap updates, and deletes rows by draft ID and owner ID without reading or writing unrelated owners.",
+          "status": "completed",
+          "ordinal": 1
+        },
+        {
+          "id": "d1-authority-atomic-snapshots",
+          "content": "Build selected draft and dashboard summaries from one repository read result so a WorkflowSnapshot cannot mix draft and summary versions.",
+          "status": "completed",
+          "ordinal": 2
+        },
+        {
+          "id": "d1-authority-idempotency",
+          "content": "Persist committed operation IDs with their resulting revision so repeated create and draft mutations are idempotent across Worker isolates.",
+          "status": "completed",
+          "ordinal": 3
+        },
+        {
+          "id": "d1-authority-storage-boundaries",
+          "content": "Separate draft-row persistence from source-blob persistence and expose narrow Effect services that server workflow and source lifecycle lanes can use without sharing the old StoreBackend aggregate.",
+          "status": "completed",
+          "ordinal": 4
+        },
+        {
+          "id": "d1-authority-backfill",
+          "content": "Add a one-time migration command that backs up and validates the primary aggregate, inserts each current draft at revision one, and produces aggregate counts without exposing user content.",
+          "status": "completed",
+          "ordinal": 5
+        },
+        {
+          "id": "d1-authority-concurrency-tests",
+          "content": "Add repository integration tests proving two owners and two repository instances cannot erase one another and stale expected revisions return the typed conflict.",
+          "status": "completed",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/32-coursition-client-request-ordering.plan.md",
+      "slug": "32-coursition-client-request-ordering",
+      "name": "coursition-client-request-ordering",
+      "overview": "Make client state revision-aware and URL-safe through one request coordinator that orders mutations, cancels obsolete reads, revalidates shared state, and invalidates expired authentication.",
+      "todos": [
+        {
+          "id": "client-ordering-coordinator",
+          "content": "Introduce a workflow request coordinator that owns session identity, current route token, current draft revision, cancelable reads, and one serialized mutation queue per draft.",
+          "status": "completed",
+          "ordinal": 1
+        },
+        {
+          "id": "client-ordering-apply-guards",
+          "content": "Apply a response only when its session, draft, route token, and revision are still current and ignore every response older than the locally committed revision.",
+          "status": "completed",
+          "ordinal": 2
+        },
+        {
+          "id": "client-ordering-route-loading",
+          "content": "Replace refreshedRouteKeyRef loading guards with explicit request generations so rapid Back and Forward navigation cannot restore an old route or leave permanent loading.",
+          "status": "completed",
+          "ordinal": 3
+        },
+        {
+          "id": "client-ordering-cache-revalidation",
+          "content": "Keep locale navigation warm without a refetch while revalidating dashboard state on focus and visibility and broadcasting successful draft mutations to other tabs.",
+          "status": "completed",
+          "ordinal": 4
+        },
+        {
+          "id": "client-ordering-auth-expiry",
+          "content": "Treat workflow 401 as session invalidation by clearing user and snapshot caches, cancelling pending work, and navigating to the locale-correct sign-in URL.",
+          "status": "completed",
+          "ordinal": 5
+        },
+        {
+          "id": "client-ordering-session-bootstrap",
+          "content": "Distinguish absent loader data from an explicit anonymous session, show retry for transient session bootstrap failure, and surface sign-out failure instead of silently preserving stale authentication.",
+          "status": "completed",
+          "ordinal": 6
+        },
+        {
+          "id": "client-ordering-delayed-response-tests",
+          "content": "Add deterministic client tests with delayed out-of-order reads and mutations covering route changes, locale changes, cross-tab invalidation, conflicts, and auth expiry.",
+          "status": "completed",
+          "ordinal": 7
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/33-coursition-server-workflow-integrity.plan.md",
+      "slug": "33-coursition-server-workflow-integrity",
+      "name": "coursition-server-workflow-integrity",
+      "overview": "Make every server workflow mutation revision-safe, merge long AI results into current state, recover interrupted runs, and enforce child and finding invariants before committing.",
+      "todos": [
+        {
+          "id": "server-integrity-repository-adoption",
+          "content": "Route every workflow read and mutation through the per-draft repository with owner checks, expected revision, operation identity, and typed conflict propagation.",
+          "status": "completed",
+          "ordinal": 1
+        },
+        {
+          "id": "server-integrity-ai-merge",
+          "content": "Reload the latest draft after each external AI phase and merge only fields owned by that phase so title, sources, preparation, and unrelated edits cannot be restored from a captured stale aggregate.",
+          "status": "completed",
+          "ordinal": 2
+        },
+        {
+          "id": "server-integrity-run-recovery",
+          "content": "Reconcile persisted running AI runs older than the accepted timeout into failed recoverable runs and allow a safe idempotent retry without duplicating applied output.",
+          "status": "completed",
+          "ordinal": 3
+        },
+        {
+          "id": "server-integrity-child-validation",
+          "content": "Reject missing or deleted source, objective, activity brief, AI run, and finding IDs before staling content, changing steps, or incrementing a revision.",
+          "status": "completed",
+          "ordinal": 4
+        },
+        {
+          "id": "server-integrity-findings",
+          "content": "Derive findings from the final post-mutation draft while preserving resolved or dismissed status by fingerprint and never persist findings computed from pre-stale state.",
+          "status": "completed",
+          "ordinal": 5
+        },
+        {
+          "id": "server-integrity-race-tests",
+          "content": "Add delayed-AI and conflicting-mutation tests proving concurrent edits survive success, provider failure, interrupted-run recovery, retry, and regeneration.",
+          "status": "completed",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/34-coursition-source-asset-lifecycle.plan.md",
+      "slug": "34-coursition-source-asset-lifecycle",
+      "name": "coursition-source-asset-lifecycle",
+      "overview": "Give uploaded source bytes a bounded, reversible, privacy-safe R2 lifecycle with rollback, deletion, cleanup recovery, and consistent client and server file validation.",
+      "todos": [
+        {
+          "id": "source-lifecycle-blob-api",
+          "content": "Add source blob delete and cleanup operations to the extracted blob service for local storage and Cloudflare R2 without exposing bucket keys to the client.",
+          "status": "completed",
+          "ordinal": 1
+        },
+        {
+          "id": "source-lifecycle-upload-rollback",
+          "content": "Delete a newly written blob when processing, validation, or the following draft CAS commit fails so an unsuccessful addSource cannot leave unreachable bytes.",
+          "status": "completed",
+          "ordinal": 2
+        },
+        {
+          "id": "source-lifecycle-delete-outbox",
+          "content": "Add a durable D1 cleanup outbox for source and draft deletion so failed R2 deletes are retried and can be audited without retaining user content indefinitely.",
+          "status": "completed",
+          "ordinal": 3
+        },
+        {
+          "id": "source-lifecycle-deleted-retry",
+          "content": "Reject retrySource for deleted sources and ensure source deletion removes derived documents and chunks before scheduling the referenced blob for cleanup.",
+          "status": "completed",
+          "ordinal": 4
+        },
+        {
+          "id": "source-lifecycle-file-limits",
+          "content": "Enforce one documented 10 MiB file limit before client base64 conversion and again at the server schema boundary with clear localized validation errors.",
+          "status": "completed",
+          "ordinal": 5
+        },
+        {
+          "id": "source-lifecycle-integration-tests",
+          "content": "Add local and R2-adapter contract tests for upload success, processing failure, CAS conflict, source deletion, draft deletion, cleanup retry, and zero-orphan reconciliation.",
+          "status": "completed",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/35-coursition-form-autosave-integrity.plan.md",
+      "slug": "35-coursition-form-autosave-integrity",
+      "name": "coursition-form-autosave-integrity",
+      "overview": "Make every editable creator form preserve in-progress values, save in a deterministic order, survive locale navigation, and never erase newer input when an older request finishes.",
+      "todos": [
+        {
+          "id": "form-integrity-autosave-boundaries",
+          "content": "Save preparation only after debounce or leaving the whole panel and route title, objective, and activity saves through the per-draft mutation queue.",
+          "status": "completed",
+          "ordinal": 1
+        },
+        {
+          "id": "form-integrity-navigation-flush",
+          "content": "Flush or explicitly resolve pending autosaves before step navigation, generation, preview, delete, sign-out, and any action that reads the just-edited data.",
+          "status": "completed",
+          "ordinal": 2
+        },
+        {
+          "id": "form-integrity-controlled-drafts",
+          "content": "Replace stale uncontrolled objective and activity default values with revision-aware edit buffers that sync server changes only while the local field is pristine.",
+          "status": "completed",
+          "ordinal": 3
+        },
+        {
+          "id": "form-integrity-source-submit",
+          "content": "Version each source-tab form draft and reset only the submitted unchanged version so typing or choosing a new file during an in-flight add never loses the next draft.",
+          "status": "completed",
+          "ordinal": 4
+        },
+        {
+          "id": "form-integrity-file-name",
+          "content": "Track whether a file source name is automatic or user-authored so replacing a file updates only an automatic name and never mismatches bytes and metadata.",
+          "status": "completed",
+          "ordinal": 5
+        },
+        {
+          "id": "form-integrity-retry-state",
+          "content": "Clear deduplication and busy state after every failed autosave and prevent conflicting retry, delete, resolve, dismiss, and generation actions from running together.",
+          "status": "completed",
+          "ordinal": 6
+        },
+        {
+          "id": "form-integrity-transient-drafts",
+          "content": "Preserve non-file source drafts and other unsaved text edit buffers across route and locale remounts in a session-scoped per-user per-draft cache while clearly handling file selections that browsers cannot restore.",
+          "status": "completed",
+          "ordinal": 7
+        },
+        {
+          "id": "form-integrity-interaction-tests",
+          "content": "Add interaction tests for tab switching, in-flight source edits, internal preparation focus changes, autosave failure retry, navigation flush, locale preservation, and server revision updates.",
+          "status": "completed",
+          "ordinal": 8
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/36-coursition-data-integrity-release.plan.md",
+      "slug": "36-coursition-data-integrity-release",
+      "name": "coursition-data-integrity-release",
+      "overview": "Integrate every data-consistency lane, migrate and verify production safely, exercise concurrent real workflows, and deploy one evidence-backed release with an immediate rollback path.",
+      "todos": [
+        {
+          "id": "integrity-release-integrate",
+          "content": "Review and integrate the storage, server, source, client, and form lanes against the revision contract and remove duplicate authority, stale fallback, and overlapping mutation paths.",
+          "status": "completed",
+          "ordinal": 1
+        },
+        {
+          "id": "integrity-release-gates",
+          "content": "Run format, lint, typecheck, Effect diagnostics, i18n, all tests, UltraModern contract checks, Cloudflare build, migration dry-run, and invariant audit before deployment.",
+          "status": "completed",
+          "ordinal": 2
+        },
+        {
+          "id": "integrity-release-staging-qa",
+          "content": "Exercise two authenticated browser sessions through create, edit, autosave, rapid route changes, locale changes, source upload, generation, delete, conflict, refresh, and auth-expiry scenarios on a non-production deployment.",
+          "status": "completed",
+          "ordinal": 3
+        },
+        {
+          "id": "integrity-release-production-migration",
+          "content": "Capture aggregate backup evidence, run the per-draft production backfill, verify counts and revisions, and keep the old aggregate read-disabled but available for immediate rollback.",
+          "status": "completed",
+          "ordinal": 4
+        },
+        {
+          "id": "integrity-release-deploy-smoke",
+          "content": "Deploy the verified Worker, repeat the critical multi-tab smoke flow, verify D1 and R2 invariants plus zero abandoned runs, and remove all temporary QA users, courses, sessions, and blobs.",
+          "status": "completed",
+          "ordinal": 5
+        },
+        {
+          "id": "integrity-release-closeout",
+          "content": "Record the production version, migration result, rollback command, invariant counts, and remaining non-blocking risks for the CzechInvest delivery handoff.",
+          "status": "completed",
+          "ordinal": 6
+        }
+      ],
+      "is_project": false,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "frontier": [
+    {
+      "plan_slug": "32-coursition-client-request-ordering",
+      "plan_name": "coursition-client-request-ordering",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/32-coursition-client-request-ordering.plan.md",
+      "plan_status": "completed",
+      "state": "done",
+      "blocked_by": [],
+      "active": [],
+      "upcoming": [],
+      "completed": 7,
+      "total": 7
+    },
+    {
+      "plan_slug": "31-coursition-d1-draft-authority",
+      "plan_name": "coursition-d1-draft-authority",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/31-coursition-d1-draft-authority.plan.md",
+      "plan_status": "completed",
+      "state": "done",
+      "blocked_by": [],
+      "active": [],
+      "upcoming": [],
+      "completed": 6,
+      "total": 6
+    },
+    {
+      "plan_slug": "36-coursition-data-integrity-release",
+      "plan_name": "coursition-data-integrity-release",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/36-coursition-data-integrity-release.plan.md",
+      "plan_status": "completed",
+      "state": "done",
+      "blocked_by": [],
+      "active": [],
+      "upcoming": [],
+      "completed": 6,
+      "total": 6
+    },
+    {
+      "plan_slug": "35-coursition-form-autosave-integrity",
+      "plan_name": "coursition-form-autosave-integrity",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/35-coursition-form-autosave-integrity.plan.md",
+      "plan_status": "completed",
+      "state": "done",
+      "blocked_by": [],
+      "active": [],
+      "upcoming": [],
+      "completed": 8,
+      "total": 8
+    },
+    {
+      "plan_slug": "30-coursition-integrity-contract",
+      "plan_name": "coursition-integrity-contract",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/30-coursition-integrity-contract.plan.md",
+      "plan_status": "completed",
+      "state": "done",
+      "blocked_by": [],
+      "active": [],
+      "upcoming": [],
+      "completed": 5,
+      "total": 5
+    },
+    {
+      "plan_slug": "33-coursition-server-workflow-integrity",
+      "plan_name": "coursition-server-workflow-integrity",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/33-coursition-server-workflow-integrity.plan.md",
+      "plan_status": "completed",
+      "state": "done",
+      "blocked_by": [],
+      "active": [],
+      "upcoming": [],
+      "completed": 6,
+      "total": 6
+    },
+    {
+      "plan_slug": "34-coursition-source-asset-lifecycle",
+      "plan_name": "coursition-source-asset-lifecycle",
+      "plan_path": "/Users/satan/work/coursition-all/coursition-full-vibe/.codex/plans/34-coursition-source-asset-lifecycle.plan.md",
+      "plan_status": "completed",
+      "state": "done",
+      "blocked_by": [],
+      "active": [],
+      "upcoming": [],
+      "completed": 6,
+      "total": 6
+    }
+  ],
+  "errors": [],
+  "warnings": [],
+  "graph_source": "explicit"
+}

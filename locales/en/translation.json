@@ -1,12 +1,17 @@
 {
   "coursition": {
     "app": {
+      "autosave": {
+        "dirty": "Changes are waiting to be saved…",
+        "error": "Changes could not be saved.",
+        "saved": "All changes are saved.",
+        "saving": "Saving changes…"
+      },
       "auth": {
         "createAccount": "Create account",
         "creatingAccount": "Creating account...",
         "email": "Email",
         "emailPlaceholder": "alex@example.com",
-        "modeLabel": "Authentication mode",
         "name": "Name",
         "namePlaceholder": "Alex Morgan",
         "password": "Password",
@@ -75,6 +80,7 @@
       },
       "dashboard": {
         "courseMeta": "{{mode}} · {{step}} · {{sources}} · {{activities}} · {{content}}",
+        "demoBadge": "Demo course",
         "counts": {
           "activities": {
             "few": "{{count}} activities",
@@ -92,7 +98,9 @@
             "other": "{{count}} sources"
           }
         },
+        "cancel": "Cancel",
         "confirmDelete": "Confirm delete",
+        "confirmDeleteMessage": "This action can't be undone. Do you really want to continue?",
         "delete": "Delete",
         "edit": "Edit",
         "empty": "No courses yet. Create the first course from this dashboard.",
@@ -115,7 +123,14 @@
         "modeSaveRequired": "Course generation mode is still saving. Try again in a moment."
       },
       "eyebrow": "Course generator",
-      "loadingCourse": "Loading course...",
+      "loading": {
+        "body": "We are restoring your saved data. This may take a moment.",
+        "courseTitle": "Loading course",
+        "dashboardTitle": "Loading your courses",
+        "failedTitle": "The data could not be loaded",
+        "retry": "Try again",
+        "sessionTitle": "Loading your account"
+      },
       "modes": {
         "assist": {
           "body": "Guided build. AI prefills each source-first step, then you review and edit before continuing.",
@@ -124,7 +139,7 @@
         },
         "generate": {
           "action": "Generate course",
-          "body": "Full build. Add source material and the app creates the course preparation, objective map, activity plan, course content, and playable preview from it.",
+          "body": "Full build. Add source material and the app creates the course preparation, objective map, activity plan, course content, and course preview from it.",
           "building": "Generating course...",
           "impact": "Use this when you want the complete generated course first, with the option to revisit the setup afterward.",
           "label": "Generate course for me"
@@ -147,9 +162,20 @@
         "continue": "Continue",
         "completed": "Completed",
         "current": "Current step",
+        "advancing": "Preparing the next step…",
+        "advancingByStep": {
+          "activityPlan": "Creating course content…",
+          "courseContent": "Opening the preview…",
+          "generateCourse": "Generating the complete course…",
+          "mode": "Opening sources…",
+          "objectives": "Preparing activities…",
+          "preparation": "Creating objectives and the activity plan…",
+          "sources": "Analyzing sources and preparing the course…"
+        },
         "label": "Course creation navigation",
         "locked": "Locked",
         "next": "Next",
+        "navigating": "Opening the selected step…",
         "ready": "Ready to try",
         "skipped": "Skipped",
         "stale": "Stale",
@@ -284,7 +310,7 @@
           }
         },
         "strongDecision": "Strong decision",
-        "title": "Playable preview"
+        "title": "Course preview"
       },
       "sourceTypes": {
         "file": "File",
@@ -298,10 +324,15 @@
         "mode": "Mode",
         "objectives": "Objective map",
         "preparation": "Course preparation",
-        "preview": "Playable preview",
+        "preview": "Course preview",
         "sources": "Sources"
       },
-      "summary": "Create a course from source material, generate the plan, and validate the playable learning experience.",
+      "studioStages": {
+        "course": "Course",
+        "design": "Design",
+        "inputs": "Inputs"
+      },
+      "summary": "Create a course from source material, generate the plan, and validate the course preview.",
       "skipToStudio": "Skip to course studio",
       "title": "Course preparation flow",
       "sources": {
@@ -315,6 +346,12 @@
         "generateEmptyCopy": "Add source material before generating the course.",
         "notesContent": "Raw notes",
         "notesNamePlaceholder": "Customer onboarding workshop notes",
+        "fileNamePlaceholder": "Customer onboarding materials.pdf",
+        "fileAddFailed": "The file could not be added. Check the error and try again.",
+        "fileProcessing": "Uploading and processing the document. This can take up to a minute.",
+        "fileReadFailed": "The selected file could not be read.",
+        "fileRequired": "Choose a file before adding the source.",
+        "fileTooLarge": "The file is too large. The maximum size is 10 MiB.",
         "notesPlaceholder": "New hires should be able to run their first customer kickoff without missing discovery, access, or follow-up steps.",
         "retry": "Retry",
         "showPreview": "Show preview",
@@ -336,6 +373,7 @@
         "urlPlaceholder": "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout"
       },
       "preparation": {
+        "advanced": "Additional settings",
         "audience": "Target audience",
         "audiencePlaceholder": "Describe who this course is for.",
         "avoid": "What should the course avoid?",
@@ -411,6 +449,8 @@
         "title": "Objective map"
       },
       "courseContent": {
+        "nextSection": "Show the next course section",
+        "previousSection": "Show the previous course section",
         "empty": "Generate the activity plan to create course content.",
         "generate": "Generate course content",
         "generating": "Generating course content...",
@@ -420,21 +460,242 @@
       }
     },
     "common": {
+      "loadingNextPage": "Loading the next page…",
       "productName": "Coursition",
       "theme": {
         "switcher": "Switch theme",
         "light": "Switch to light mode",
         "dark": "Switch to dark mode"
+      },
+      "headerCta": "Upload your first file",
+      "headerSignIn": "Sign in"
+    },
+    "footer": {
+      "company": {
+        "label": "Operated by",
+        "name": "Coursition s.r.o.",
+        "address": "Lidická 700/19, Veveří, 602 00 Brno, Czech Republic",
+        "ids": "Company ID 21017069 · VAT ID CZ21017069",
+        "register": "Registered in the Commercial Register kept by the Regional Court in Brno, file no. C 137141",
+        "email": "info@coursition.com"
+      },
+      "copyright": "© {{year}} Coursition",
+      "groups": {
+        "account": "Account",
+        "legal": "Legal"
+      },
+      "links": {
+        "signIn": "Sign in",
+        "signUp": "Upload your first file",
+        "privacy": "Privacy",
+        "terms": "Terms"
+      },
+      "navLabel": "Footer links",
+      "publicity": {
+        "countryAlt": "Czech Republic – The Country For The Future logo",
+        "incubationAlt": "Technology Incubation programme logo, run by CzechInvest",
+        "statement": "This project was implemented with funding from the Technology Incubation programme."
+      },
+      "tagline": "A studio for course authors."
+    },
+    "landing": {
+      "closing": {
+        "body": "Upload what you have. You decide: what stays, what changes, what goes.",
+        "primaryCta": "Upload your first file",
+        "title": "The course stays yours."
+      },
+      "hero": {
+        "lead": "Upload a file. A written course opens — objectives, activities, the text learners read. You do not write. You cut.",
+        "primaryCta": "Upload your first file",
+        "still": {
+          "alt": "Coursition objective map: an objective written from an uploaded file, labelled with how well the file backs it and open for editing."
+        },
+        "titleAccent": "You start on the far side of it.",
+        "titleLead": "The hardest part of a course is the blank page."
+      },
+      "receive": {
+        "intro": "From objectives to the text learners read. All of it, not an outline.",
+        "items": {
+          "activityPlan": {
+            "alt": "Coursition activity plan: activity name, activity type, and editable instructions for a single objective.",
+            "body": "Every objective gets an activity. What learners do, when they are done. You tune the wording.",
+            "title": "You do not write briefs"
+          },
+          "courseContent": {
+            "alt": "Coursition course content: a written section explained from an uploaded file, with the practical task underneath.",
+            "body": "Every activity comes with finished text. Nothing missing.",
+            "title": "You do not stitch text together"
+          },
+          "objectives": {
+            "alt": "Coursition objective map: one objective with its title and the skill learners walk away with.",
+            "body": "You read them and cut what does not belong.",
+            "title": "You do not invent objectives"
+          }
+        },
+        "outro": "Rewrite an objective. The activities and the text follow. One fix, not three.",
+        "title": "A finished first draft."
+      },
+      "trust": {
+        "intro": "Find the weak spots while fixing them is cheap.",
+        "items": {
+          "preview": {
+            "body": "Walk the course their way. Fix what breaks before they hit it.",
+            "title": "You find the holes, not your learners"
+          },
+          "sourceSupport": {
+            "body": "Coursition marks it: your file, or its own guess. No digging.",
+            "title": "Every objective says where it came from"
+          }
+        },
+        "title": "You see it first."
       }
     },
     "languages": {
       "cs": "Čeština",
       "en": "English",
-      "switcher": "Language"
+      "switcher": "Language",
+      "switchTo": "Switch to {{language}}"
+    },
+    "legal": {
+      "backToHome": "Back to Coursition",
+      "contact": {
+        "address": "Lidická 700/19, Veveří, 602 00 Brno, Czech Republic",
+        "company": "Coursition s.r.o.",
+        "email": "info@coursition.com",
+        "emailLabel": "Write to us",
+        "registration": "Company ID 21017069, VAT ID CZ21017069, registered in the Commercial Register kept by the Regional Court in Brno, file C 137141.",
+        "title": "Who you are dealing with"
+      },
+      "eyebrow": "Legal",
+      "lastUpdated": "3 August 2026",
+      "lastUpdatedLabel": "Last updated",
+      "navLabel": "Legal pages",
+      "privacy": {
+        "description": "How Coursition handles your account, the material you upload and the course drafts we generate from it.",
+        "lead": "Short version: we keep your account, the files you upload and the courses you build from them. We use that to run the product for you, and for nothing else.",
+        "sections": {
+          "ai": {
+            "body": "Drafting a course means sending the text of your sources to the AI provider we use for generation. That provider processes the text to return a draft and works only on our instructions. Please do not upload material you are not allowed to hand to an external processor.",
+            "title": "Sending your material to an AI model"
+          },
+          "business": {
+            "body": "If your organisation bought Coursition under a signed agreement, your organisation decides what happens to the data in its workspace and we act as its processor under the data processing terms of that agreement. In that case ask your organisation for its own privacy notice.",
+            "title": "If you use Coursition through your employer"
+          },
+          "changes": {
+            "body": "If we change how we handle your data, we update this page and the date at the top of it. If a change materially affects you, we tell you before it takes effect.",
+            "title": "Changes to this notice"
+          },
+          "cookies": {
+            "body": "We only set the cookies the site needs to work: one that keeps you signed in, one that remembers the language you chose, and one that remembers whether you picked the light or dark theme. There is no advertising and no third-party analytics.",
+            "title": "Cookies"
+          },
+          "data": {
+            "body": "We collect three things, and only these:",
+            "items": {
+              "account": "Your account: name, email address and password. Passwords are stored hashed, never in readable form.",
+              "content": "Your work: the files and text you upload as source material, and the course drafts generated from them.",
+              "technical": "Session data: the IP address and browser your sign-ins come from, so we can spot suspicious access to your account."
+            },
+            "title": "What we collect"
+          },
+          "purposes": {
+            "body": "We use your data to run your account, to generate and store your course drafts, to keep the service secure, and to answer you when you contact us. The legal basis is performing our agreement with you, plus our legitimate interest in keeping the service safe and working. We do not profile you and we do not use your material to train models of our own.",
+            "title": "Why we use it"
+          },
+          "retention": {
+            "body": "Your account data lives as long as your account does. Source files and course drafts stay until you delete them or delete your account, after which they are removed from storage. We keep invoicing records for as long as Czech accounting and tax law requires.",
+            "title": "How long we keep it"
+          },
+          "rights": {
+            "body": "Under the GDPR you can ask us to:",
+            "items": {
+              "access": "tell you what data we hold about you and give you a copy,",
+              "complaint": "and you can complain to the Czech Data Protection Authority (Úřad pro ochranu osobních údajů, uoou.gov.cz) if you think we got it wrong.",
+              "correction": "correct anything that is wrong,",
+              "deletion": "delete your account and everything in it,",
+              "objection": "stop or limit a particular use of your data,",
+              "portability": "hand your data over in a portable format,"
+            },
+            "title": "Your rights"
+          },
+          "scope": {
+            "body": "This page explains what Coursition does with personal data when you sign up and use the course studio yourself. It is written for people, not for lawyers, and it describes what the product actually does today.",
+            "title": "What this page covers"
+          },
+          "sharing": {
+            "body": "We do not sell personal data and we do not share it for marketing. We use service providers to host the application, store your files and run AI generation; they process data only on our instructions and only to keep the product running. We hand data to authorities only when the law obliges us to.",
+            "title": "Who else sees it"
+          }
+        },
+        "title": "Privacy"
+      },
+      "terms": {
+        "description": "The rules for using the Coursition course studio: what we provide, what you are responsible for, and what happens if something goes wrong.",
+        "lead": "Short version: your material and your courses stay yours, the studio stays ours, and every draft the AI produces is yours to check before you teach from it.",
+        "sections": {
+          "acceptableUse": {
+            "body": "While using Coursition, please do not:",
+            "items": {
+              "abuse": "try to break, overload, or get around the security of the service.",
+              "resell": "resell, rent out or sublicense access to the studio,",
+              "reverseEngineer": "copy, reverse engineer or rebuild the software behind it,",
+              "unlawful": "upload unlawful material or material you have no right to use,"
+            },
+            "title": "What you must not do"
+          },
+          "account": {
+            "body": "You need an account to use the studio. Give us a working email address, keep your password to yourself, and treat everything done through your account as done by you. Tell us at info@coursition.com if you think someone else got in.",
+            "title": "Your account"
+          },
+          "ai": {
+            "body": "Course drafts are produced by AI models. They can be wrong, incomplete or one-sided, and AI output is not always protected by copyright. Read and edit every draft before you put it in front of learners. Coursition is a drafting tool, not a substitute for your judgement.",
+            "title": "AI-generated drafts"
+          },
+          "availability": {
+            "body": "We work to keep Coursition up, but the service is provided as it is. We may change, add or retire features, and we do not promise uninterrupted or error-free operation. Keep your own copy of anything you cannot afford to lose.",
+            "title": "Availability"
+          },
+          "business": {
+            "body": "If your organisation signed a separate written agreement with us, that agreement governs its use of Coursition and these terms only fill the gaps it leaves.",
+            "title": "Business customers"
+          },
+          "changes": {
+            "body": "We may update these terms. The date at the top of this page shows the current version, and we tell you before a material change takes effect. If you do not accept a change, you can close your account.",
+            "title": "Changes to these terms"
+          },
+          "law": {
+            "body": "Czech law applies. We would rather sort a disagreement out by talking to you; if that fails, it is decided by the Czech court with jurisdiction over Coursition's registered office.",
+            "title": "Governing law"
+          },
+          "liability": {
+            "body": "We are liable for damage we cause intentionally or by gross negligence, and for anything the law does not allow us to exclude. Beyond that we are not liable for lost profit, lost data, or the consequences of publishing a course draft you did not review.",
+            "title": "Liability"
+          },
+          "scope": {
+            "body": "These terms apply when you create a Coursition account and use the course studio yourself. They are an agreement between you and Coursition s.r.o.",
+            "title": "Who these terms are between"
+          },
+          "service": {
+            "body": "Coursition takes the material you upload and drafts learning objectives, an activity plan and course content from it. You review and edit every step, and nothing is published anywhere by us.",
+            "title": "What Coursition does"
+          },
+          "termination": {
+            "body": "You can delete your account whenever you like. We may suspend or close an account that breaks these terms or is used unlawfully, and we will tell you why unless the law stops us. After closure we delete the content in the account.",
+            "title": "Ending the agreement"
+          },
+          "yourContent": {
+            "body": "Your source material stays yours, and so do the courses you build from it. You give us permission to store and process that material for one purpose only: running the service for you. By uploading, you confirm you are allowed to use the material and to have us process it.",
+            "title": "Your material and your courses"
+          }
+        },
+        "title": "Terms of use"
+      }
     },
     "meta": {
-      "description": "Coursition helps creators turn source material into reviewed courses.",
-      "title": "Coursition course generator"
+      "description": "Upload your material. Coursition drafts the course — objectives, activities, the text learners read.",
+      "imageAlt": "Coursition course studio showing generated learning objectives ready for review.",
+      "title": "Coursition: a course from your material"
     }
   }
 }

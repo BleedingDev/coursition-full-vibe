@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import effectBff from '../api/effect/index.ts';
+import effectBff from '../api/index.ts';
 import {
   generatedActivityFromAxSpec,
   generateCourseContentWithAi,
@@ -76,8 +76,43 @@ const withEnv = async (env, run) => {
   }
 };
 
+const operationBackedActions = new Set([
+  'addSource',
+  'advanceDraft',
+  'createDraft',
+  'deleteDraft',
+  'deleteSource',
+  'generateActivities',
+  'generateCourse',
+  'generateCourseContent',
+  'generateLearningBlueprint',
+  'goToStep',
+  'retryAiRun',
+  'retrySource',
+]);
+
+let operationSequence = 0;
+
 const workflow = async (store, ownerId, action) => {
-  const snapshot = await store.applyWorkflowAction(ownerId, action);
+  let currentAction = action;
+  if ('draftId' in action && !('expectedRevision' in action)) {
+    const selected = await store.applyWorkflowAction(ownerId, {
+      action: 'selectDraft',
+      draftId: action.draftId,
+    });
+    currentAction = {
+      ...currentAction,
+      expectedRevision: requiredDraft(selected.draft).revision,
+    };
+  }
+  if (operationBackedActions.has(action.action) && !('operationId' in action)) {
+    operationSequence += 1;
+    currentAction = {
+      ...currentAction,
+      operationId: `workflow-test-${operationSequence}`,
+    };
+  }
+  const snapshot = await store.applyWorkflowAction(ownerId, currentAction);
   return requiredDraft(snapshot.draft);
 };
 
@@ -474,6 +509,13 @@ const generateCourse = (store, ownerId, draftId) =>
     draftId,
   });
 
+const advanceDraft = (store, ownerId, draftId, step) =>
+  workflow(store, ownerId, {
+    action: 'advanceDraft',
+    draftId,
+    step,
+  });
+
 const goToStep = (store, ownerId, draftId, step) =>
   workflow(store, ownerId, {
     action: 'goToStep',
@@ -733,7 +775,6 @@ const scenarios = {
       const ownerId = 'owner-assist-gates';
       const draft = await createDraft(store, ownerId, 'Assist source-first gates');
       await addNotesSource(store, ownerId, draft.id, sourceMaterial);
-      const sourcesDraft = await goToStep(store, ownerId, draft.id, 'sources');
       const preparedDraft = await updatePreparation(
         store,
         ownerId,
@@ -743,8 +784,10 @@ const scenarios = {
           desiredOutcome: 'They can triage and hand off incidents using the source material.',
         }),
       );
-      const preparationDraft = await goToStep(store, ownerId, draft.id, 'preparation');
-      const blueprintDraft = await generateLearningBlueprint(store, ownerId, draft.id);
+      const sourcesDraft = await goToStep(store, ownerId, draft.id, 'sources');
+      const preparationDraft = await advanceDraft(store, ownerId, draft.id, 'sources');
+      await seedAxBlueprint(store, ownerId, draft.id, 'preparation');
+      const blueprintDraft = await advanceDraft(store, ownerId, draft.id, 'preparation');
       const [firstObjective] = blueprintFor(blueprintDraft).objectives;
       if (!firstObjective) {
         throw new Error('Expected generated learning objective.');
@@ -756,8 +799,8 @@ const scenarios = {
         objectiveId: firstObjective.id,
         title: firstObjective.title,
       });
-      const objectivesDraft = await seedAxBlueprint(store, ownerId, draft.id, 'objectives');
-      const [firstBrief] = blueprintFor(objectivesDraft).activityBriefs;
+      const activityPlanDraft = await advanceDraft(store, ownerId, draft.id, 'objectives');
+      const [firstBrief] = blueprintFor(activityPlanDraft).activityBriefs;
       if (!firstBrief) {
         throw new Error('Expected generated activity brief.');
       }
@@ -772,14 +815,8 @@ const scenarios = {
         title: firstBrief.title,
         type: firstBrief.type,
       });
-      await seedAxBlueprint(store, ownerId, draft.id);
-      const activityPlanDraft = await goToStep(store, ownerId, draft.id, 'activityPlan');
-      await generateCourseContent(store, ownerId, draft.id);
-      const courseContentDraft = await goToStep(store, ownerId, draft.id, 'courseContent');
-      const previewDraft = await workflow(store, ownerId, {
-        action: 'openPreview',
-        draftId: draft.id,
-      });
+      const courseContentDraft = await advanceDraft(store, ownerId, draft.id, 'activityPlan');
+      const previewDraft = await advanceDraft(store, ownerId, draft.id, 'courseContent');
       const blueprint = blueprintFor(previewDraft);
       return {
         activityBriefCount: blueprint.activityBriefs.length,
@@ -789,7 +826,7 @@ const scenarios = {
         preparationAudience: preparedDraft.learningBlueprint.coursePreparation.audience,
         stepAfterActivityPlan: activityPlanDraft.step,
         stepAfterCourseContent: courseContentDraft.step,
-        stepAfterObjectives: objectivesDraft.step,
+        stepAfterObjectives: blueprintDraft.step,
         stepAfterPreparation: preparationDraft.step,
         stepAfterPreview: previewDraft.step,
         stepAfterSources: sourcesDraft.step,
@@ -1239,6 +1276,107 @@ const scenarios = {
         stepAfterGenerateCourse: generatedDraft.step,
       };
     } finally {
+      await cleanup();
+    }
+  },
+
+  async advanceRegeneratesStaleGenerateModeCourse() {
+    const { cleanup, store } = await createHarness();
+    try {
+      const ownerId = 'owner-advance-regenerates-stale-course';
+      const draft = await createDraft(store, ownerId, 'Advance stale course');
+      await workflow(store, ownerId, {
+        action: 'setMode',
+        draftId: draft.id,
+        mode: 'generate',
+      });
+      const sourcesDraft = await advanceDraft(store, ownerId, draft.id, 'mode');
+      await addNotesSource(store, ownerId, draft.id, sourceMaterial);
+      await updatePreparation(store, ownerId, draft.id, sourceFirstPreparation());
+      await seedAxBlueprint(store, ownerId, draft.id);
+      await seedCourseContent(store, ownerId, draft.id, 'courseContent');
+      const firstGeneratedDraft = await workflow(store, ownerId, {
+        action: 'openPreview',
+        draftId: draft.id,
+      });
+      await goToStep(store, ownerId, draft.id, 'preparation');
+      const staleDraft = await updatePreparation(store, ownerId, draft.id, {
+        ...firstGeneratedDraft.learningBlueprint.coursePreparation,
+        language: 'cs',
+        languagePreference: 'cs',
+      });
+      store.setAiProviderModuleLoaderForTests(async () => {
+        const module = await import('../server/coursition/ai-provider.ts');
+        return {
+          ...module,
+          generateCourseContentWithAi: (currentDraft) => {
+            const timestamp = new Date().toISOString();
+            const value = {
+              ...currentDraft.courseContent,
+              sections: currentDraft.courseContent.sections.map((section) => ({
+                ...section,
+                blocks: section.blocks.map((block) => ({
+                  ...block,
+                  status: 'generated',
+                  updatedAt: timestamp,
+                })),
+                status: 'generated',
+                updatedAt: timestamp,
+              })),
+              status: 'generated',
+              updatedAt: timestamp,
+            };
+            return Promise.resolve({
+              model: 'test-model',
+              provider: 'test-provider',
+              text: '{}',
+              value,
+            });
+          },
+          generateLearningPlanWithAi: (currentDraft) => {
+            const timestamp = new Date().toISOString();
+            const value = {
+              ...currentDraft.learningBlueprint,
+              activityBriefs: currentDraft.learningBlueprint.activityBriefs.map((brief) => ({
+                ...brief,
+                status: 'generated',
+                updatedAt: timestamp,
+              })),
+              generatedActivities: currentDraft.learningBlueprint.generatedActivities.map(
+                (activity) => ({ ...activity, status: 'generated' }),
+              ),
+              objectives: currentDraft.learningBlueprint.objectives.map((objective) => ({
+                ...objective,
+                status: 'generated',
+                updatedAt: timestamp,
+              })),
+              updatedAt: timestamp,
+            };
+            return Promise.resolve({
+              model: 'test-model',
+              provider: 'test-provider',
+              text: '{}',
+              value,
+            });
+          },
+        };
+      });
+      const regeneratedDraft = await advanceDraft(store, ownerId, draft.id, 'preparation');
+
+      return {
+        courseGenerationRuns: regeneratedDraft.aiRuns.filter(
+          (run) => run.type === 'course_generation' && run.status === 'applied',
+        ).length,
+        learningBlueprintRuns: regeneratedDraft.aiRuns.filter(
+          (run) => run.type === 'learning_blueprint_generation' && run.status === 'applied',
+        ).length,
+        sourceStep: sourcesDraft.step,
+        staleContentStatus: staleDraft.courseContent.status,
+        stepAfterAdvance: regeneratedDraft.step,
+        stepAfterFirstAdvance: firstGeneratedDraft.step,
+      };
+    } finally {
+      store.resetAiProviderModuleLoaderForTests();
       await cleanup();
     }
   },

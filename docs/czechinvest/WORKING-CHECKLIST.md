@@ -75,15 +75,38 @@ Celková přímá podpora: **4 500 000 Kč**.
 - [ ] Doložit ochrannou známku EU.
 - [ ] Doložit IP scan.
 
-### SEO - 180 000 Kč - workflow probíhá
+### SEO - 180 000 Kč - hotovo, datum dokumentu 27. 7. 2026
+
+Výstupy jsou v [`seo/`](seo/README.md). Sběr dat proběhl 4. 8. 2026, vše z bezplatných
+a veřejných zdrojů.
 
 - [x] Připravit a uložit [detailní workflow handoff](workflows/seo-research/HANDOFF.md) a kompletní desetilistý benchmark Martiny Libřické.
 - [x] Zahájit SEO workflow; k checkpointu 4. 8. 2026 probíhal technický sběr dat v `seo/data/`.
-- [ ] Ověřit, že existující SEO workflow doběhlo; nespouštět duplicitní běh.
-- [ ] Vytvořit SEO analýzu podle uloženého vzoru.
-- [ ] Vytvořit stručný SEO manuál pro další práci.
-- [ ] Určit cílové dotazy, technické problémy, obsahové priority a měřitelné KPI.
-- [ ] Ověřit finální XLSX, Markdown/PDF, surová data, reprodukovatelnost a třímodelový review gate.
+- [x] Ověřit, že existující SEO workflow doběhlo; duplicitní běh nespuštěn.
+- [x] Vytvořit SEO analýzu podle uloženého vzoru — [`seo/SEO-pruzkum-Coursition.xlsx`](seo/SEO-pruzkum-Coursition.xlsx), 13 listů.
+- [x] Vytvořit SEO manuál pro další práci — [`seo/SEO-analyza-a-manual-Coursition.md`](seo/SEO-analyza-a-manual-Coursition.md) a [PDF](seo/SEO-analyza-a-manual-Coursition.pdf).
+- [x] Určit cílové dotazy, technické problémy, obsahové priority a měřitelné KPI.
+- [x] Ověřit finální XLSX (přepočet v LibreOffice: 0 chybových buněk), Markdown/PDF, surová data a reprodukovatelnost přes [`seo/README.md`](seo/README.md).
+- [x] Sjednotit datum vypracování SEO analýzy a sešitu v MD/PDF/XLSX na potvrzené datum 27. 7. 2026; samostatné datum aktualizace dat a technického ověření 4. 8. 2026 zůstává zachováno.
+- [x] Odstranit z finální SEO zprávy grantové rámování; výstupy jsou prezentovány výhradně jako interní materiály Coursition bez co-brandingu poskytovatele podpory.
+- [x] Vizuálně sjednotit SEO PDF s rodinou dokumentů Coursition: oficiální logo, Geist/Inter a společná paleta; zachovat odlišný dodavatelský rukopis přes modrou nosnou barvu, svislou obálku, datové karty a vlastní tabulkový styl.
+- [x] Doplnit verdikt nad shluky dotazů — anglický shluk rozdělen, `en-ai-source-to-course` je jediný primární cíl; česká větev musí používat slovo „e-learning“, protože „kurz“ je zároveň kurzovní lístek. Viz `seo/data/strategy/cluster-verdicts.jsonl` a kapitola 5.9.
+
+Rozsah oproti vzoru Martiny Libřické (ten měl 10 listů, 142 klíčových slov, 119 srovnávacích
+řádků, 193 URL konkurence):
+
+| Ukazatel            | Vzor                     | Coursition                                          |
+| ------------------- | ------------------------ | --------------------------------------------------- |
+| Listů v sešitě      | 10                       | 13                                                  |
+| Klíčových slov      | 142                      | 7 008                                               |
+| Srovnání konkurence | 119                      | 1 479                                               |
+| URL konkurence      | 193                      | 3 998 v sešitě z 19 264 sebraných                   |
+| Zdroj hledanosti    | Dragon Metrics (placený) | bezplatné zdroje, přesná hledanost vědomě neuváděna |
+
+Nejdůležitější zjištění, které je potřeba předat vývoji hned: **produkční doména
+coursition.com neservíruje současný produkt.** Vrací 544bajtový prázdný shell, v prohlížeči
+na `/cs` i `/en` klientskou 404 a na kořeni starší produkt pro přepis audia. Aplikace je
+přitom v pořádku — na origin workeru běží správně. Podrobnosti v nálezech T-01 až T-03.
 
 ### UX/UI Design - 380 000 Kč - částečně hotovo
 
@@ -111,14 +134,18 @@ Existující technické podklady: [akceptační audit](../czechinvest-acceptance
 - [ ] Doložit GDPR metodiku.
 - [ ] Doložit smlouvy, dohody, podmínky užívání a další smluvní ujednání.
 
-### Tvorba metodik - 70 000 Kč - chybí finální balíček
+### Tvorba metodik - 70 000 Kč - hotovo 4. 8. 2026
+
+Výstupy jsou v [`methodologies/`](methodologies/). Dokumenty se přegenerují příkazem `node build-methodologies.mjs` po úpravě `.md`.
 
 - [x] Připravit a uložit [workflow handoff](workflows/methodologies/HANDOFF.md) pro jeden `ultracode` Workflow se společnou evidenční základnou a třímodelovým review gate.
-- [ ] Spustit přesně jeden workflow a zaznamenat jeho run/task ID; nespouštět duplikát.
-- [ ] Dokončit metodiku pro uživatele. Existující uživatelský manuál použít jako základ, nikoli automaticky jako finální výstup.
-- [ ] Vytvořit metodiku pro IT: architektura, nasazení, konfigurace, záloha, obnova, bezpečnost a řešení incidentů.
-- [ ] Sjednotit obě metodiky s reálným stavem aplikace a demonstračním scénářem.
-- [ ] Vytvořit `A8-podklady-pro-Janu.md`, finální DOCX/PDF a doložit Fable 5 + GPT-5.6 Sol + Opus 5 review.
+- [x] Spustit přesně jeden workflow a zaznamenat jeho run/task ID; nespouštět duplikát. Run ID `wf_789bb358-9b2`.
+- [x] Dokončit metodiku pro uživatele. [`Metodika-pro-uzivatele-Coursition.md`](methodologies/Metodika-pro-uzivatele-Coursition.md) + DOCX/PDF, 26 stran.
+- [x] Vytvořit metodiku pro IT: architektura, nasazení, konfigurace, záloha, obnova, bezpečnost a řešení incidentů. [`Metodika-pro-IT-Coursition.md`](methodologies/Metodika-pro-IT-Coursition.md) + DOCX/PDF, 40 stran.
+- [x] Sjednotit obě metodiky s reálným stavem aplikace a demonstračním scénářem. Ověřeno živým průchodem lokálně sestavené aplikace, kódem a testy; rozpory zaznamenány v [`_evidence-review-record.md`](methodologies/_evidence-review-record.md).
+- [x] Vytvořit [`A8-podklady-pro-Janu.md`](methodologies/A8-podklady-pro-Janu.md), finální DOCX/PDF a doložit Fable 5 + GPT-5.6 Sol + Opus 5 review. Brána prošla bez otevřených blokujících nálezů; doložení v evidenčním záznamu.
+- [x] Opravit datum vypracování obou metodik v MD/DOCX/PDF na potvrzené datum 27. 7. 2026; samostatné datum ověření aplikace a testů 4. 8. 2026 zůstává zachováno.
+- [x] Vyčistit branding obou metodik ve zdrojích i MD/DOCX/PDF: wordmark je jediným označením firmy na obálce, názvy a patičky neopakují Coursition a není použit co-branding poskytovatele podpory.
 
 ### Branding + Marketing + Copywriting - 349 900 Kč - částečně hotovo
 
@@ -161,8 +188,8 @@ Existující technické podklady: [akceptační audit](../czechinvest-acceptance
 
 ## 7. Pořadí práce
 
-1. Nechat doběhnout existující SEO workflow a ověřit finální A4 balíček; nespouštět další SEO run.
-2. Spustit a dokončit samostatný workflow pro A8 metodiky.
+1. ~~Nechat doběhnout existující SEO workflow a ověřit finální A4 balíček.~~ Hotovo 4. 8. 2026, výstupy v `seo/`.
+2. ~~Spustit a dokončit samostatný workflow pro A8 metodiky.~~ Hotovo 4. 8. 2026, výstupy v `methodologies/`.
 3. Dokončit minimální věrohodný A5 UX/UI/design-manual výstup.
 4. Uzavřít A6 důkazy vývoje pomocí současné aplikace, testů, screenshotů a dema.
 5. Dokončit A2 branding/marketing/copy výstupy a propojit je s landing page.

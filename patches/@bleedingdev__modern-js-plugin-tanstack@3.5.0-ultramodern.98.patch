@@ -1,0 +1,153 @@
+diff --git a/dist/cjs/runtime/clientHydration.js b/dist/cjs/runtime/clientHydration.js
+index f01859149f9afa55a81f8a953c1140ee281613a1..a9d583da9037e125590d00c31f57175997233647 100644
+--- a/dist/cjs/runtime/clientHydration.js
++++ b/dist/cjs/runtime/clientHydration.js
+@@ -57,7 +57,7 @@ function preloadHydratedRouteComponents(router) {
+             const modernRouteId = route?.options?.staticData?.modernRouteId;
+             const cachedRouteModule = 'string' == typeof modernRouteId && '' !== modernRouteId ? getCachedRouteModule(modernRouteId) : void 0;
+             const resolvedComponent = (0, external_routeTree_js_namespaceObject.pickRouteModuleComponent)(cachedRouteModule ?? routeModule);
+-            if (void 0 !== resolvedComponent && 'string' == typeof modernRouteId && '' !== modernRouteId) route.options.component = (0, external_outlet_js_namespaceObject.withModernRouteMatchContext)(resolvedComponent, modernRouteId);
++            if (void 0 !== resolvedComponent && 'string' == typeof modernRouteId && '' !== modernRouteId) route.options.component = (0, external_outlet_js_namespaceObject.withModernRouteMatchContext)((props)=>(0, external_react_namespaceObject.createElement)(external_react_namespaceObject.Suspense,{fallback:null},(0, external_react_namespaceObject.createElement)(resolvedComponent,props)), modernRouteId);
+         });
+     })).then(()=>void 0);
+ }
+diff --git a/dist/cjs/runtime/plugin.js b/dist/cjs/runtime/plugin.js
+index 3235e6c8bc2449d83886fc64f4081fbb2af35041..f44641108d30ba9c1cc577b719341e011c44fa20 100644
+--- a/dist/cjs/runtime/plugin.js
++++ b/dist/cjs/runtime/plugin.js
+@@ -49,6 +49,10 @@ const external_routeHooks_js_namespaceObject = require("./routeHooks.js");
+ const external_routeTree_js_namespaceObject = require("./routeTree.js");
+ const client_js_namespaceObject = require("./rsc/client.js");
+ const external_types_js_namespaceObject = require("./types.js");
++
++/* Snapshot at module load: the streaming bootstrap deletes window.$_TSR
++ * before React renders the root, so a later read always sees it missing. */
++const __modernHadTanstackSsrBootstrap = "u" > typeof window && Boolean(window.$_TSR);
+ const tanstackRouterPlugin = (userConfig = {})=>{
+     const plugin = {
+         name: '@modern-js/plugin-router-tanstack',
+@@ -155,7 +159,7 @@ const tanstackRouterPlugin = (userConfig = {})=>{
+                     useNavigate: react_router_namespaceObject.useNavigate,
+                     useRouter: react_router_namespaceObject.useRouter
+                 };
+-                const hasSSRBootstrap = "u" > typeof window && Boolean(window.$_TSR);
++                const hasSSRBootstrap = __modernHadTanstackSsrBootstrap;
+                 if (hasSSRBootstrap && getRouteObjects().length > 0) {
+                     const runtimeContext = context;
+                     const router = getRouter(runtimeContext, getClientBasename(runtimeContext));
+@@ -188,7 +192,7 @@ const tanstackRouterPlugin = (userConfig = {})=>{
+                         basename: _basename,
+                         router
+                     };
+-                    const hasSSRBootstrap = "u" > typeof window && (Boolean(window.$_TSR) || (0, external_clientHydration_js_namespaceObject.hasTanstackSsrHydrationRecord)(router));
++                    const hasSSRBootstrap = __modernHadTanstackSsrBootstrap || (0, external_clientHydration_js_namespaceObject.hasTanstackSsrHydrationRecord)(router);
+                     const needsRouterClient = hasSSRBootstrap;
+                     if (needsRouterClient) hooks.onBeforeHydrateRouter.call({
+                         ...lifecycleContext,
+diff --git a/dist/esm/runtime/clientHydration.mjs b/dist/esm/runtime/clientHydration.mjs
+index b8bb9bc6d19b2fa221634b6b80465a972c7d378f..0c779da3aa95bfe15be0d21172fd93bb57ccb25c 100644
+--- a/dist/esm/runtime/clientHydration.mjs
++++ b/dist/esm/runtime/clientHydration.mjs
+@@ -1,5 +1,5 @@
+ import { RouterProvider } from "@tanstack/react-router";
+-import { createElement } from "react";
++import { createElement, Suspense } from "react";
+ import { withModernRouteMatchContext } from "./outlet.mjs";
+ import { pickRouteModuleComponent } from "./routeTree.mjs";
+ const routerHydrationRecords = new WeakMap();
+@@ -22,7 +22,7 @@ function preloadHydratedRouteComponents(router) {
+             const modernRouteId = route?.options?.staticData?.modernRouteId;
+             const cachedRouteModule = 'string' == typeof modernRouteId && '' !== modernRouteId ? getCachedRouteModule(modernRouteId) : void 0;
+             const resolvedComponent = pickRouteModuleComponent(cachedRouteModule ?? routeModule);
+-            if (void 0 !== resolvedComponent && 'string' == typeof modernRouteId && '' !== modernRouteId) route.options.component = withModernRouteMatchContext(resolvedComponent, modernRouteId);
++            if (void 0 !== resolvedComponent && 'string' == typeof modernRouteId && '' !== modernRouteId) route.options.component = withModernRouteMatchContext((props)=>createElement(Suspense,{fallback:null},createElement(resolvedComponent,props)), modernRouteId);
+         });
+     })).then(()=>void 0);
+ }
+diff --git a/dist/esm/runtime/plugin.mjs b/dist/esm/runtime/plugin.mjs
+index 1d368abb1a50f1058e5716f59d2fe9e5f6d890e2..cbe08ac08c9ae73b458c6a0df0dd45530397cc68 100644
+--- a/dist/esm/runtime/plugin.mjs
++++ b/dist/esm/runtime/plugin.mjs
+@@ -16,6 +16,10 @@ import { useMatches } from "./routeHooks.mjs";
+ import { createRouteTreeFromRouteObjects } from "./routeTree.mjs";
+ import { getTanstackRscSerializationAdapters } from "./rsc/client.mjs";
+ import { getModernTanstackRouterFastDefaults } from "./types.mjs";
++
++/* Snapshot at module load: the streaming bootstrap deletes window.$_TSR
++ * before React renders the root, so a later read always sees it missing. */
++const __modernHadTanstackSsrBootstrap = "u" > typeof window && Boolean(window.$_TSR);
+ const tanstackRouterPlugin = (userConfig = {})=>{
+     const plugin = {
+         name: '@modern-js/plugin-router-tanstack',
+@@ -122,7 +126,7 @@ const tanstackRouterPlugin = (userConfig = {})=>{
+                     useNavigate: useNavigate,
+                     useRouter: useRouter
+                 };
+-                const hasSSRBootstrap = "u" > typeof window && Boolean(window.$_TSR);
++                const hasSSRBootstrap = __modernHadTanstackSsrBootstrap;
+                 if (hasSSRBootstrap && getRouteObjects().length > 0) {
+                     const runtimeContext = context;
+                     const router = getRouter(runtimeContext, getClientBasename(runtimeContext));
+@@ -155,7 +159,7 @@ const tanstackRouterPlugin = (userConfig = {})=>{
+                         basename: _basename,
+                         router
+                     };
+-                    const hasSSRBootstrap = "u" > typeof window && (Boolean(window.$_TSR) || hasTanstackSsrHydrationRecord(router));
++                    const hasSSRBootstrap = __modernHadTanstackSsrBootstrap || hasTanstackSsrHydrationRecord(router);
+                     const needsRouterClient = hasSSRBootstrap;
+                     if (needsRouterClient) hooks.onBeforeHydrateRouter.call({
+                         ...lifecycleContext,
+diff --git a/dist/esm-node/runtime/clientHydration.mjs b/dist/esm-node/runtime/clientHydration.mjs
+index 3e7a8ade5823a914a0ad47e87c1645f11e715649..4dd682d1fbb598dd0630ee6fa9d6779ea28e5264 100644
+--- a/dist/esm-node/runtime/clientHydration.mjs
++++ b/dist/esm-node/runtime/clientHydration.mjs
+@@ -1,6 +1,6 @@
+ import "node:module";
+ import { RouterProvider } from "@tanstack/react-router";
+-import { createElement } from "react";
++import { createElement, Suspense } from "react";
+ import { withModernRouteMatchContext } from "./outlet.mjs";
+ import { pickRouteModuleComponent } from "./routeTree.mjs";
+ const routerHydrationRecords = new WeakMap();
+@@ -23,7 +23,7 @@ function preloadHydratedRouteComponents(router) {
+             const modernRouteId = route?.options?.staticData?.modernRouteId;
+             const cachedRouteModule = 'string' == typeof modernRouteId && '' !== modernRouteId ? getCachedRouteModule(modernRouteId) : void 0;
+             const resolvedComponent = pickRouteModuleComponent(cachedRouteModule ?? routeModule);
+-            if (void 0 !== resolvedComponent && 'string' == typeof modernRouteId && '' !== modernRouteId) route.options.component = withModernRouteMatchContext(resolvedComponent, modernRouteId);
++            if (void 0 !== resolvedComponent && 'string' == typeof modernRouteId && '' !== modernRouteId) route.options.component = withModernRouteMatchContext((props)=>createElement(Suspense,{fallback:null},createElement(resolvedComponent,props)), modernRouteId);
+         });
+     })).then(()=>void 0);
+ }
+diff --git a/dist/esm-node/runtime/plugin.mjs b/dist/esm-node/runtime/plugin.mjs
+index cf60ffb3f3d08e96fcd8e2b43e761e59eaeafc3a..52d1bf74452a4e5d7ec12cd9333c1a1fe0783045 100644
+--- a/dist/esm-node/runtime/plugin.mjs
++++ b/dist/esm-node/runtime/plugin.mjs
+@@ -17,6 +17,10 @@ import { useMatches } from "./routeHooks.mjs";
+ import { createRouteTreeFromRouteObjects } from "./routeTree.mjs";
+ import { getTanstackRscSerializationAdapters } from "./rsc/client.mjs";
+ import { getModernTanstackRouterFastDefaults } from "./types.mjs";
++
++/* Snapshot at module load: the streaming bootstrap deletes window.$_TSR
++ * before React renders the root, so a later read always sees it missing. */
++const __modernHadTanstackSsrBootstrap = "u" > typeof window && Boolean(window.$_TSR);
+ const tanstackRouterPlugin = (userConfig = {})=>{
+     const plugin = {
+         name: '@modern-js/plugin-router-tanstack',
+@@ -123,7 +127,7 @@ const tanstackRouterPlugin = (userConfig = {})=>{
+                     useNavigate: useNavigate,
+                     useRouter: useRouter
+                 };
+-                const hasSSRBootstrap = "u" > typeof window && Boolean(window.$_TSR);
++                const hasSSRBootstrap = __modernHadTanstackSsrBootstrap;
+                 if (hasSSRBootstrap && getRouteObjects().length > 0) {
+                     const runtimeContext = context;
+                     const router = getRouter(runtimeContext, getClientBasename(runtimeContext));
+@@ -156,7 +160,7 @@ const tanstackRouterPlugin = (userConfig = {})=>{
+                         basename: _basename,
+                         router
+                     };
+-                    const hasSSRBootstrap = "u" > typeof window && (Boolean(window.$_TSR) || hasTanstackSsrHydrationRecord(router));
++                    const hasSSRBootstrap = __modernHadTanstackSsrBootstrap || hasTanstackSsrHydrationRecord(router);
+                     const needsRouterClient = hasSSRBootstrap;
+                     if (needsRouterClient) hooks.onBeforeHydrateRouter.call({
+                         ...lifecycleContext,

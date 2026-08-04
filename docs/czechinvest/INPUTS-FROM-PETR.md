@@ -6,15 +6,15 @@ Last consolidated: **2026-08-04**. These are direct user-provided facts or expli
 
 The founder financed the company through **interest-free founder loans**, not equity contributions:
 
-| Date | Amount |
-| --- | ---: |
-| 20. 1. 2025 | 135 000 Kč |
-| 15. 6. 2026 | 458 184,44 Kč |
-| 18. 6. 2026 | 499 998 Kč |
-| 12. 7. 2026 | 100 000 Kč |
-| **Total provided** | **1 193 182,44 Kč** |
-| **Repaid so far** | **60 000 Kč (5,0 %)** |
-| **Outstanding** | **1 133 182,44 Kč (95,0 %)** |
+| Date               |                       Amount |
+| ------------------ | ---------------------------: |
+| 20. 1. 2025        |                   135 000 Kč |
+| 15. 6. 2026        |                458 184,44 Kč |
+| 18. 6. 2026        |                   499 998 Kč |
+| 12. 7. 2026        |                   100 000 Kč |
+| **Total provided** |          **1 193 182,44 Kč** |
+| **Repaid so far**  |        **60 000 Kč (5,0 %)** |
+| **Outstanding**    | **1 133 182,44 Kč (95,0 %)** |
 
 - Product revenue from Coursition: **0 Kč**.
 - The loan agreements are not yet signed, but can be printed and signed. Do not backdate anything. Jana/accounting should reconcile the figures with the books and bank statements and confirm the appropriate legal wording.

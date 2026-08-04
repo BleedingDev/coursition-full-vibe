@@ -15,7 +15,7 @@ This is a documentation workflow. Do not implement or redesign the product. If t
 
 ## Repository and ownership
 
-- Repository: `/Users/satan/work/coursition-all/coursition-full-vibe`
+- Repository: kořen repozitáře Coursition (cesta podle lokálního checkoutu)
 - Read and obey the repository `AGENTS.md` before any action.
 - The worktree is already dirty and contains user/other-agent work. Preserve it. Do not reset, clean, revert, delete, or overwrite unrelated changes.
 - Limit authored outputs to a new or existing methodology directory under `docs/czechinvest/`. Do not edit application source, tests, configuration, migrations, package files, the SEO work, or the existing presentation unless the user explicitly expands scope.

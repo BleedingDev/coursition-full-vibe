@@ -1,12 +1,17 @@
 {
   "coursition": {
     "app": {
+      "autosave": {
+        "dirty": "Změny čekají na uložení…",
+        "error": "Změny se nepodařilo uložit.",
+        "saved": "Všechny změny jsou uložené.",
+        "saving": "Ukládám změny…"
+      },
       "auth": {
         "createAccount": "Vytvořit účet",
         "creatingAccount": "Vytváříme účet...",
         "email": "E-mail",
         "emailPlaceholder": "alex@example.com",
-        "modeLabel": "Režim přihlášení",
         "name": "Jméno",
         "namePlaceholder": "Alex Novák",
         "password": "Heslo",
@@ -43,7 +48,7 @@
         "title": "Plán aktivit",
         "type": "Typ aktivity",
         "types": {
-          "not_playable": "Nehratelné",
+          "not_playable": "Bez interakce",
           "ordering_matching": "Řazení / přiřazování",
           "practice_task": "Praktický úkol",
           "retrieval_check": "Vybavovací kontrola",
@@ -75,6 +80,7 @@
       },
       "dashboard": {
         "courseMeta": "{{mode}} · {{step}} · {{sources}} · {{activities}} · {{content}}",
+        "demoBadge": "Ukázkový kurz",
         "counts": {
           "activities": {
             "few": "{{count}} aktivity",
@@ -92,7 +98,9 @@
             "other": "{{count}} zdrojů"
           }
         },
+        "cancel": "Zrušit",
         "confirmDelete": "Potvrdit smazání",
+        "confirmDeleteMessage": "Tuto akci nelze vzít zpět. Opravdu chceš pokračovat?",
         "delete": "Smazat",
         "edit": "Upravit",
         "empty": "Zatím tu nejsou žádné kurzy. Vytvořte první kurz z této správy.",
@@ -115,7 +123,14 @@
         "modeSaveRequired": "Režim generování kurzu se ještě ukládá. Zkuste to za chvíli znovu."
       },
       "eyebrow": "Generátor kurzu",
-      "loadingCourse": "Načítáme kurz...",
+      "loading": {
+        "body": "Obnovujeme vaše uložená data. Může to chvíli trvat.",
+        "courseTitle": "Načítáme kurz",
+        "dashboardTitle": "Načítáme vaše kurzy",
+        "failedTitle": "Data se nepodařilo načíst",
+        "retry": "Zkusit znovu",
+        "sessionTitle": "Načítáme váš účet"
+      },
       "modes": {
         "assist": {
           "body": "Průvodce s AI. AI předvyplní každý krok podle zdrojů, vy ho zkontrolujete a můžete upravit před pokračováním.",
@@ -124,7 +139,7 @@
         },
         "generate": {
           "action": "Vygenerovat kurz",
-          "body": "Plná tvorba. Přidáte zdrojový materiál a aplikace z něj vytvoří přípravu kurzu, mapu cílů, plán aktivit, obsah kurzu a hratelný náhled.",
+          "body": "Plná tvorba. Přidáte zdrojový materiál a aplikace z něj vytvoří přípravu kurzu, mapu cílů, plán aktivit, obsah kurzu a náhled kurzu.",
           "building": "Generujeme kurz...",
           "impact": "Hodí se, když chcete nejdřív hotový vygenerovaný kurz a potom se případně vrátit k nastavení.",
           "label": "Vygeneruj kurz za mě"
@@ -147,9 +162,20 @@
         "continue": "Pokračovat",
         "completed": "Dokončeno",
         "current": "Aktuální krok",
+        "advancing": "Připravuji další krok…",
+        "advancingByStep": {
+          "activityPlan": "Vytvářím obsah kurzu…",
+          "courseContent": "Otevírám náhled…",
+          "generateCourse": "Generuji celý kurz…",
+          "mode": "Otevírám zdroje…",
+          "objectives": "Připravuji aktivity…",
+          "preparation": "Vytvářím cíle a plán aktivit…",
+          "sources": "Analyzuji zdroje a připravuji kurz…"
+        },
         "label": "Navigace tvorbou kurzu",
         "locked": "Zamčeno",
         "next": "Další",
+        "navigating": "Přecházím na vybraný krok…",
         "ready": "Připraveno k vyzkoušení",
         "skipped": "Přeskočeno",
         "stale": "Zastaralé",
@@ -220,14 +246,14 @@
         "evaluating": "Vyhodnocujeme...",
         "evaluateWithAi": "Získat zpětnou vazbu AI",
         "evaluationFailed": "Zpětná vazba AI selhala. Zkuste to za chvíli znovu.",
-        "incompleteActivity": "Vygenerovaná aktivita ještě není hratelná",
+        "incompleteActivity": "Vygenerovaná aktivita zatím není kompletní",
         "incompleteActivityHeading": "Neúplná vygenerovaná aktivita",
         "incompleteActivityReasons": {
           "choices": "Ax nevrátil dost možností odpovědi pro tuto interakci.",
           "criteria": "Ax nevrátil kritéria určená studentovi pro tuto interakci.",
           "items": "Ax nevrátil dost položek k seřazení nebo spárování pro tuto interakci.",
           "labels": "Ax nevrátil dost různých štítků pro párování v této interakci.",
-          "notPlayable": "Ax nevrátil platnou hratelnou aktivitu pro toto zadání.",
+          "notPlayable": "Ax nevrátil použitelnou interaktivní aktivitu pro toto zadání.",
           "prompt": "Ax nevrátil zadání určené studentovi pro tuto interakci."
         },
         "generatorFeedback": "Zpětná vazba generátoru",
@@ -284,7 +310,7 @@
           }
         },
         "strongDecision": "Silné rozhodnutí",
-        "title": "Hratelný náhled"
+        "title": "Náhled kurzu"
       },
       "sourceTypes": {
         "file": "Soubor",
@@ -298,10 +324,15 @@
         "mode": "Režim",
         "objectives": "Mapa cílů",
         "preparation": "Příprava kurzu",
-        "preview": "Hratelný náhled",
+        "preview": "Náhled kurzu",
         "sources": "Zdroje"
       },
-      "summary": "Vytvořte kurz ze zdrojového materiálu, vygenerujte plán a ověřte hratelný zážitek z učení.",
+      "studioStages": {
+        "course": "Kurz",
+        "design": "Návrh",
+        "inputs": "Podklady"
+      },
+      "summary": "Vytvořte kurz ze zdrojového materiálu, vygenerujte plán a ověřte náhled kurzu.",
       "skipToStudio": "Přejít na studio kurzu",
       "title": "Příprava kurzu",
       "sources": {
@@ -315,6 +346,12 @@
         "generateEmptyCopy": "Před vygenerováním kurzu přidejte zdrojový materiál.",
         "notesContent": "Surové poznámky",
         "notesNamePlaceholder": "Poznámky z workshopu onboardingu",
+        "fileNamePlaceholder": "Podklady k zákaznickému onboardingu.pdf",
+        "fileAddFailed": "Soubor se nepodařilo přidat. Zkontrolujte chybu a zkuste to znovu.",
+        "fileProcessing": "Nahráváme a zpracováváme dokument. Může to trvat až minutu.",
+        "fileReadFailed": "Vybraný soubor se nepodařilo přečíst.",
+        "fileRequired": "Před přidáním zdroje vyberte soubor.",
+        "fileTooLarge": "Soubor je příliš velký. Maximální velikost je 10 MiB.",
         "notesPlaceholder": "Noví členové týmu mají zvládnout první zákaznický kickoff bez opomenutí discovery, přístupů a navazujících kroků.",
         "retry": "Zkusit znovu",
         "showPreview": "Zobrazit náhled",
@@ -336,6 +373,7 @@
         "urlPlaceholder": "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout"
       },
       "preparation": {
+        "advanced": "Další nastavení",
         "audience": "Cílové publikum",
         "audiencePlaceholder": "Popište, pro koho kurz je.",
         "avoid": "Čemu se má kurz vyhnout?",
@@ -411,6 +449,8 @@
         "title": "Mapa cílů"
       },
       "courseContent": {
+        "nextSection": "Zobrazit další část kurzu",
+        "previousSection": "Zobrazit předchozí část kurzu",
         "empty": "Vygenerujte plán aktivit a připraví se obsah kurzu.",
         "generate": "Vygenerovat obsah kurzu",
         "generating": "Generujeme obsah kurzu...",
@@ -420,21 +460,242 @@
       }
     },
     "common": {
+      "loadingNextPage": "Načítám další stránku…",
       "productName": "Coursition",
       "theme": {
         "switcher": "Změnit vzhled",
         "light": "Přepnout na světlý vzhled",
         "dark": "Přepnout na tmavý vzhled"
+      },
+      "headerCta": "Nahrát první soubor",
+      "headerSignIn": "Přihlásit se"
+    },
+    "footer": {
+      "company": {
+        "label": "Provozovatel",
+        "name": "Coursition s.r.o.",
+        "address": "Lidická 700/19, Veveří, 602 00 Brno",
+        "ids": "IČO 21017069 · DIČ CZ21017069",
+        "register": "Zapsáno v obchodním rejstříku vedeném Krajským soudem v Brně, sp. zn. C 137141",
+        "email": "info@coursition.com"
+      },
+      "copyright": "© {{year}} Coursition",
+      "groups": {
+        "account": "Účet",
+        "legal": "Právní informace"
+      },
+      "links": {
+        "signIn": "Přihlásit se",
+        "signUp": "Nahrát první soubor",
+        "privacy": "Ochrana osobních údajů",
+        "terms": "Obchodní podmínky"
+      },
+      "navLabel": "Odkazy v patičce",
+      "publicity": {
+        "countryAlt": "Logo Czech Republic – The Country For The Future",
+        "incubationAlt": "Logo programu Technologická inkubace, který realizuje CzechInvest",
+        "statement": "Tento projekt byl realizován za finanční podpory programu Technologická inkubace."
+      },
+      "tagline": "Studio pro autory kurzů."
+    },
+    "landing": {
+      "closing": {
+        "body": "Nahrajete, co máte. Rozhodujete vy: co zůstane, co přepíšete, co půjde pryč.",
+        "primaryCta": "Nahrát první soubor",
+        "title": "Kurz zůstane váš."
+      },
+      "hero": {
+        "lead": "Nahrajete soubor. Otevře se rozepsaný kurz — cíle, aktivity, text pro studující. Nepíšete. Škrtáte.",
+        "primaryCta": "Nahrát první soubor",
+        "still": {
+          "alt": "Mapa cílů v Coursition: cíl sepsaný z nahraného souboru, označený štítkem podloženosti a otevřený k úpravě."
+        },
+        "titleAccent": "Vy začínáte až za ní.",
+        "titleLead": "Nejtěžší na kurzu je prázdná stránka."
+      },
+      "receive": {
+        "intro": "Od cílů až po text, který čtou studující. Celé, ne kostra.",
+        "items": {
+          "activityPlan": {
+            "alt": "Plán aktivit v Coursition: název aktivity, typ aktivity a upravitelné instrukce k jednomu cíli.",
+            "body": "Ke každému cíli aktivita. Co studující dělají, kdy jsou hotoví. Vy doladíte formulace.",
+            "title": "Zadání nepíšete"
+          },
+          "courseContent": {
+            "alt": "Obsah kurzu v Coursition: napsaná sekce s vysvětlením z nahraného souboru a praktickým úkolem pod ním.",
+            "body": "Ke každé aktivitě hotový text. Nic nechybí.",
+            "title": "Text nelepíte dohromady"
+          },
+          "objectives": {
+            "alt": "Mapa cílů v Coursition: jeden cíl s názvem a schopností, kterou si studující odnesou.",
+            "body": "Přečtete si je a škrtnete, co do kurzu nepatří.",
+            "title": "Cíle nevymýšlíte"
+          }
+        },
+        "outro": "Přepíšete cíl, změní se aktivity i text. Jedna oprava, ne tři.",
+        "title": "Hotová první verze."
+      },
+      "trust": {
+        "intro": "Slabá místa najdete, dokud je oprava levná.",
+        "items": {
+          "preview": {
+            "body": "Projdete kurz jejich cestou. Co nesedí, spravíte předtím.",
+            "title": "Díry najdete vy, ne studující"
+          },
+          "sourceSupport": {
+            "body": "Coursition označí, jestli stojí na vašem souboru, nebo si ho domyslel. Nemusíte to dohledávat.",
+            "title": "U každého cíle víte, odkud je"
+          }
+        },
+        "title": "Nejdřív to uvidíte vy."
       }
     },
     "languages": {
       "cs": "Čeština",
       "en": "English",
-      "switcher": "Jazyk"
+      "switcher": "Jazyk",
+      "switchTo": "Přepnout na {{language}}"
+    },
+    "legal": {
+      "backToHome": "Zpět na Coursition",
+      "contact": {
+        "address": "Lidická 700/19, Veveří, 602 00 Brno, Česká republika",
+        "company": "Coursition s.r.o.",
+        "email": "info@coursition.com",
+        "emailLabel": "Napište nám",
+        "registration": "IČO 21017069, DIČ CZ21017069, zapsaná v obchodním rejstříku vedeném Krajským soudem v Brně, sp. zn. C 137141.",
+        "title": "S kým máte co do činění"
+      },
+      "eyebrow": "Právní informace",
+      "lastUpdated": "3. srpna 2026",
+      "lastUpdatedLabel": "Poslední aktualizace",
+      "navLabel": "Právní stránky",
+      "privacy": {
+        "description": "Jak Coursition nakládá s vaším účtem, s materiály, které nahrajete, a s kurzy, které z nich vzniknou.",
+        "lead": "Krátce: uchováváme váš účet, soubory, které nahrajete, a kurzy, které z nich sestavíte. Používáme je k tomu, abychom vám produkt provozovali, a k ničemu jinému.",
+        "sections": {
+          "ai": {
+            "body": "Sestavení návrhu kurzu znamená, že text vašich zdrojů odešleme poskytovateli AI modelu, kterého ke generování používáme. Ten text zpracuje jen proto, aby vrátil návrh, a pracuje výhradně podle našich pokynů. Nenahrávejte prosím materiály, které nesmíte předat externímu zpracovateli.",
+            "title": "Odesílání materiálů AI modelu"
+          },
+          "business": {
+            "body": "Pokud Coursition pořídila vaše organizace na základě podepsané smlouvy, o datech ve svém prostoru rozhoduje ona a my vystupujeme jako její zpracovatel podle zpracovatelských podmínek té smlouvy. V takovém případě si vyžádejte informace o zpracování přímo od své organizace.",
+            "title": "Když Coursition používáte přes zaměstnavatele"
+          },
+          "changes": {
+            "body": "Pokud způsob nakládání s vašimi údaji změníme, upravíme tuto stránku i datum v jejím záhlaví. O změně, která se vás podstatně dotkne, vám dáme vědět dřív, než začne platit.",
+            "title": "Změny těchto informací"
+          },
+          "cookies": {
+            "body": "Nastavujeme jen cookies, bez kterých by web nefungoval: jednu, která vás udrží přihlášené, jednu pro zvolený jazyk a jednu pro světlý nebo tmavý režim. Žádná reklama, žádná analytika třetích stran.",
+            "title": "Cookies"
+          },
+          "data": {
+            "body": "Sbíráme tři věci, a nic dalšího:",
+            "items": {
+              "account": "Váš účet: jméno, e-mail a heslo. Hesla ukládáme v podobě otisku, nikdy čitelně.",
+              "content": "Vaši práci: soubory a texty, které nahrajete jako zdroje, a návrhy kurzů, které z nich vzniknou.",
+              "technical": "Údaje o přihlášení: IP adresu a prohlížeč, ze kterých se přihlašujete, abychom poznali podezřelý přístup k účtu."
+            },
+            "title": "Co o vás máme"
+          },
+          "purposes": {
+            "body": "Údaje používáme k vedení vašeho účtu, k vytváření a ukládání návrhů kurzů, k zabezpečení služby a k tomu, abychom vám odpověděli, když nám napíšete. Právním základem je plnění smlouvy s vámi a náš oprávněný zájem na tom, aby služba fungovala a byla bezpečná. Neprofilujeme vás a vaše materiály nepoužíváme k trénování vlastních modelů.",
+            "title": "K čemu je používáme"
+          },
+          "retention": {
+            "body": "Údaje o účtu žijí tak dlouho jako váš účet. Zdrojové soubory a návrhy kurzů zůstávají, dokud je nesmažete vy nebo dokud nesmažete účet; poté je odstraníme z úložiště. Účetní doklady uchováváme po dobu, kterou vyžadují české daňové a účetní předpisy.",
+            "title": "Jak dlouho je držíme"
+          },
+          "rights": {
+            "body": "Podle GDPR nás můžete požádat, abychom:",
+            "items": {
+              "access": "vám řekli, jaké údaje o vás máme, a dali vám jejich kopii,",
+              "complaint": "a pokud máte za to, že jsme to udělali špatně, můžete se obrátit na Úřad pro ochranu osobních údajů (uoou.gov.cz).",
+              "correction": "opravili, co je špatně,",
+              "deletion": "smazali váš účet i všechno v něm,",
+              "objection": "omezili nebo zastavili konkrétní způsob zpracování,",
+              "portability": "vám údaje předali v přenositelném formátu,"
+            },
+            "title": "Vaše práva"
+          },
+          "scope": {
+            "body": "Tahle stránka vysvětluje, co Coursition dělá s osobními údaji, když si sami založíte účet a používáte studio pro tvorbu kurzů. Je psaná pro lidi, ne pro právníky, a popisuje, jak se produkt chová dnes.",
+            "title": "Čeho se to týká"
+          },
+          "sharing": {
+            "body": "Osobní údaje neprodáváme a nepředáváme je pro marketing. Využíváme dodavatele, kteří pro nás hostují aplikaci, ukládají vaše soubory a provozují AI generování; zpracovávají údaje jen podle našich pokynů a jen kvůli chodu produktu. Úřadům údaje předáváme, jen když nám to ukládá zákon.",
+            "title": "Kdo se k nim ještě dostane"
+          }
+        },
+        "title": "Ochrana osobních údajů"
+      },
+      "terms": {
+        "description": "Pravidla používání studia Coursition: co poskytujeme my, za co odpovídáte vy a co se stane, když se něco pokazí.",
+        "lead": "Krátce: vaše materiály a vaše kurzy zůstávají vaše, studio zůstává naše a každý návrh od AI je na vás, abyste si ho před výukou zkontrolovali.",
+        "sections": {
+          "acceptableUse": {
+            "body": "Při používání Coursition prosím ne:",
+            "items": {
+              "abuse": "nesnažte se službu rozbít, přetížit nebo obejít její zabezpečení.",
+              "resell": "nepřeprodávejte, nepronajímejte ani nepodlicencujte přístup do studia,",
+              "reverseEngineer": "nekopírujte software za ním, nezkoumejte ho zpětným inženýrstvím ani ho nepřestavujte,",
+              "unlawful": "nenahrávejte nezákonné materiály ani materiály, ke kterým nemáte práva,"
+            },
+            "title": "Co dělat nesmíte"
+          },
+          "account": {
+            "body": "Ke studiu potřebujete účet. Dejte nám funkční e-mail, heslo si nechte pro sebe a počítejte s tím, že co se přes váš účet stane, jde za vámi. Když máte podezření, že se do něj dostal někdo cizí, napište na info@coursition.com.",
+            "title": "Váš účet"
+          },
+          "ai": {
+            "body": "Návrhy kurzů vytvářejí AI modely. Můžou být nepřesné, neúplné nebo jednostranné a výstup AI nemusí být chráněn autorským právem. Než návrh postavíte před studenty, přečtěte si ho a upravte. Coursition je nástroj na první návrh, ne náhrada vašeho úsudku.",
+            "title": "Návrhy vytvořené AI"
+          },
+          "availability": {
+            "body": "Snažíme se, aby Coursition běžel, ale službu poskytujeme tak, jak je. Funkce můžeme měnit, přidávat i rušit a neslibujeme nepřetržitý ani bezchybný provoz. Co si nemůžete dovolit ztratit, mějte i u sebe.",
+            "title": "Dostupnost"
+          },
+          "business": {
+            "body": "Pokud vaše organizace s námi podepsala samostatnou smlouvu, řídí se její používání Coursition tou smlouvou a tyto podmínky doplňují jen to, co v ní není.",
+            "title": "Firemní zákazníci"
+          },
+          "changes": {
+            "body": "Podmínky můžeme aktualizovat. Datum v záhlaví ukazuje platnou verzi a o podstatné změně vám dáme vědět, než začne platit. Když se změnou nesouhlasíte, můžete účet zrušit.",
+            "title": "Změny podmínek"
+          },
+          "law": {
+            "body": "Platí české právo. Neshodu bychom raději vyřešili domluvou; když to nepůjde, rozhodne ji český soud příslušný podle sídla Coursition.",
+            "title": "Rozhodné právo"
+          },
+          "liability": {
+            "body": "Odpovídáme za škodu, kterou způsobíme úmyslně nebo hrubou nedbalostí, a za vše, co ze zákona vyloučit nelze. Nad tento rámec neodpovídáme za ušlý zisk, ztrátu dat ani za následky zveřejnění návrhu kurzu, který jste si nezkontrolovali.",
+            "title": "Odpovědnost"
+          },
+          "scope": {
+            "body": "Tyto podmínky platí, když si sami založíte účet Coursition a používáte studio pro tvorbu kurzů. Jsou dohodou mezi vámi a společností Coursition s.r.o.",
+            "title": "Mezi kým podmínky platí"
+          },
+          "service": {
+            "body": "Coursition vezme materiály, které nahrajete, a sestaví z nich návrh výukových cílů, plánu aktivit a obsahu kurzu. Každý krok si projdete a upravíte a nic za vás nikam nezveřejňujeme.",
+            "title": "Co Coursition dělá"
+          },
+          "termination": {
+            "body": "Účet můžete kdykoli smazat. My můžeme pozastavit nebo zrušit účet, který porušuje tyto podmínky nebo se používá nezákonně, a řekneme vám proč, pokud nám v tom nebrání zákon. Po zrušení obsah účtu smažeme.",
+            "title": "Ukončení"
+          },
+          "yourContent": {
+            "body": "Vaše zdrojové materiály zůstávají vaše a stejně tak kurzy, které z nich sestavíte. Dáváte nám svolení je ukládat a zpracovávat jen k jedinému účelu: abychom vám provozovali službu. Nahráním potvrzujete, že materiály smíte použít a nechat je námi zpracovat.",
+            "title": "Vaše materiály a vaše kurzy"
+          }
+        },
+        "title": "Obchodní podmínky"
+      }
     },
     "meta": {
-      "description": "Coursition pomáhá autorům proměnit zdrojové materiály v ověřené kurzy.",
-      "title": "Generátor kurzů Coursition"
+      "description": "Nahrajete podklady. Coursition rozepíše kurz — cíle, aktivity, text pro studující.",
+      "imageAlt": "Studio kurzů Coursition s vygenerovanými výukovými cíli připravenými ke kontrole.",
+      "title": "Coursition: kurz z vašich podkladů"
     }
   }
 }

@@ -1,11 +1,13 @@
-import { ai as createAxAI, flow } from '@ax-llm/ax';
+import { ai as createAxAI, flow } from '@ax-llm/ax/ai-flow';
 import type { AxAIOpenAIModel, AxForwardable } from '@ax-llm/ax';
 import * as Data from 'effect/Data';
 import { DateTime } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Option from 'effect/Option';
 import * as Schema from 'effect/Schema';
-import { activityTypeSchema } from '../../shared/coursition/effect-api.ts';
+import { activityTypeSchema } from '../../shared/api.ts';
+import { activityTypes } from '../../shared/coursition/workflow.ts';
+import type { AiProviderConfig } from './ai-provider-config.ts';
 import type {
   ActivityEvaluationCriterion,
   ActivityEvaluationResponse,
@@ -22,15 +24,14 @@ import type {
   SourceReference,
   SourceSupport,
 } from '../../shared/coursition/workflow.ts';
-import type { CoursitionAiRuntimeConfig } from './config.ts';
-import { loadCoursitionAiRuntimeConfig } from './config.ts';
+import {
+  aiCallTimeoutMs,
+  aiProviderConfig,
+  defaultAiModel,
+  isFreeAiModel,
+} from './ai-provider-config.ts';
 
-interface AiProviderConfig {
-  apiKey: string;
-  baseURL: string;
-  model: string;
-  provider: string;
-}
+export { aiProviderConfig, isAiProviderConfigured } from './ai-provider-config.ts';
 
 interface AiJsonResult<T> {
   model: string;
@@ -53,11 +54,7 @@ class AiProviderConfigurationError extends Data.TaggedError('AiProviderConfigura
   readonly message: string;
 }> {}
 
-const defaultLocalBaseUrl = 'http://localhost:8317/v1';
-const defaultLocalApiKey = 'droid-local-key';
-const defaultModel = 'gpt-5.3-codex-spark';
 const localCourseContentRendererProvider = 'local-course-content-renderer';
-const axProviderLabel = 'ax/openai-compatible';
 
 interface ActivityGenerationFlowInput {
   activityPolicy: string;
@@ -128,9 +125,6 @@ const coursePlannerResultSchema = Schema.Struct({
   objectives: Schema.Unknown,
   outputLanguage: Schema.String,
 });
-const activityBriefPlannerResultSchema = Schema.Struct({
-  activityBriefs: Schema.Unknown,
-});
 const coursePreparationPlannerResultSchema = Schema.Struct({
   assumptions: Schema.String,
   coursePreparation: Schema.Unknown,
@@ -153,7 +147,6 @@ const activityEvaluationFlowResultSchema = Schema.Struct({
 });
 
 const coursePlannerResultFrom = Schema.decodeUnknownSync(coursePlannerResultSchema);
-const activityBriefPlannerResultFrom = Schema.decodeUnknownSync(activityBriefPlannerResultSchema);
 const coursePreparationPlannerResultFrom = Schema.decodeUnknownSync(
   coursePreparationPlannerResultSchema,
 );
@@ -319,6 +312,10 @@ const activityPolicyForDraft = (draft: CourseDraft) => {
       : [
           `The creator explicitly selected outputLanguage=${languagePreference}.`,
           `The coursePlanner must return outputLanguage="${languagePreference}".`,
+          `Every learner-facing string in coursePreparation and objectives must be written in ${languagePreference}.`,
+          languagePreference === 'cs'
+            ? 'Translate learner-facing content into Czech even when the course title, existing preparation, or source evidence is English. Do not copy English objective titles or capabilities.'
+            : 'Translate learner-facing content into English even when the course title, existing preparation, or source evidence uses another language.',
         ].join('\n');
 
   return [
@@ -374,10 +371,9 @@ const activityPolicyForDraft = (draft: CourseDraft) => {
   ].join('\n');
 };
 
-const coursitionActivityGenerationFlow = flow<
-  ActivityGenerationFlowInput,
-  ActivityGenerationFlowOutput
->({ autoParallel: false })
+const coursitionLearningPlanFlow = flow<ActivityGenerationFlowInput, ActivityGenerationFlowOutput>({
+  autoParallel: false,
+})
   .node(
     'coursePlanner',
     [
@@ -387,20 +383,9 @@ const coursitionActivityGenerationFlow = flow<
       'sourceEvidence:string,',
       'activityPolicy:string',
       '-> outputLanguage:string "Supported values: en or cs.",',
-      'coursePreparation:json "Top-level JSON object. Do not stringify. Do not wrap in another object.",',
+      'coursePreparation:json "Top-level JSON object. Every learner-facing string must be written in languageCode; when languageCode is cs, translate English source content into Czech. Do not stringify. Do not wrap in another object.",',
       'assumptions:string,',
-      'objectives:json[] "Top-level JSON array of objects. Each object must include exact keys title, topicName, capability, sourceSupport, and sourceConfidence. Do not stringify. Do not wrap in another object."',
-    ].join(' '),
-  )
-  .node(
-    'activityBriefPlanner',
-    [
-      'outputLanguage:string,',
-      'coursePreparation:json,',
-      'objectives:json[],',
-      'sourceEvidence:string,',
-      'activityPolicy:string',
-      '-> activityBriefs:json[] "Top-level JSON array of objects. Each object must include exact keys objectiveIds, title, type, learnerAction, instructions, successCriteria, feedbackGuidance, and sourceConfidence. Do not stringify. Do not wrap in another object."',
+      'objectives:string "Serialized top-level JSON array of objects, including the opening and closing square brackets. Each object must include exact keys title, topicName, capability, sourceSupport, and sourceConfidence. Every title, topicName, and capability must be written in languageCode; when languageCode is cs, translate English source content into Czech. Do not wrap the array in another object or a Markdown fence."',
     ].join(' '),
   )
   .execute('coursePlanner', (state) => ({
@@ -410,23 +395,13 @@ const coursitionActivityGenerationFlow = flow<
     languageCode: state.languageCode,
     sourceEvidence: state.sourceEvidence,
   }))
-  .execute('activityBriefPlanner', (state) => {
-    const coursePlannerResult = coursePlannerResultFrom(state.coursePlannerResult);
-    return {
-      activityPolicy: state.activityPolicy,
-      coursePreparation: coursePlannerResult.coursePreparation,
-      objectives: coursePlannerResult.objectives,
-      outputLanguage: coursePlannerResult.outputLanguage,
-      sourceEvidence: state.sourceEvidence,
-    };
-  })
   .returns((state) => {
-    const activityBriefPlannerResult = activityBriefPlannerResultFrom(
-      state.activityBriefPlannerResult,
-    );
     const coursePlannerResult = coursePlannerResultFrom(state.coursePlannerResult);
     return {
-      activityBriefs: activityBriefPlannerResult.activityBriefs,
+      // The five supported activity engines are materialized deterministically
+      // from the generated objectives. One advance action therefore performs
+      // one remote Ax call instead of holding the Worker open for a second model.
+      activityBriefs: [],
       assumptions: coursePlannerResult.assumptions,
       coursePreparation: coursePlannerResult.coursePreparation,
       objectives: coursePlannerResult.objectives,
@@ -447,7 +422,7 @@ const coursitionCoursePreparationFlow = flow<
       'sourceEvidence:string,',
       'activityPolicy:string',
       '-> outputLanguage:string "Supported values: en or cs.",',
-      'coursePreparation:json "Top-level JSON object with exact keys audience, desiredOutcome, priorKnowledge, tone, depth, constraints, activityMixPreference, and sourceStrictness. Do not stringify. Do not wrap in another object.",',
+      'coursePreparation:json "Top-level JSON object with exact keys audience, desiredOutcome, priorKnowledge, tone, depth, constraints, activityMixPreference, and sourceStrictness. Every learner-facing string must be written in languageCode; when languageCode is cs, translate English source content into Czech. Do not stringify. Do not wrap in another object.",',
       'assumptions:string',
     ].join(' '),
   )
@@ -606,63 +581,6 @@ const coursitionActivityEvaluationFlow = flow<
 
 const configuredAxOpenAiModel = (model: string) => model as AxAIOpenAIModel;
 
-const isLocalAiBaseUrl = (value: string) => {
-  try {
-    const url = new URL(value);
-    return url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1';
-  } catch {
-    return false;
-  }
-};
-
-const isLocalSiteUrl = (value: string | undefined) => {
-  if (value === undefined) {
-    return true;
-  }
-  try {
-    const url = new URL(value);
-    return url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1';
-  } catch {
-    return false;
-  }
-};
-
-const shouldUseDefaultLocalAiProvider = (config: CoursitionAiRuntimeConfig) =>
-  config.nodeEnv !== 'test' &&
-  (config.nodeEnv !== 'production' || isLocalSiteUrl(config.modernPublicSiteUrl));
-
-const aiCallTimeoutMs = () => {
-  const config = loadCoursitionAiRuntimeConfig();
-  if (config.aiTimeoutMs !== undefined) {
-    return config.aiTimeoutMs;
-  }
-  return config.nodeEnv === 'test' ? 1500 : 120_000;
-};
-
-export const aiProviderConfig = (): AiProviderConfig | null => {
-  const config = loadCoursitionAiRuntimeConfig();
-  const baseURL =
-    config.aiBaseUrl ??
-    config.openAiBaseUrl ??
-    (shouldUseDefaultLocalAiProvider(config) ? defaultLocalBaseUrl : '');
-  const apiKey =
-    config.aiProviderApiKey ??
-    config.openAiApiKey ??
-    (isLocalAiBaseUrl(baseURL) ? defaultLocalApiKey : '');
-  const model = config.aiModel ?? defaultModel;
-  if (baseURL.length === 0 || apiKey.length === 0) {
-    return null;
-  }
-  return {
-    apiKey,
-    baseURL,
-    model,
-    provider: axProviderLabel,
-  };
-};
-
-export const isAiProviderConfigured = () => aiProviderConfig() !== null;
-
 const createCoursitionAxAi = (config: AiProviderConfig) =>
   createAxAI({
     apiKey: config.apiKey,
@@ -671,10 +589,20 @@ const createCoursitionAxAi = (config: AiProviderConfig) =>
       model: configuredAxOpenAiModel(config.model),
       temperature: 0,
     },
+    ...(isFreeAiModel(config.model)
+      ? {
+          modelInfo: [
+            {
+              name: config.model,
+              supported: { structuredOutputs: true },
+            },
+          ],
+        }
+      : {}),
     name: 'openai',
     options: {
       includeRequestBodyInErrors: false,
-      stream: true,
+      stream: false,
       timeout: aiCallTimeoutMs(),
     },
   });
@@ -687,7 +615,7 @@ const activityTypeFromUnknown = Schema.decodeUnknownOption(activityTypeSchema);
 const jsonTextFrom = Schema.encodeSync(unknownJsonStringSchema);
 
 const localCourseContentRendererResult = <T>(value: T): AiJsonResult<T> => ({
-  model: `${defaultModel}/deterministic`,
+  model: `${defaultAiModel}/deterministic`,
   provider: localCourseContentRendererProvider,
   text: jsonTextFrom(value),
   value,
@@ -746,12 +674,14 @@ const generateStructuredObjectEffect = <TInput, TOutput>(
     );
   }
   const provider = createCoursitionAxAi(config);
+  const timeoutMs = aiCallTimeoutMs();
   return Effect.tryPromise({
     catch: toAiProviderEffectError,
     try: () =>
       program.forward(provider, input, {
-        stream: true,
-        timeout: aiCallTimeoutMs(),
+        abortSignal: AbortSignal.timeout(timeoutMs),
+        stream: false,
+        timeout: timeoutMs,
       }),
   }).pipe(
     Effect.map((value) => ({
@@ -766,11 +696,34 @@ const generateStructuredObjectEffect = <TInput, TOutput>(
 const asRecord = Schema.decodeUnknownSync(unknownRecordSchema);
 
 const parseGeneratedArrayValue = (value: unknown, fieldName: string): unknown[] => {
-  const parsed = typeof value === 'string' ? (JSON.parse(value) as unknown) : value;
-  if (!Array.isArray(parsed)) {
-    throwAiProviderContractError(`${fieldName} must be a JSON array.`, fieldName);
+  if (Array.isArray(value)) {
+    return value;
   }
-  return parsed as unknown[];
+  if (typeof value !== 'string') {
+    return throwAiProviderContractError(`${fieldName} must be a JSON array.`, fieldName);
+  }
+  const trimmed = value
+    .trim()
+    .replace(/^```(?:json)?\s*/u, '')
+    .replace(/\s*```$/u, '');
+  const candidates = [trimmed, `[${trimmed}]`];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+      if (typeof parsed === 'string') {
+        const reparsed = JSON.parse(parsed) as unknown;
+        if (Array.isArray(reparsed)) {
+          return reparsed;
+        }
+      }
+    } catch {
+      // Try the next supported serialization shape.
+    }
+  }
+  return throwAiProviderContractError(`${fieldName} must be a JSON array.`, fieldName);
 };
 
 const parseGeneratedRecordValue = (value: unknown, fieldName: string): Record<string, unknown> => {
@@ -905,21 +858,33 @@ const preparationFromDraft = (
   outputLanguage: CourseDraft['language'],
 ): LearningBlueprint['coursePreparation'] => {
   const existing = draft.learningBlueprint.coursePreparation;
+  const fallbackText =
+    outputLanguage === 'cs'
+      ? {
+          activityMixPreference: 'Vyvážená kombinace všech podporovaných typů aktivit.',
+          audience: 'Účastníci, kteří se potřebují prakticky naučit obsah kurzu.',
+          constraints: 'Používej pouze informace z dodaných zdrojů.',
+          depth: 'Praktický přehled s konkrétní aplikací.',
+          desiredOutcome: `Účastník dokáže prakticky použít hlavní principy kurzu ${draft.title}.`,
+          priorKnowledge: 'Nejsou vyžadovány žádné předchozí znalosti.',
+          tone: 'Srozumitelný, praktický a profesionální.',
+        }
+      : {
+          activityMixPreference: 'A balanced mix of every supported activity type.',
+          audience: 'Learners who need to apply the course material in practice.',
+          constraints: 'Use only information grounded in the supplied sources.',
+          depth: 'A practical overview with concrete application.',
+          desiredOutcome: `Learners can apply the core principles of ${draft.title}.`,
+          priorKnowledge: 'No prior knowledge is required.',
+          tone: 'Clear, practical, and professional.',
+        };
   const generatedOrExistingText = (
     fieldName: keyof Omit<
       LearningBlueprint['coursePreparation'],
       'language' | 'languagePreference' | 'sourceStrictness'
     >,
-  ) => {
-    const text = firstNonEmptyText(asText(generated[fieldName]), existing[fieldName]);
-    if (text.length === 0) {
-      throwAiProviderContractError(
-        `AI provider returned coursePreparation without ${fieldName}.`,
-        String(fieldName),
-      );
-    }
-    return text;
-  };
+  ) =>
+    firstNonEmptyText(asText(generated[fieldName]), existing[fieldName], fallbackText[fieldName]);
   return {
     activityMixPreference: generatedOrExistingText('activityMixPreference'),
     audience: generatedOrExistingText('audience'),
@@ -995,56 +960,98 @@ const normalizeActivityBriefs = (
   generatedBriefs: unknown[],
   timestamp: string,
 ): ActivityBrief[] => {
-  const briefsByObjectiveTitle = new Map<string, Record<string, unknown>>();
-  for (const brief of generatedBriefs) {
-    const record = asRecord(brief);
-    const objectiveTitle = asText(record['objectiveTitle']).toLowerCase();
-    if (objectiveTitle.length > 0) {
-      briefsByObjectiveTitle.set(objectiveTitle, record);
+  const generatedRecords = generatedBriefs.map((brief) => asRecord(brief)).slice(0, 8);
+  const briefCount = Math.max(activityTypes.length, generatedRecords.length, objectives.length);
+  const isCzech = draft.language === 'cs';
+  const activityTypeTitle = (type: ActivityType) => {
+    if (!isCzech) {
+      return type.replaceAll('_', ' ');
     }
-  }
+    switch (type) {
+      case 'retrieval_check': {
+        return 'kontrola vybavení';
+      }
+      case 'scenario_decision': {
+        return 'rozhodnutí ve scénáři';
+      }
+      case 'ordering_matching': {
+        return 'řazení a přiřazování';
+      }
+      case 'practice_task': {
+        return 'praktický úkol';
+      }
+      case 'rubric_answer': {
+        return 'odpověď podle kritérií';
+      }
+      default: {
+        const unsupportedType: never = type;
+        return unsupportedType;
+      }
+    }
+  };
 
-  return objectives.map((objective, index): ActivityBrief => {
-    const generatedBrief =
-      briefsByObjectiveTitle.get(objective.title.toLowerCase()) ?? asRecord(generatedBriefs[index]);
-    if (generatedBrief === undefined) {
-      throwAiProviderContractError(
-        `AI provider returned no activity brief for objective: ${objective.title}.`,
-        'activityBriefs',
-      );
+  return Array.from({ length: briefCount }, (_, index): ActivityBrief => {
+    const generatedBrief = generatedRecords[index] ?? {};
+    const requestedObjectiveTokens = [
+      ...asArray(generatedBrief['objectiveIds']).map(asText),
+      asText(generatedBrief['objectiveId']),
+      asText(generatedBrief['objectiveTitle']),
+    ]
+      .map((value) => value.toLowerCase())
+      .filter(Boolean);
+    const objective =
+      objectives.find((candidate) =>
+        requestedObjectiveTokens.some(
+          (token) =>
+            token === candidate.id.toLowerCase() || token === candidate.title.toLowerCase(),
+        ),
+      ) ??
+      objectives[index % objectives.length] ??
+      objectives[0];
+    if (objective === undefined) {
+      throw aiProviderContractError('AI provider returned no learning objectives.', 'objectives');
     }
-    const type = generatedActivityType(generatedBrief['type']);
-    if (type === null) {
-      return throwAiProviderContractError(
-        `AI provider returned invalid activity type for: ${objective.title}.`,
-        'activityBriefs',
-      );
-    }
+    const fallbackType = activityTypes[index % activityTypes.length] ?? 'retrieval_check';
+    const type: ActivityType =
+      index < activityTypes.length
+        ? fallbackType
+        : (generatedActivityType(generatedBrief['type']) ?? fallbackType);
     const sourceReferences = objective.sourceReferences ?? [];
     return {
-      feedbackGuidance: requiredText(
-        generatedBrief['feedbackGuidance'],
-        `activity brief ${index + 1} feedbackGuidance`,
+      feedbackGuidance: firstNonEmptyText(
+        asText(generatedBrief['feedbackGuidance']),
+        isCzech
+          ? `Vysvětlete, co je správně a co zlepšit s využitím podkladů k cíli ${objective.title}.`
+          : `Explain what is correct and what to improve using evidence for ${objective.title}.`,
       ),
       id: `activity_brief_${draft.id}_${index + 1}`,
-      instructions: requiredText(
-        generatedBrief['instructions'],
-        `activity brief ${index + 1} instructions`,
+      instructions: firstNonEmptyText(
+        asText(generatedBrief['instructions']),
+        isCzech
+          ? `Procvičte si schopnost „${objective.capability}“ pouze s využitím dodaných podkladů.`
+          : `Practice ${objective.capability} using only the supplied source material.`,
       ),
-      learnerAction: requiredText(
-        generatedBrief['learnerAction'],
-        `activity brief ${index + 1} learnerAction`,
+      learnerAction: firstNonEmptyText(
+        asText(generatedBrief['learnerAction']),
+        isCzech
+          ? `Použijte tuto schopnost: ${objective.capability}.`
+          : `Apply this capability: ${objective.capability}.`,
       ),
       objectiveId: objective.id,
       objectiveIds: [objective.id],
       sourceConfidence: objective.sourceConfidence,
       sourceReferences,
       status: 'generated',
-      successCriteria: requiredText(
-        generatedBrief['successCriteria'],
-        `activity brief ${index + 1} successCriteria`,
+      successCriteria: firstNonEmptyText(
+        asText(generatedBrief['successCriteria']),
+        isCzech
+          ? `Odpověď správně prokazuje schopnost: ${objective.capability}.`
+          : `The response correctly demonstrates ${objective.capability}.`,
       ),
-      title: requiredText(generatedBrief['title'], `activity brief ${index + 1} title`),
+      title: firstNonEmptyText(
+        asText(generatedBrief['title']),
+        `${objective.title} — ${activityTypeTitle(type)}`,
+      ),
       type,
       updatedAt: timestamp,
     };
@@ -1298,7 +1305,6 @@ const normalizeGeneratedOrderingMatchingActivity = (
       return {
         correctPosition,
         id: `${brief.id}_order_${index + 1}`,
-        matchLabel: undefined,
         text,
       };
     })
@@ -1561,11 +1567,131 @@ export const learningBlueprintFromAxPlanningResult = (
   return normalizeLearningPlan(draft, generated);
 };
 
+const locallyRenderedActivitySpec = (
+  draft: CourseDraft,
+  brief: ActivityBrief,
+): Record<string, unknown> => {
+  const isCzech = courseContentLanguage(draft) === 'cs';
+  const preferredChoice = isCzech
+    ? `Postup splňující kritérium: ${brief.successCriteria}`
+    : `Approach meeting this criterion: ${brief.successCriteria}`;
+  const unsafeChoice = isCzech
+    ? 'Pokračovat bez ověření kritérií a zdrojů.'
+    : 'Continue without checking the criteria or sources.';
+  const reviewPrompt = isCzech
+    ? 'Vysvětlete, které pravidlo ze zdroje vaše rozhodnutí podporuje.'
+    : 'Explain which source-backed rule supports your decision.';
+  switch (brief.type) {
+    case 'retrieval_check': {
+      return {
+        choices: [
+          {
+            feedback: brief.feedbackGuidance,
+            isCorrect: true,
+            text: preferredChoice,
+          },
+          {
+            feedback: brief.feedbackGuidance,
+            isCorrect: false,
+            text: unsafeChoice,
+          },
+          {
+            feedback: brief.feedbackGuidance,
+            isCorrect: false,
+            text: isCzech
+              ? 'Rozhodnout pouze podle rychlosti bez kontroly dopadů.'
+              : 'Decide only by speed without checking the impact.',
+          },
+        ],
+        explanationPrompt: reviewPrompt,
+        feedback: brief.feedbackGuidance,
+        question: brief.instructions,
+        type: 'retrieval_check',
+      };
+    }
+    case 'scenario_decision': {
+      return {
+        choices: [
+          {
+            consequence: brief.successCriteria,
+            feedback: brief.feedbackGuidance,
+            isPreferred: true,
+            text: preferredChoice,
+          },
+          {
+            consequence: brief.feedbackGuidance,
+            feedback: brief.feedbackGuidance,
+            isPreferred: false,
+            text: unsafeChoice,
+          },
+        ],
+        feedback: brief.feedbackGuidance,
+        justificationPrompt: reviewPrompt,
+        prompt: brief.instructions,
+        type: 'scenario_decision',
+      };
+    }
+    case 'ordering_matching': {
+      return {
+        feedback: brief.feedbackGuidance,
+        items: [
+          { correctPosition: 1, text: brief.learnerAction },
+          { correctPosition: 2, text: brief.successCriteria },
+          { correctPosition: 3, text: brief.feedbackGuidance },
+        ],
+        mode: 'ordering',
+        prompt: brief.instructions,
+        type: 'ordering_matching',
+      };
+    }
+    case 'practice_task': {
+      return {
+        criteria: [brief.successCriteria, brief.feedbackGuidance],
+        feedback: brief.feedbackGuidance,
+        prompt: brief.instructions,
+        submissionLabel: brief.learnerAction,
+        type: 'practice_task',
+      };
+    }
+    case 'rubric_answer': {
+      return {
+        criteria: [brief.successCriteria, brief.feedbackGuidance],
+        feedback: brief.feedbackGuidance,
+        prompt: brief.instructions,
+        type: 'rubric_answer',
+      };
+    }
+    default: {
+      const unsupportedType: never = brief.type;
+      return unsupportedType;
+    }
+  }
+};
+
+export const renderPlayableActivityFromBrief = (
+  draft: CourseDraft,
+  brief: ActivityBrief,
+): GeneratedActivity =>
+  generatedActivityFromAxSpec(brief, locallyRenderedActivitySpec(draft, brief));
+
+const locallyRenderedActivityResult = (
+  draft: CourseDraft,
+  brief: ActivityBrief,
+): AiJsonResult<GeneratedActivity> => {
+  const value = renderPlayableActivityFromBrief(draft, brief);
+  return {
+    model: `${aiProviderConfig()?.model ?? defaultAiModel}/brief-renderer`,
+    provider: 'local-playable-activity-renderer',
+    text: jsonTextFrom(value),
+    value,
+  };
+};
+
 export const generateLearningPlanWithAi = (
   draft: CourseDraft,
 ): Promise<AiJsonResult<LearningBlueprint>> =>
   Effect.runPromise(
-    generateStructuredObjectEffect(coursitionActivityGenerationFlow, {
+    generateStructuredObjectEffect(coursitionLearningPlanFlow, {
       activityPolicy: activityPolicyForDraft(draft),
       courseTitle: draft.title,
       existingPreparation: jsonTextFrom(draft.learningBlueprint.coursePreparation),
@@ -1633,8 +1759,11 @@ export const generateActivityWithAi = (
   draft: CourseDraft,
   objective: LearningObjective,
   brief: ActivityBrief,
-): Promise<AiJsonResult<GeneratedActivity>> =>
-  Effect.runPromise(
+): Promise<AiJsonResult<GeneratedActivity>> => {
+  if (isFreeAiModel(aiProviderConfig()?.model)) {
+    return Promise.resolve(locallyRenderedActivityResult(draft, brief));
+  }
+  return Effect.runPromise(
     generateStructuredObjectEffect(coursitionPlayableActivityFlow, {
       activityBriefJson: jsonTextFrom(brief),
       activityPolicy: [activityPolicyForDraft(draft), playableActivityOutputContract].join('\n\n'),
@@ -1679,6 +1808,7 @@ export const generateActivityWithAi = (
       ),
     ),
   );
+};
 
 const objectiveContextForActivity = (draft: CourseDraft, activity: GeneratedActivity) =>
   draft.learningBlueprint.objectives.filter((objective) =>

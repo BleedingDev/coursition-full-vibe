@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Coursition — pitch deck</title>
+    <!-- Fonts for print (the video relies on the HyperFrames renderer to bundle these). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=EB+Garamond:ital,wght@0,500;1,500&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+
+      :root {
+        --ink: #0c0b0a;
+        --ink2: #15120e;
+        --paper: #f1e9da;
+        --muted: #8d8676;
+        --faint: rgba(241, 233, 218, 0.14);
+        --hair: rgba(241, 233, 218, 0.16);
+        --red: #ff3b27;
+        --display: Oswald, sans-serif;
+        --serif: "EB Garamond", serif;
+        --mono: "Space Mono", monospace;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--ink); color: var(--paper); }
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: Oswald, sans-serif; }
+
+      /* ---- atmosphere ---- */
+      .bg { position: absolute; inset: 0; z-index: 0; background:
+        radial-gradient(1500px 1000px at 70% 8%, #19150f 0%, var(--ink) 60%),
+        var(--ink); }
+      .bg-lines { position: absolute; inset: 0; opacity: 0.5;
+        background-image: repeating-linear-gradient(0deg, transparent 0 63px, rgba(241,233,218,0.028) 63px 64px);
+        -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+                mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent); }
+      .grain { position: absolute; inset: 0; z-index: 6; pointer-events: none;
+        opacity: 0.05; mix-blend-mode: soft-light; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 180px 180px; }
+
+      /* ---- persistent editorial frame ---- */
+      .chrome { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+      .chrome .hr { position: absolute; left: 150px; right: 150px; height: 1px; background: var(--hair); }
+      .chrome .hr-top { top: 92px; }
+      .chrome .hr-bot { bottom: 92px; }
+      .chrome .bar { position: absolute; left: 150px; right: 150px; display: flex; justify-content: space-between; align-items: center;
+        font-family: "Space Mono", monospace; font-size: 17px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--muted); }
+      .chrome .bar-top { top: 54px; }
+      .chrome .bar-bot { bottom: 54px; }
+      .chrome .brand { color: var(--paper); }
+      .chrome .brand b { color: var(--red); font-weight: 400; }
+      .chrome .sections { position: relative; height: 18px; min-width: 320px; text-align: right; }
+      .chrome .seclabel { position: absolute; right: 0; top: 0; opacity: 0; color: var(--paper); }
+      .chrome .tick { color: var(--red); }
+
+      /* ---- scene shell (left-aligned, editorial) ---- */
+      .scene { position: absolute; inset: 0; z-index: 2; opacity: 0;
+        display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+        padding: 150px 152px 150px 152px; }
+      .stack { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 30px; max-width: 1610px; }
+      .rl { display: block; overflow: visible; }
+      .ri { display: inline-block; }
+      .eyebrow { font-family: "Space Mono", monospace; font-size: 21px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--muted); }
+      .eyebrow::before { content: "●  "; color: var(--red); }
+
+      .mark { position: relative; white-space: nowrap; }
+      .mark .swipe { position: absolute; left: -0.02em; right: -0.02em; bottom: 0.04em; height: 0.1em;
+        background: var(--red); transform: scaleX(0); transform-origin: left center; }
+
+      h1.display { font-family: Oswald, sans-serif; font-weight: 700; text-transform: uppercase;
+        line-height: 0.95; letter-spacing: -0.005em; color: var(--paper); }
+      .xl { font-size: 150px; }
+      .lg { font-size: 100px; }
+      .md { font-size: 86px; }
+      .serif-em { font-family: "EB Garamond", serif; font-style: italic; font-weight: 500; text-transform: none;
+        color: var(--red); letter-spacing: 0; line-height: 1.02; }
+
+      /* ---- positioning ---- */
+      .rivals { font-family: "EB Garamond", serif; font-size: 44px; color: var(--muted); line-height: 1.2; }
+      .rivals .rl-label { font-family: "Space Mono", monospace; font-size: 18px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
+      .pipe { display: flex; align-items: center; gap: 16px; font-family: "Space Mono", monospace; font-size: 23px; color: var(--paper); margin-top: 8px; }
+      .pipe .seg { padding: 12px 0; border-bottom: 2px solid var(--faint); }
+      .pipe .arrow { color: var(--red); font-family: Oswald, sans-serif; font-size: 26px; }
+
+      /* ---- fight ---- */
+      .contrast { display: flex; flex-direction: column; gap: 16px; margin-top: 10px; }
+      .crow { display: flex; align-items: center; gap: 22px; font-family: "Space Mono", monospace; font-size: 30px; }
+      .crow .cmark { width: 46px; height: 46px; display: grid; place-items: center; font-size: 26px; border: 1.5px solid var(--faint); }
+      .crow.bad { color: var(--muted); }
+      .crow.bad .lbl { text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+      .crow.bad .cmark { color: var(--red); }
+      .crow.good { color: var(--paper); }
+      .crow.good .cmark { color: var(--red); border-color: var(--red); }
+
+      /* ---- engines (numbered editorial row) ---- */
+      .list { display: flex; gap: 26px; margin-top: 14px; }
+      .item { display: flex; flex-direction: column; gap: 12px; max-width: 300px; }
+      .item .num { font-family: "Space Mono", monospace; font-size: 20px; color: var(--red); letter-spacing: 0.1em; }
+      .item .num::after { content: ""; display: block; width: 34px; height: 2px; background: var(--red); margin-top: 10px; }
+      .item .lab { font-family: Oswald, sans-serif; text-transform: uppercase; font-weight: 500; font-size: 27px; line-height: 1.04; color: var(--paper); }
+      .note { font-family: "EB Garamond", serif; font-style: italic; font-size: 28px; color: var(--muted); margin-top: 8px; }
+
+      /* ---- demo ---- */
+      .demo-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; }
+      .demo-head { width: 100%; max-width: 1216px; display: flex; align-items: baseline; justify-content: space-between; }
+      .demo-head .h { font-family: Oswald, sans-serif; text-transform: uppercase; font-weight: 600; font-size: 40px; color: var(--paper); }
+      .demo-head .e { font-family: "Space Mono", monospace; font-size: 17px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--muted); }
+      .demo-head .e::before { content: "●  "; color: var(--red); }
+      .browser { width: 1216px; overflow: hidden; background: var(--ink2); border: 1px solid var(--hair);
+        box-shadow: 0 40px 90px rgba(0,0,0,0.55); }
+      .browser-bar { position: relative; height: 52px; display: flex; align-items: center; gap: 14px; padding: 0 20px;
+        background: rgba(241,233,218,0.04); border-bottom: 1px solid var(--hair); }
+      .browser-bar .dots { display: flex; gap: 8px; }
+      .browser-bar .dots i { width: 11px; height: 11px; border-radius: 50%; background: #4a4338; }
+      .browser-bar .url { font-family: "Space Mono", monospace; font-size: 16px; color: var(--muted); padding: 6px 14px; background: rgba(0,0,0,0.28); }
+      .browser-bar .steplabel { position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+        font-family: "Space Mono", monospace; font-size: 16px; letter-spacing: 0.06em; color: var(--paper); opacity: 0; }
+      .browser-bar .steplabel b { color: var(--red); margin-right: 10px; }
+      .browser-view { position: relative; width: 100%; height: 760px; background: var(--ink); }
+      .shot { position: absolute; inset: 0; background-size: cover; background-position: top center; opacity: 0; }
+
+      /* ---- result ---- */
+      .next { display: flex; gap: 0; margin-top: 16px; }
+      .next .item2 { display: flex; align-items: baseline; gap: 16px; padding: 0 34px; border-left: 1px solid var(--hair); }
+      .next .item2:first-child { padding-left: 0; border-left: 0; }
+      .next .item2 .t { font-family: "Space Mono", monospace; font-size: 24px; color: var(--paper); }
+      .next .item2 .c { color: var(--red); font-family: Oswald, sans-serif; font-size: 26px; }
+
+      /* ---- close ---- */
+      .close-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 22px; }
+      .wordmark { font-family: Oswald, sans-serif; font-weight: 700; font-size: 176px; line-height: 0.9; text-transform: uppercase; color: var(--paper); }
+      .tagline { font-family: "EB Garamond", serif; font-style: italic; font-size: 40px; color: var(--muted); max-width: 1200px; line-height: 1.25; }
+
+
+      @page { size: 1920px 1080px; margin: 0; }
+      html, body { width: 1920px; height: auto; overflow: visible; background: var(--ink); }
+      .slide { position: relative; width: 1920px; height: 1080px; overflow: hidden;
+        display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+        padding: 150px 152px;
+        background: radial-gradient(1500px 1000px at 70% 8%, #19150f 0%, var(--ink) 60%), var(--ink);
+        break-after: page; page-break-after: always; }
+      .slide:last-child { break-after: auto; page-break-after: auto; }
+      /* reveal everything (no GSAP in print) */
+      .slide .swipe { transform: scaleX(1) !important; }
+      .slide .shot { opacity: 1 !important; }
+      .slide .steplabel { opacity: 1 !important; }
+      .slide .scene { position: static; opacity: 1; padding: 0; }
+      @media print { html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+    </style>
+  </head>
+  <body>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="stack">
+    <div class="eyebrow r">36 hours · one risky bet</div>
+    <h1 class="display xl"><span class="rl"><span class="ri">Course text is easy.</span></span><span class="rl"><span class="ri">Good learning is <span class="mark">hard<i class="swipe"></i></span>.</span></span></h1>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">The premise</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;01 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="stack">
+    <div class="eyebrow r">Not another LMS</div>
+    <div class="rivals r"><span class="rl-label">host &amp; sell courses</span><br/>Teachable · Thinkific · Moodle</div>
+    <h1 class="display lg"><span class="rl"><span class="ri">Coursition prepares the <span class="mark">learning<i class="swipe"></i></span>.</span></span></h1>
+    <div class="pipe r">
+      <span class="seg">PDF / raw text</span><span class="arrow">→</span><span class="seg">Objectives</span><span class="arrow">→</span><span class="seg">Activities</span><span class="arrow">→</span><span class="seg">Playable preview</span>
+    </div>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">The category</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;02 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="stack">
+    <div class="eyebrow r">What I learned the hard way</div>
+    <h1 class="display md"><span class="rl"><span class="ri">The hard part wasn't content.</span></span><span class="rl"><span class="ri serif-em">It was practice.</span></span></h1>
+    <div class="contrast">
+      <div class="crow bad r"><span class="cmark">✕</span><span class="lbl">AI, invent a fun mini-game</span></div><div class="crow good r"><span class="cmark">✓</span><span class="lbl">AI, fill a learning-activity contract</span></div>
+    </div>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">The pivot</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;03 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="stack">
+    <div class="eyebrow r">Constrained, not random</div>
+    <h1 class="display md"><span class="rl"><span class="ri">Five reusable <span class="mark">engines<i class="swipe"></i></span>.</span></span></h1>
+    <div class="list">
+      <div class="item r"><span class="num">01</span><span class="lab">Retrieval check</span></div><div class="item r"><span class="num">02</span><span class="lab">Scenario decision</span></div><div class="item r"><span class="num">03</span><span class="lab">Ordering / matching</span></div><div class="item r"><span class="num">04</span><span class="lab">Practice task</span></div><div class="item r"><span class="num">05</span><span class="lab">Rubric answer</span></div>
+    </div>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">The engines</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;04 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="demo-wrap">
+    <div class="demo-head">
+      <span class="h">One source. A whole course.</span>
+      <span class="e">1 / 5 · Add source</span>
+    </div>
+    <div class="browser">
+      <div class="browser-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="url">localhost:8080 — Coursition</span>
+        <span class="steplabel"><b>01/05</b>Add source</span>
+      </div>
+      <div class="browser-view">
+        <div class="shot" style="background-image:url('assets/screens-print/02-sources.jpg')"></div>
+      </div>
+    </div>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">The product</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;05 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="demo-wrap">
+    <div class="demo-head">
+      <span class="h">One source. A whole course.</span>
+      <span class="e">2 / 5 · Course preparation</span>
+    </div>
+    <div class="browser">
+      <div class="browser-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="url">localhost:8080 — Coursition</span>
+        <span class="steplabel"><b>02/05</b>Course preparation</span>
+      </div>
+      <div class="browser-view">
+        <div class="shot" style="background-image:url('assets/screens-print/03-preparation.jpg')"></div>
+      </div>
+    </div>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">The product</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;06 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="demo-wrap">
+    <div class="demo-head">
+      <span class="h">One source. A whole course.</span>
+      <span class="e">3 / 5 · Objectives</span>
+    </div>
+    <div class="browser">
+      <div class="browser-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="url">localhost:8080 — Coursition</span>
+        <span class="steplabel"><b>03/05</b>Objectives</span>
+      </div>
+      <div class="browser-view">
+        <div class="shot" style="background-image:url('assets/screens-print/04-objectives.jpg')"></div>
+      </div>
+    </div>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">The product</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;07 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="demo-wrap">
+    <div class="demo-head">
+      <span class="h">One source. A whole course.</span>
+      <span class="e">4 / 5 · Activity plan</span>
+    </div>
+    <div class="browser">
+      <div class="browser-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="url">localhost:8080 — Coursition</span>
+        <span class="steplabel"><b>04/05</b>Activity plan</span>
+      </div>
+      <div class="browser-view">
+        <div class="shot" style="background-image:url('assets/screens-print/05-activity-plan.jpg')"></div>
+      </div>
+    </div>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">The product</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;08 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="demo-wrap">
+    <div class="demo-head">
+      <span class="h">One source. A whole course.</span>
+      <span class="e">5 / 5 · Playable preview</span>
+    </div>
+    <div class="browser">
+      <div class="browser-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="url">localhost:8080 — Coursition</span>
+        <span class="steplabel"><b>05/05</b>Playable preview</span>
+      </div>
+      <div class="browser-view">
+        <div class="shot" style="background-image:url('assets/screens-print/06-preview-top.jpg')"></div>
+      </div>
+    </div>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">The product</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;09 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="stack">
+    <div class="eyebrow r">Where it stands</div>
+    <h1 class="display lg"><span class="rl"><span class="ri">Not sold.</span></span><span class="rl"><span class="ri">Not finished.</span></span><span class="rl"><span class="ri serif-em">But the wedge is sharper.</span></span></h1>
+    <div class="next">
+      <div class="item2 r"><span class="c">→</span><span class="t">2k newsletter</span></div><div class="item2 r"><span class="c">→</span><span class="t">10k on LinkedIn</span></div><div class="item2 r"><span class="c">→</span><span class="t">Test source-to-activity</span></div>
+    </div>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">Honest</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;10 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <section class="slide">
+      <div class="bg-lines"></div>
+      
+  <div class="close-wrap">
+    <div class="wordmark"><span class="rl"><span class="ri">Coursition<i class="swipe" style="height:0.05em;bottom:0.02em"></i></span></span></div>
+    <div class="tagline r">Course preparation for reusable, interactive learning.</div>
+  </div>
+      <div class="chrome">
+        <div class="hr hr-top"></div>
+        <div class="hr hr-bot"></div>
+        <div class="bar bar-top">
+          <span class="brand"><b>●</b> COURSITION</span>
+          <span style="color:var(--paper)">Coursition</span>
+        </div>
+        <div class="bar bar-bot">
+          <span>Course preparation engine</span>
+          <span><span class="tick">●</span>&nbsp;&nbsp;11 / 11</span>
+        </div>
+      </div>
+      <div class="grain"></div>
+    </section>
+  </body>
+</html>

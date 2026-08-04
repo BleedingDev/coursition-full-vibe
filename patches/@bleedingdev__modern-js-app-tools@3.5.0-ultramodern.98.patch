@@ -1,0 +1,144 @@
+diff --git a/dist/cjs/esm/ts-paths-loader.js b/dist/cjs/esm/ts-paths-loader.js
+index 85233a44719d57951245f881f39d34321268ed55..339a30418ebc3a74f2e329e931ba0a9714b550bd 100644
+--- a/dist/cjs/esm/ts-paths-loader.js
++++ b/dist/cjs/esm/ts-paths-loader.js
+@@ -54,7 +54,7 @@ async function initialize({ appDir: currentAppDir, baseUrl, paths }) {
+ function resolve(specifier, context, defaultResolve) {
+     const parentPath = getParentPath(context.parentURL);
+     const relativeFromApp = appDir ? external_node_path_namespaceObject.relative(appDir, parentPath) : '';
+-    const isAppFile = appDir && (parentPath === appDir || relativeFromApp && !relativeFromApp.startsWith('..') && !external_node_path_namespaceObject.isAbsolute(relativeFromApp));
++    const isAppFile = appDir && !relativeFromApp.split(external_node_path_namespaceObject.sep).includes('node_modules') && (parentPath === appDir || relativeFromApp && !relativeFromApp.startsWith('..') && !external_node_path_namespaceObject.isAbsolute(relativeFromApp));
+     if ((specifier.startsWith('./') || specifier.startsWith('../')) && !external_node_path_namespaceObject.extname(specifier) && isAppFile) {
+         const matchedPath = external_node_path_namespaceObject.resolve(parentPath, specifier);
+         const resolvedPath = (0, utils_namespaceObject.findSourceEntry)(matchedPath) || matchedPath;
+diff --git a/dist/cjs/esm/ts-paths-loader.mjs b/dist/cjs/esm/ts-paths-loader.mjs
+index f03884adef248bf0a69769696f35948f970fd1ec..cbced6dfa83296371f9d1458ebd460c8459bdda1 100644
+--- a/dist/cjs/esm/ts-paths-loader.mjs
++++ b/dist/cjs/esm/ts-paths-loader.mjs
+@@ -21,7 +21,7 @@ export async function initialize({ appDir: currentAppDir, baseUrl, paths }) {
+ export function resolve(specifier, context, defaultResolve) {
+     const parentPath = getParentPath(context.parentURL);
+     const relativeFromApp = appDir ? path.relative(appDir, parentPath) : '';
+-    const isAppFile = appDir && (parentPath === appDir || relativeFromApp && !relativeFromApp.startsWith('..') && !path.isAbsolute(relativeFromApp));
++    const isAppFile = appDir && !relativeFromApp.split(path.sep).includes('node_modules') && (parentPath === appDir || relativeFromApp && !relativeFromApp.startsWith('..') && !path.isAbsolute(relativeFromApp));
+     if ((specifier.startsWith('./') || specifier.startsWith('../')) && !path.extname(specifier) && isAppFile) {
+         const matchedPath = path.resolve(parentPath, specifier);
+         const resolvedPath = findSourceEntry(matchedPath) || matchedPath;
+@@ -30,6 +30,7 @@ export function resolve(specifier, context, defaultResolve) {
+     if (!matchPath) return defaultResolve(specifier, context, defaultResolve);
+     const match = findMatchedSourcePath(matchPath, specifier);
+     if (!match) return defaultResolve(specifier, context, defaultResolve);
+-    const resolvedPath = findSourceEntry(match) || match;
++    const directoryEntry = node_fs.existsSync(match) && node_fs.statSync(match).isDirectory() ? findSourceEntry(node_path.join(match, 'index')) : undefined;
++    const resolvedPath = findSourceEntry(match) || directoryEntry || match;
+     return defaultResolve(pathToFileURL(resolvedPath).href, context, defaultResolve);
+ }
+diff --git a/dist/cjs/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.js b/dist/cjs/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.js
+index 29cb532ebfc125166ba8291ce29612e19ae3d7ac..96fcdaad563862761b7951127405663161711e9e 100644
+--- a/dist/cjs/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.js
++++ b/dist/cjs/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.js
+@@ -146,10 +146,14 @@ const visitAst = (node, visitor)=>{
+         }
+     }
+ };
++/* A dynamic import with a computed specifier carries no module name.
++ * Reading the identifier here reported bundler-minified variables such
++ * as "e" as missing packages. */
++const getLiteralSpecifier = (node)=>isAstNode(node) && 'StringLiteral' === node.type && 'string' == typeof node.value ? node.value : void 0;
+ const getStaticImport = (node)=>{
+     if (('ImportDeclaration' === node.type || 'ExportNamedDeclaration' === node.type || 'ExportAllDeclaration' === node.type) && isAstNode(node.source)) return getNodeName(node.source);
+-    if ('ImportExpression' === node.type && isAstNode(node.source)) return getNodeName(node.source);
+-    if ('CallExpression' === node.type && Array.isArray(node.arguments) && 1 === node.arguments.length && isAstNode(node.callee) && ('Identifier' === node.callee.type && 'require' === node.callee.name || 'Import' === node.callee.type)) return getNodeName(node.arguments[0]);
++    if ('ImportExpression' === node.type && isAstNode(node.source)) return getLiteralSpecifier(node.source);
++    if ('CallExpression' === node.type && Array.isArray(node.arguments) && 1 === node.arguments.length && isAstNode(node.callee) && ('Identifier' === node.callee.type && 'require' === node.callee.name || 'Import' === node.callee.type)) return getLiteralSpecifier(node.arguments[0]);
+ };
+ const analyzeWorkerModule = (source)=>{
+     const ast = (0, parser_namespaceObject.parse)(source, {
+diff --git a/dist/esm/esm/ts-paths-loader.mjs b/dist/esm/esm/ts-paths-loader.mjs
+index d8b64c9c2cd6d09138fc87c1bb1d2a016a02d17b..24ddddada9a46e949401a1c311a17a62cb16aff0 100644
+--- a/dist/esm/esm/ts-paths-loader.mjs
++++ b/dist/esm/esm/ts-paths-loader.mjs
+@@ -21,7 +21,7 @@ async function initialize({ appDir: currentAppDir, baseUrl, paths }) {
+ function resolve(specifier, context, defaultResolve) {
+     const parentPath = getParentPath(context.parentURL);
+     const relativeFromApp = appDir ? node_path.relative(appDir, parentPath) : '';
+-    const isAppFile = appDir && (parentPath === appDir || relativeFromApp && !relativeFromApp.startsWith('..') && !node_path.isAbsolute(relativeFromApp));
++    const isAppFile = appDir && !relativeFromApp.split(node_path.sep).includes('node_modules') && (parentPath === appDir || relativeFromApp && !relativeFromApp.startsWith('..') && !node_path.isAbsolute(relativeFromApp));
+     if ((specifier.startsWith('./') || specifier.startsWith('../')) && !node_path.extname(specifier) && isAppFile) {
+         const matchedPath = node_path.resolve(parentPath, specifier);
+         const resolvedPath = findSourceEntry(matchedPath) || matchedPath;
+@@ -30,7 +30,8 @@ function resolve(specifier, context, defaultResolve) {
+     if (!matchPath) return defaultResolve(specifier, context, defaultResolve);
+     const match = findMatchedSourcePath(matchPath, specifier);
+     if (!match) return defaultResolve(specifier, context, defaultResolve);
+-    const resolvedPath = findSourceEntry(match) || match;
++    const directoryEntry = node_fs.existsSync(match) && node_fs.statSync(match).isDirectory() ? findSourceEntry(node_path.join(match, 'index')) : undefined;
++    const resolvedPath = findSourceEntry(match) || directoryEntry || match;
+     return defaultResolve(pathToFileURL(resolvedPath).href, context, defaultResolve);
+ }
+ export { initialize, resolve };
+diff --git a/dist/esm/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.mjs b/dist/esm/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.mjs
+index beb1aa78a911a2bd3eab25acc516c0e3bc895900..a3f184cf54910fe4d9520f70a3ff40f862e4981b 100644
+--- a/dist/esm/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.mjs
++++ b/dist/esm/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.mjs
+@@ -98,10 +98,14 @@ const visitAst = (node, visitor)=>{
+         }
+     }
+ };
++/* A dynamic import with a computed specifier carries no module name.
++ * Reading the identifier here reported bundler-minified variables such
++ * as "e" as missing packages. */
++const getLiteralSpecifier = (node)=>isAstNode(node) && 'StringLiteral' === node.type && 'string' == typeof node.value ? node.value : void 0;
+ const getStaticImport = (node)=>{
+     if (('ImportDeclaration' === node.type || 'ExportNamedDeclaration' === node.type || 'ExportAllDeclaration' === node.type) && isAstNode(node.source)) return getNodeName(node.source);
+-    if ('ImportExpression' === node.type && isAstNode(node.source)) return getNodeName(node.source);
+-    if ('CallExpression' === node.type && Array.isArray(node.arguments) && 1 === node.arguments.length && isAstNode(node.callee) && ('Identifier' === node.callee.type && 'require' === node.callee.name || 'Import' === node.callee.type)) return getNodeName(node.arguments[0]);
++    if ('ImportExpression' === node.type && isAstNode(node.source)) return getLiteralSpecifier(node.source);
++    if ('CallExpression' === node.type && Array.isArray(node.arguments) && 1 === node.arguments.length && isAstNode(node.callee) && ('Identifier' === node.callee.type && 'require' === node.callee.name || 'Import' === node.callee.type)) return getLiteralSpecifier(node.arguments[0]);
+ };
+ const analyzeWorkerModule = (source)=>{
+     const ast = parse(source, {
+diff --git a/dist/esm-node/esm/ts-paths-loader.mjs b/dist/esm-node/esm/ts-paths-loader.mjs
+index eebe94f1259cf6271d54a116a7dba17e593cf87e..5d59ed3c5bd44a5f8d5b03957455c2eda8b5571c 100644
+--- a/dist/esm-node/esm/ts-paths-loader.mjs
++++ b/dist/esm-node/esm/ts-paths-loader.mjs
+@@ -22,7 +22,7 @@ async function initialize({ appDir: currentAppDir, baseUrl, paths }) {
+ function resolve(specifier, context, defaultResolve) {
+     const parentPath = getParentPath(context.parentURL);
+     const relativeFromApp = appDir ? node_path.relative(appDir, parentPath) : '';
+-    const isAppFile = appDir && (parentPath === appDir || relativeFromApp && !relativeFromApp.startsWith('..') && !node_path.isAbsolute(relativeFromApp));
++    const isAppFile = appDir && !relativeFromApp.split(node_path.sep).includes('node_modules') && (parentPath === appDir || relativeFromApp && !relativeFromApp.startsWith('..') && !node_path.isAbsolute(relativeFromApp));
+     if ((specifier.startsWith('./') || specifier.startsWith('../')) && !node_path.extname(specifier) && isAppFile) {
+         const matchedPath = node_path.resolve(parentPath, specifier);
+         const resolvedPath = findSourceEntry(matchedPath) || matchedPath;
+@@ -31,7 +31,8 @@ function resolve(specifier, context, defaultResolve) {
+     if (!matchPath) return defaultResolve(specifier, context, defaultResolve);
+     const match = findMatchedSourcePath(matchPath, specifier);
+     if (!match) return defaultResolve(specifier, context, defaultResolve);
+-    const resolvedPath = findSourceEntry(match) || match;
++    const directoryEntry = node_fs.existsSync(match) && node_fs.statSync(match).isDirectory() ? findSourceEntry(node_path.join(match, 'index')) : undefined;
++    const resolvedPath = findSourceEntry(match) || directoryEntry || match;
+     return defaultResolve(pathToFileURL(resolvedPath).href, context, defaultResolve);
+ }
+ export { initialize, resolve };
+diff --git a/dist/esm-node/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.mjs b/dist/esm-node/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.mjs
+index 602350c3c8b16b88d4ef23942470941177937d13..752b3fab9554a4d7965f54a4441719f60b23ed7c 100644
+--- a/dist/esm-node/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.mjs
++++ b/dist/esm-node/plugins/deploy/platforms/cloudflare-output-verifier/worker-bundles.mjs
+@@ -99,10 +99,14 @@ const visitAst = (node, visitor)=>{
+         }
+     }
+ };
++/* A dynamic import with a computed specifier carries no module name.
++ * Reading the identifier here reported bundler-minified variables such
++ * as "e" as missing packages. */
++const getLiteralSpecifier = (node)=>isAstNode(node) && 'StringLiteral' === node.type && 'string' == typeof node.value ? node.value : void 0;
+ const getStaticImport = (node)=>{
+     if (('ImportDeclaration' === node.type || 'ExportNamedDeclaration' === node.type || 'ExportAllDeclaration' === node.type) && isAstNode(node.source)) return getNodeName(node.source);
+-    if ('ImportExpression' === node.type && isAstNode(node.source)) return getNodeName(node.source);
+-    if ('CallExpression' === node.type && Array.isArray(node.arguments) && 1 === node.arguments.length && isAstNode(node.callee) && ('Identifier' === node.callee.type && 'require' === node.callee.name || 'Import' === node.callee.type)) return getNodeName(node.arguments[0]);
++    if ('ImportExpression' === node.type && isAstNode(node.source)) return getLiteralSpecifier(node.source);
++    if ('CallExpression' === node.type && Array.isArray(node.arguments) && 1 === node.arguments.length && isAstNode(node.callee) && ('Identifier' === node.callee.type && 'require' === node.callee.name || 'Import' === node.callee.type)) return getLiteralSpecifier(node.arguments[0]);
+ };
+ const analyzeWorkerModule = (source)=>{
+     const ast = parse(source, {

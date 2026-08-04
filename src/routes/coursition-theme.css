@@ -1,0 +1,643 @@
+/*
+ * Coursition civic-editorial theme.
+ *
+ * This is the product-level visual source of truth. It is imported after the
+ * Techsio UI kit so semantic and component variables keep the implementation
+ * on the design-system path while giving Coursition its own calm, credible
+ * visual voice. Hierarchy comes from warm surfaces, typography and space;
+ * borders are reserved for controls, dividers and meaningful state changes.
+ */
+
+html.light {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+:root {
+  /* Editorial typography. IBM Plex Sans is preferred when available, with a
+   * high-quality variable system stack as a zero-network fallback. */
+  --font-sans:
+    'IBM Plex Sans', 'Segoe UI Variable', Inter, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: var(--font-sans);
+  --font-heading: var(--font-sans);
+  --font-weight-label: var(--font-weight-semibold);
+  --font-weight-accordion-title: var(--font-weight-semibold);
+  --font-weight-radio-card-item: var(--font-weight-semibold);
+  --font-weight-badge-sm: var(--font-weight-medium);
+  --font-weight-badge-md: var(--font-weight-semibold);
+
+  /* Deep forest interaction ramp. Darker values are intentionally retained
+   * for solid controls so white labels preserve strong APCA contrast. */
+  --color-primary-100: light-dark(oklch(96% 0.025 154), oklch(24% 0.035 154));
+  --color-primary-200: light-dark(oklch(91% 0.05 154), oklch(31% 0.05 154));
+  --color-primary-300: light-dark(oklch(82% 0.085 154), oklch(79% 0.09 154));
+  --color-primary-400: light-dark(oklch(67% 0.13 154), oklch(72% 0.12 154));
+  --color-primary-500: light-dark(oklch(48% 0.13 154), oklch(66% 0.105 154));
+  --color-primary-600: light-dark(oklch(36% 0.105 154), oklch(58% 0.09 154));
+  --color-primary-700: light-dark(oklch(30% 0.085 154), oklch(47% 0.075 154));
+  --color-primary-800: light-dark(oklch(25% 0.065 154), oklch(36% 0.06 154));
+  --color-primary-900: light-dark(oklch(21% 0.045 154), oklch(27% 0.045 154));
+
+  --color-primary: light-dark(oklch(29% 0.085 154), oklch(91% 0.055 154));
+  --color-primary-hover: light-dark(oklch(24% 0.075 154), oklch(96% 0.04 154));
+  --color-primary-active: light-dark(oklch(20% 0.06 154), oklch(98% 0.025 154));
+  --color-primary-disabled: light-dark(oklch(42% 0.025 154), oklch(76% 0.025 154));
+  --color-primary-light: light-dark(oklch(94% 0.025 154), oklch(22% 0.025 154));
+  --color-primary-light-hover: light-dark(oklch(91% 0.035 154), oklch(26% 0.035 154));
+  --color-primary-light-active: light-dark(oklch(87% 0.045 154), oklch(30% 0.045 154));
+  --color-primary-light-disabled: var(--color-bg-disabled);
+
+  --color-bg-primary-base: light-dark(oklch(36% 0.105 154), oklch(38% 0.085 154));
+  --color-bg-primary-hover: light-dark(oklch(31% 0.09 154), oklch(43% 0.09 154));
+  --color-bg-primary-active: light-dark(oklch(26% 0.07 154), oklch(34% 0.07 154));
+  --color-bg-light-primary-base: var(--color-primary-light);
+  --color-bg-light-primary-hover: var(--color-primary-light-hover);
+  --color-bg-light-primary-active: var(--color-primary-light-active);
+  --color-bg-outlined-primary-hover: var(--color-primary-light);
+  --color-bg-outlined-primary-active: var(--color-primary-light-active);
+
+  /* Warm civic canvas and three deliberate surface levels. These are solid
+   * colors rather than translucent washes, keeping contrast predictable. */
+  --color-page-bg: light-dark(oklch(97.6% 0.008 84), oklch(12.5% 0.008 72));
+  --color-page-fg: light-dark(oklch(17% 0.012 72), oklch(96% 0.008 84));
+  --color-surface: light-dark(oklch(99.4% 0.004 84), oklch(16.5% 0.009 72));
+  --color-surface-subtle: light-dark(oklch(95.5% 0.01 84), oklch(20.5% 0.011 72));
+  --color-fill-surface: var(--color-surface-subtle);
+  --color-fill-overlay: light-dark(oklch(93% 0.012 84), oklch(23% 0.012 72));
+  --color-fill-highlight: light-dark(oklch(90% 0.014 84), oklch(27% 0.013 72));
+  --color-fill-base: light-dark(oklch(96.2% 0.009 84), oklch(19% 0.01 72));
+  --color-fill-hover: light-dark(oklch(93.5% 0.013 84), oklch(23% 0.013 72));
+  --color-fill-active: light-dark(oklch(90.5% 0.016 84), oklch(27% 0.015 72));
+  --color-fill-selected: var(--color-primary-light);
+  --color-bg-disabled: light-dark(oklch(92.5% 0.009 84), oklch(24% 0.009 72));
+  --color-fill-disabled: var(--color-bg-disabled);
+
+  /* APCA-first foreground ladder. Placeholder hints remain legible while
+   * staying unmistakably separate from user-entered content. */
+  --color-fg-primary: light-dark(oklch(17% 0.012 72), oklch(96% 0.008 84));
+  --color-fg-secondary: light-dark(oklch(29% 0.014 72), oklch(90% 0.01 84));
+  --color-fg-placeholder: light-dark(oklch(55% 0.012 72), oklch(77% 0.01 84));
+  --color-fg-disabled: light-dark(oklch(35% 0.012 72), oklch(86% 0.01 84));
+  --color-fg-light: var(--color-white);
+  --color-fg-dark: light-dark(oklch(17% 0.012 72), oklch(13% 0.008 72));
+  --color-fg-reverse: light-dark(var(--color-white), oklch(13% 0.008 72));
+  --color-fg-accent-primary: light-dark(oklch(27% 0.08 154), oklch(92% 0.05 154));
+  --color-primary-accent-fg: var(--color-fg-accent-primary);
+  --opacity-placeholder: 100%;
+  --opacity-text-secondary: 100%;
+  --opacity-disabled: 100%;
+
+  /* A quiet border ladder: controls remain explicit while nested layout
+   * surfaces can use the muted divider without looking card-heavy. */
+  --color-border-primary: light-dark(oklch(80% 0.014 84), oklch(36% 0.014 72));
+  --color-border-secondary: light-dark(oklch(85% 0.012 84), oklch(31% 0.012 72));
+  --color-border-muted: light-dark(oklch(89% 0.01 84), oklch(27% 0.011 72));
+  --color-border-disabled: light-dark(oklch(83% 0.009 84), oklch(33% 0.009 72));
+
+  /* Feedback semantics use subtle surfaces plus high-contrast foregrounds. */
+  --color-success: light-dark(oklch(31% 0.085 151), oklch(91% 0.07 151));
+  --color-success-light: light-dark(oklch(94% 0.035 151), oklch(21% 0.028 151));
+  --color-success-fg: light-dark(oklch(22% 0.055 151), oklch(96% 0.035 151));
+  --color-fg-accent-success: var(--color-success);
+  --color-bg-success: light-dark(oklch(38% 0.105 151), oklch(40% 0.09 151));
+
+  --color-info: light-dark(oklch(31% 0.07 225), oklch(91% 0.055 225));
+  --color-info-light: light-dark(oklch(94% 0.025 225), oklch(21% 0.025 225));
+  --color-info-fg: light-dark(oklch(22% 0.05 225), oklch(96% 0.03 225));
+  --color-bg-info: light-dark(oklch(38% 0.09 225), oklch(42% 0.075 225));
+
+  --color-warning: light-dark(oklch(32% 0.07 75), oklch(92% 0.07 82));
+  --color-warning-light: light-dark(oklch(95% 0.04 82), oklch(21% 0.03 82));
+  --color-warning-fg: light-dark(oklch(22% 0.045 75), oklch(96% 0.035 82));
+  --color-fg-accent-warning: var(--color-warning);
+  --color-bg-light-warning-base: var(--color-warning-light);
+  --color-bg-light-warning-hover: light-dark(oklch(92% 0.05 82), oklch(25% 0.04 82));
+  --color-bg-light-warning-active: light-dark(oklch(88% 0.06 82), oklch(29% 0.05 82));
+
+  --color-danger: light-dark(oklch(36% 0.115 25), oklch(91% 0.075 25));
+  --color-danger-light: light-dark(oklch(95% 0.035 25), oklch(21% 0.03 25));
+  --color-danger-fg: light-dark(oklch(23% 0.07 25), oklch(96% 0.04 25));
+  --color-fg-accent-danger: var(--color-danger);
+  --color-bg-danger-base: light-dark(oklch(42% 0.14 25), oklch(43% 0.115 25));
+  --color-bg-danger-hover: light-dark(oklch(37% 0.13 25), oklch(48% 0.12 25));
+  --color-bg-danger-active: light-dark(oklch(32% 0.11 25), oklch(38% 0.1 25));
+  --color-bg-danger-subtle: var(--color-danger-light);
+  --color-bg-light-danger-base: var(--color-danger-light);
+  --color-bg-light-danger-hover: light-dark(oklch(92% 0.045 25), oklch(25% 0.04 25));
+  --color-bg-light-danger-active: light-dark(oklch(88% 0.055 25), oklch(29% 0.05 25));
+
+  /* Secondary is neutral ink, tertiary is a restrained clay accent and
+   * warning stays a light signal surface with dark text. */
+  --color-bg-secondary-base: light-dark(oklch(28% 0.018 72), oklch(88% 0.012 84));
+  --color-bg-secondary-hover: light-dark(oklch(23% 0.016 72), oklch(93% 0.01 84));
+  --color-bg-secondary-active: light-dark(oklch(20% 0.014 72), oklch(82% 0.012 84));
+  --color-bg-light-secondary-base: var(--color-fill-base);
+  --color-bg-light-secondary-hover: var(--color-fill-hover);
+  --color-bg-light-secondary-active: var(--color-fill-active);
+  --color-bg-tertiary-base: light-dark(oklch(38% 0.065 42), oklch(39% 0.06 42));
+  --color-bg-tertiary-hover: light-dark(oklch(33% 0.06 42), oklch(44% 0.065 42));
+  --color-bg-tertiary-active: light-dark(oklch(28% 0.05 42), oklch(34% 0.055 42));
+  --color-bg-light-tertiary-base: light-dark(oklch(94% 0.02 42), oklch(22% 0.02 42));
+  --color-bg-light-tertiary-hover: light-dark(oklch(91% 0.03 42), oklch(26% 0.025 42));
+  --color-bg-light-tertiary-active: light-dark(oklch(87% 0.04 42), oklch(30% 0.03 42));
+  --color-bg-warning-base: light-dark(oklch(89% 0.115 82), oklch(89% 0.105 82));
+  --color-bg-warning-hover: light-dark(oklch(87% 0.115 82), oklch(87% 0.105 82));
+  --color-bg-warning-active: light-dark(oklch(85% 0.11 82), oklch(85% 0.1 82));
+
+  /* Buttons: one confident forest CTA; non-primary variants recede through
+   * transparent or subtle fills instead of becoming competing boxes. */
+  --border-width-button-sm: 1px;
+  --border-width-button-md: 1px;
+  --border-width-button-lg: 1px;
+  --color-button-bg-primary-base: var(--color-bg-primary-base);
+  --color-button-bg-primary-hover: var(--color-bg-primary-hover);
+  --color-button-bg-primary-active: var(--color-bg-primary-active);
+  --color-button-border-primary: var(--color-bg-primary-base);
+  --color-button-fg-primary: var(--color-white);
+  --color-button-fg-primary-borderless: var(--color-fg-accent-primary);
+  --color-button-bg-primary-light-base: var(--color-primary-light);
+  --color-button-bg-primary-light-hover: var(--color-primary-light-hover);
+  --color-button-bg-primary-light-active: var(--color-primary-light-active);
+  --color-button-fg-primary-light: var(--color-fg-accent-primary);
+  --color-button-bg-secondary-base: var(--color-bg-secondary-base);
+  --color-button-bg-secondary-hover: var(--color-bg-secondary-hover);
+  --color-button-bg-secondary-active: var(--color-bg-secondary-active);
+  --color-button-border-secondary: var(--color-bg-secondary-base);
+  --color-button-fg-secondary: light-dark(var(--color-white), oklch(13% 0.008 72));
+  --color-button-bg-secondary-light-base: var(--color-bg-light-secondary-base);
+  --color-button-bg-secondary-light-hover: var(--color-bg-light-secondary-hover);
+  --color-button-bg-secondary-light-active: var(--color-bg-light-secondary-active);
+  --color-button-fg-secondary-light: var(--color-fg-primary);
+  --color-button-fg-secondary-borderless: var(--color-fg-primary);
+  --color-button-bg-tertiary-base: var(--color-bg-tertiary-base);
+  --color-button-bg-tertiary-hover: var(--color-bg-tertiary-hover);
+  --color-button-bg-tertiary-active: var(--color-bg-tertiary-active);
+  --color-button-border-tertiary: var(--color-bg-tertiary-base);
+  --color-button-fg-tertiary: var(--color-white);
+  --color-button-bg-tertiary-light-base: var(--color-bg-light-tertiary-base);
+  --color-button-bg-tertiary-light-hover: var(--color-bg-light-tertiary-hover);
+  --color-button-bg-tertiary-light-active: var(--color-bg-light-tertiary-active);
+  --color-button-fg-tertiary-light: var(--color-fg-primary);
+  --color-button-fg-tertiary-borderless: var(--color-fg-primary);
+  --color-button-bg-outlined: transparent;
+  --color-button-bg-outlined-primary-hover: var(--color-primary-light);
+  --color-button-bg-outlined-primary-active: var(--color-primary-light-active);
+  --color-button-fg-outlined-primary: var(--color-fg-accent-primary);
+  --color-button-bg-borderless-base: transparent;
+  --color-button-bg-borderless-hover: var(--color-fill-hover);
+  --color-button-bg-borderless-active: var(--color-fill-active);
+  --color-button-fg-outlined-secondary: var(--color-fg-primary);
+  --color-button-fg-outlined-tertiary: var(--color-fg-primary);
+  --color-button-fg-outlined-danger: var(--color-fg-accent-danger);
+  --color-button-bg-danger-light-base: var(--color-danger-light);
+  --color-button-bg-danger-light-hover: var(--color-bg-light-danger-hover);
+  --color-button-bg-danger-light-active: var(--color-bg-light-danger-active);
+  --color-button-fg-danger: var(--color-white);
+  --color-button-fg-danger-light: var(--color-fg-accent-danger);
+  --color-button-fg-danger-borderless: var(--color-fg-accent-danger);
+  --color-button-fg-warning: light-dark(oklch(14% 0.025 75), oklch(14% 0.025 75));
+  --color-button-fg-warning-light: var(--color-fg-accent-warning);
+  --color-button-fg-warning-borderless: var(--color-fg-accent-warning);
+  --color-button-bg-disabled: var(--color-bg-disabled);
+  --color-button-border-disabled: var(--color-border-disabled);
+  --color-button-fg-disabled: var(--color-fg-disabled);
+
+  /* Form controls stay visibly editable but do not look inset or metallic. */
+  --border-width-form-control: 1px;
+  --border-width-input: 1px;
+  --border-width-textarea: 1px;
+  --color-form-control-bg: var(--color-surface);
+  --color-form-control-bg-hover: var(--color-surface);
+  --color-form-control-bg-focus: var(--color-surface);
+  --color-form-control-border: var(--color-border-primary);
+  --color-form-control-border-hover: var(--color-primary-500);
+  --color-form-control-border-focus: var(--color-primary);
+  --color-form-control-bg-disabled: var(--color-bg-disabled);
+  --color-form-control-border-disabled: var(--color-border-disabled);
+  --color-form-control-fg-disabled: var(--color-fg-disabled);
+  --color-form-control-fg-placeholder: var(--color-fg-placeholder);
+  --color-checkbox-bg-base: var(--color-surface);
+  --color-checkbox-border-base: var(--color-border-primary);
+  --color-checkbox-bg-checked: var(--color-bg-primary-base);
+  --color-checkbox-border-checked: var(--color-bg-primary-base);
+  --color-checkbox-fg-checked: var(--color-white);
+
+  --color-link: var(--color-fg-accent-primary);
+  --color-link-base: var(--color-fg-accent-primary);
+  --color-link-hover: var(--color-primary-hover);
+  --color-link-active: var(--color-primary-active);
+  --color-link-visited: var(--color-fg-accent-primary);
+
+  /* Underline-style tabs read as navigation, not another framed control. */
+  --border-width-tabs: 1px;
+  --color-tabs-bg: transparent;
+  --color-tabs-list-bg: transparent;
+  --color-tabs-border-base: var(--color-border-muted);
+  --color-tabs-border-selected: var(--color-primary);
+  --color-tabs-indicator-bg: var(--color-primary);
+  --color-tabs-content-fg: var(--color-fg-primary);
+  --color-tabs-trigger-bg-hover: var(--color-fill-base);
+  --color-tabs-trigger-bg-outline-selected: transparent;
+  --color-tabs-trigger-bg-selected: var(--color-bg-primary-base);
+  --color-tabs-trigger-fg-base: var(--color-fg-secondary);
+  --color-tabs-trigger-fg-selected: var(--color-fg-accent-primary);
+  --color-tabs-trigger-fg-solid-selected: var(--color-white);
+  --color-tabs-trigger-fg-disabled: var(--color-fg-disabled);
+  --radius-tabs: 0;
+  --radius-tabs-indicator: 999px;
+  --radius-tabs-trigger: var(--radius-sm);
+  --spacing-tabs-content-padding-md: 0px;
+  --spacing-tabs-indicator-height: 2px;
+
+  /* Accordions become an editorial list with dividers and a calm expanded
+   * region; shadows and floating-card geometry are deliberately removed. */
+  --border-width-accordion: 1px;
+  --color-accordion-bg: transparent;
+  --color-accordion-border: var(--color-border-muted);
+  --color-accordion-title-bg: transparent;
+  --color-accordion-title-bg-hover: var(--color-fill-base);
+  --color-accordion-title-fg: var(--color-fg-primary);
+  --color-accordion-fg: var(--color-fg-primary);
+  --color-accordion-subtitle-fg: var(--color-fg-secondary);
+  --color-accordion-content-bg: var(--color-surface-subtle);
+  --color-accordion-content-fg: var(--color-fg-primary);
+  --radius-accordion: 0;
+  --shadow-accordion-content-md: none;
+  --shadow-accordion-content-sm: none;
+  --shadow-accordion-root-md: none;
+  --shadow-accordion-root-sm: none;
+
+  /* Radio cards remain the one appropriate card-like choice control. A soft
+   * mint selection conveys state without a saturated full-card fill. */
+  --border-width-radio-card: 1px;
+  --border-width-radio-card-addon: 1px;
+  --border-width-radio-card-indicator: 1px;
+  --color-radio-card-item-bg: var(--color-surface);
+  --color-radio-card-item-bg-hover: var(--color-fill-base);
+  --color-radio-card-item-bg-disabled: var(--color-bg-disabled);
+  --color-radio-card-item-border: var(--color-border-primary);
+  --color-radio-card-item-border-hover: var(--color-primary-500);
+  --color-radio-card-item-border-disabled: var(--color-border-disabled);
+  --color-radio-card-item-bg-outline-checked-hover: var(--color-primary-light-hover);
+  --color-radio-card-item-bg-solid-checked: var(--color-primary-light);
+  --color-radio-card-item-bg-solid-checked-hover: var(--color-primary-light-hover);
+  --color-radio-card-item-bg-subtle-checked: var(--color-primary-light);
+  --color-radio-card-item-bg-subtle-checked-hover: var(--color-primary-light-hover);
+  --color-radio-card-item-border-outline-checked: var(--color-primary-500);
+  --color-radio-card-item-border-outline-checked-hover: var(--color-primary);
+  --color-radio-card-item-border-solid-checked: var(--color-primary-500);
+  --color-radio-card-item-border-solid-checked-hover: var(--color-primary);
+  --color-radio-card-item-border-subtle-checked: var(--color-primary-500);
+  --color-radio-card-item-border-subtle-checked-hover: var(--color-primary);
+  --color-radio-card-item-fg: var(--color-fg-primary);
+  --color-radio-card-item-fg-solid-checked: var(--color-fg-primary);
+  --color-radio-card-item-fg-subtle-checked: var(--color-fg-primary);
+  --color-radio-card-item-description-fg: var(--color-fg-secondary);
+  --color-radio-card-item-description-fg-solid-checked: var(--color-fg-secondary);
+  --color-radio-card-item-description-fg-subtle-checked: var(--color-fg-secondary);
+  --color-radio-card-addon-fg-subtle-checked: var(--color-fg-primary);
+  --color-radio-card-item-indicator-bg-solid-checked: var(--color-bg-primary-base);
+  --color-radio-card-item-indicator-border: var(--color-border-primary);
+  --color-radio-card-item-indicator-border-solid-checked: var(--color-bg-primary-base);
+  --color-radio-card-item-indicator-border-subtle-checked: var(--color-primary-500);
+  --color-radio-card-item-indicator-content-fg-subtle-checked: var(--color-primary);
+  --color-radio-card-item-indicator-content-fg-solid-checked: var(--color-white);
+  --color-radio-card-addon-fg-solid-checked: var(--color-fg-primary);
+  --radius-radio-card-item: var(--radius-lg);
+  --shadow-radio-card-item: none;
+
+  /* Steps communicate progress with restrained color and hairline connectors. */
+  --border-width-steps-content: 1px;
+  --border-width-steps-indicator: 1px;
+  --color-steps-content-bg: transparent;
+  --color-steps-content-bg-complete: var(--color-fill-base);
+  --color-steps-content-border: var(--color-border-muted);
+  --color-steps-content-border-complete: var(--color-primary-500);
+  --color-steps-content-fg: var(--color-fg-primary);
+  --color-steps-indicator-bg: var(--color-surface);
+  --color-steps-indicator-bg-hover: var(--color-fill-hover);
+  --color-steps-indicator-bg-current: var(--color-bg-primary-base);
+  --color-steps-indicator-bg-complete: var(--color-bg-primary-base);
+  --color-steps-indicator-bg-solid: var(--color-fill-base);
+  --color-steps-indicator-bg-solid-current: var(--color-bg-primary-base);
+  --color-steps-indicator-bg-solid-complete: var(--color-bg-primary-base);
+  --color-steps-indicator-border: var(--color-border-primary);
+  --color-steps-indicator-border-current: var(--color-bg-primary-base);
+  --color-steps-indicator-border-complete: var(--color-bg-primary-base);
+  --color-steps-indicator-fg: var(--color-fg-secondary);
+  --color-steps-indicator-fg-current: var(--color-white);
+  --color-steps-indicator-fg-complete: var(--color-white);
+  --color-steps-indicator-fg-solid: var(--color-fg-primary);
+  --color-steps-indicator-fg-solid-current: var(--color-white);
+  --color-steps-indicator-fg-solid-complete: var(--color-white);
+  --color-steps-separator-bg: var(--color-border-muted);
+  --color-steps-separator-bg-current: var(--color-primary-200);
+  --color-steps-separator-bg-complete: var(--color-primary-500);
+  --color-steps-progress-bg: var(--color-border-muted);
+  --color-steps-progress-range-bg: var(--color-primary-500);
+  --color-steps-title-fg: var(--color-fg-secondary);
+  --color-steps-title-fg-current: var(--color-fg-primary);
+  --color-steps-title-fg-complete: var(--color-fg-accent-primary);
+  --color-steps-description-fg: var(--color-fg-secondary);
+  --color-steps-description-fg-current: var(--color-fg-primary);
+  --color-steps-description-fg-complete: var(--color-fg-primary);
+  --color-steps-trigger-bg-current: var(--color-primary-light);
+  --color-steps-trigger-bg-complete: var(--color-primary-light);
+  --radius-steps-trigger: var(--radius-sm);
+
+  /* Badges are compact status chips, not miniature saturated buttons. */
+  --border-width-badge: 1px;
+  --radius-badge: var(--radius-full);
+  --color-badge-bg-primary: var(--color-primary-light);
+  --color-badge-border-primary: var(--color-primary-200);
+  --color-badge-fg-primary: var(--color-fg-accent-primary);
+  --color-badge-bg-secondary: var(--color-fill-overlay);
+  --color-badge-border-secondary: var(--color-border-secondary);
+  --color-badge-fg-secondary: var(--color-fg-primary);
+  --color-badge-bg-tertiary: var(--color-bg-light-tertiary-base);
+  --color-badge-border-tertiary: var(--color-bg-tertiary-base);
+  --color-badge-fg-tertiary: var(--color-fg-primary);
+  --color-badge-bg-success: var(--color-success-light);
+  --color-badge-border-success: var(--color-success);
+  --color-badge-fg-success: var(--color-success-fg);
+  --color-badge-bg-info: var(--color-info-light);
+  --color-badge-border-info: var(--color-info);
+  --color-badge-fg-info: var(--color-info-fg);
+  --color-badge-bg-warning: var(--color-warning-light);
+  --color-badge-border-warning: var(--color-warning);
+  --color-badge-fg-warning: var(--color-warning-fg);
+  --color-badge-bg-danger: var(--color-danger-light);
+  --color-badge-bg-discount: var(--color-danger-light);
+  --color-badge-border-danger: var(--color-danger);
+  --color-badge-border-discount: var(--color-danger);
+  --color-badge-fg-danger: var(--color-danger-fg);
+  --color-badge-fg-discount: var(--color-danger-fg);
+  --color-badge-bg-outline: transparent;
+  --color-badge-border-outline: var(--color-border-primary);
+  --color-badge-fg-outline: var(--color-fg-secondary);
+
+  --color-status-text-fg: var(--color-fg-secondary);
+  --color-status-text-fg-success: var(--color-success);
+  --color-status-text-fg-warning: var(--color-warning);
+  --color-status-text-fg-error: var(--color-danger);
+
+  /* Controls use 8–12px radii; only genuinely floating UI receives depth. */
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-button-sm: var(--radius-sm);
+  --radius-button-md: var(--radius-md);
+  --radius-button-lg: var(--radius-lg);
+  --radius-form-control-sm: var(--radius-sm);
+  --radius-form-control-md: var(--radius-md);
+  --radius-form-control-lg: var(--radius-lg);
+  --radius-form-control: var(--radius-form-control-md);
+  --radius-dialog-content-center: var(--radius-lg);
+  --radius-menu: var(--radius-md);
+  --radius-popover: var(--radius-md);
+  --radius-toast-root: var(--radius-md);
+
+  --shadow-sm: 0 1px 2px oklch(18% 0.01 72 / 0.06);
+  --shadow-md: 0 8px 24px oklch(12% 0.012 72 / 0.1), 0 2px 6px oklch(12% 0.012 72 / 0.06);
+  --shadow-lg: 0 18px 48px oklch(12% 0.012 72 / 0.14), 0 4px 12px oklch(12% 0.012 72 / 0.07);
+  --shadow-xl: var(--shadow-lg);
+  --shadow-primary: var(--shadow-md);
+  --shadow-dialog-content: var(--shadow-lg);
+  --shadow-menu-content: var(--shadow-md);
+  --shadow-popover: var(--shadow-md);
+  --shadow-select-content: var(--shadow-md);
+
+  /* Clear on-brand focus language, shared by kit controls. */
+  --color-ring: light-dark(oklch(41% 0.12 154), oklch(78% 0.1 154));
+  --color-ring-default: var(--color-ring);
+  --color-button-ring: var(--color-ring);
+  --color-form-control-ring: var(--color-ring);
+  --color-tabs-ring: var(--color-ring);
+  --color-radio-card-ring: var(--color-ring);
+  --default-ring-style: solid;
+  --default-ring-width: 2px;
+  --default-ring-offset: 2px;
+
+  --color-base: var(--color-page-bg);
+  --color-base-reverse: var(--color-page-fg);
+  --z-dialog-backdrop: 60;
+  --z-dialog-positioner: 61;
+  --color-dialog-backdrop-bg-modal: oklch(8% 0.01 72 / 0.64);
+}
+
+/* The draft title is an editorial heading that happens to be editable. Keeping
+ * this treatment here prevents the route from dismantling the kit Input with
+ * a long utility override while preserving the shared focus language. */
+.coursition-title-input {
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  padding: 0.25rem 0;
+  overflow: hidden;
+  border-width: 0 0 1px;
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-fg-primary);
+  font-size: 1.25rem;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coursition-title-input:hover,
+.coursition-title-input:focus {
+  border-color: var(--color-border-primary);
+  background: transparent;
+}
+
+@media (min-width: 40rem) {
+  .coursition-title-input {
+    font-size: 1.875rem;
+  }
+}
+
+/* User agents otherwise dim placeholders independently from the token color. */
+:root ::placeholder {
+  color: var(--color-fg-placeholder);
+  opacity: 1;
+}
+
+.coursition-section-tabs {
+  min-width: 0;
+}
+
+.coursition-workflow-navigation {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.coursition-workflow-step-list {
+  max-width: 100%;
+  padding-block-end: 0.25rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.coursition-section-tab-list {
+  max-width: 100%;
+  padding-block-end: 0.25rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.coursition-section-tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.coursition-section-tab-trigger {
+  max-width: 16rem;
+  flex-shrink: 0;
+  scroll-snap-align: center;
+}
+
+.coursition-tab-scroll-button {
+  display: none;
+}
+
+.coursition-route-progress {
+  position: fixed;
+  z-index: 40;
+  inset-block-start: 3.5rem;
+  inset-inline: 0;
+  height: 3px;
+  overflow: hidden;
+  background: var(--color-primary-light);
+}
+
+.coursition-route-progress > span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-primary-base);
+  animation: coursition-route-progress 1.1s ease-in-out infinite;
+}
+
+@keyframes coursition-route-progress {
+  from {
+    transform: translateX(-110%);
+  }
+
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coursition-route-progress > span {
+    width: 100%;
+    animation: none;
+  }
+}
+
+@media (max-width: 39.999rem) {
+  .coursition-section-tabs {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    align-items: end;
+  }
+
+  .coursition-tab-scroll-button {
+    display: inline-flex;
+  }
+
+  [data-scope='accordion'][data-part='item-trigger'] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    text-align: start;
+  }
+
+  [data-scope='accordion'][data-part='item-trigger'] > :first-child {
+    min-width: 0;
+    grid-column: 1;
+    justify-self: start;
+    text-align: start;
+  }
+
+  [data-scope='accordion'][data-part='item-trigger'] > :nth-child(2) {
+    grid-column: 1;
+    justify-self: start;
+    padding-block-end: var(--padding-accordion-title-y-md);
+    padding-inline: var(--padding-accordion-title-x-md);
+    text-align: start;
+  }
+
+  [data-scope='accordion'][data-part='item-trigger'] > :last-child {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+}
+
+/* Brand lockup.
+ *
+ * The official logo ships as a positive mark for light backgrounds and a
+ * negative (all-white) mark for dark ones. Both are in the DOM and the
+ * inactive one is hidden here, so the swap follows the same `html.dark` +
+ * `prefers-color-scheme` rules the footer publicity marks use instead of
+ * depending on React state that is not settled on the server. Intrinsic
+ * width/height are the asset viewBox (570x190); sizing is by block-size with
+ * `inline-size: auto`, so the mark keeps its aspect ratio and reserves its box
+ * before the SVG decodes.
+ */
+.coursition-brand-logo {
+  display: block;
+  inline-size: auto;
+  block-size: 1.75rem;
+  max-inline-size: 100%;
+}
+
+.coursition-brand-logo--dark {
+  display: none;
+}
+
+html.dark .coursition-brand-logo--light {
+  display: none;
+}
+
+html.dark .coursition-brand-logo--dark {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.light) .coursition-brand-logo--light {
+    display: none;
+  }
+
+  html:not(.light) .coursition-brand-logo--dark {
+    display: block;
+  }
+}
+
+/* Header sign-up action on the landing route. The header sits outside
+ * `.coursition-landing`, so it would otherwise inherit the product's forest
+ * primary and clash with the brand plum/magenta the landing page uses. */
+.coursition-header-cta {
+  --color-bg-primary-base: light-dark(#4a044e, #a01daf);
+  --color-bg-primary-hover: light-dark(#5f0a63, #b93ec6);
+  --color-bg-primary-active: light-dark(#3a033d, #a01daf);
+  --color-button-bg-primary-base: var(--color-bg-primary-base);
+  --color-button-bg-primary-hover: var(--color-bg-primary-hover);
+  --color-button-bg-primary-active: var(--color-bg-primary-active);
+  --color-button-border-primary: var(--color-bg-primary-base);
+}

@@ -1,7 +1,7 @@
 /*
  * Coursition domain model.
  *
- * The domain types are defined once as Effect schemas in ./effect-api and
+ * The domain types are defined once as Effect schemas in ../api and
  * re-exported here so the wire contract, runtime validation, and these
  * TypeScript types share a single source of truth. This module layers the
  * workflow ordering, prerequisite gates, findings, and staleness rules on top
@@ -17,7 +17,7 @@ import type {
   GeneratedActivity,
   LearningBlueprint,
   ReviewFinding,
-} from './effect-api';
+} from '../api';
 
 export type {
   ActivityEvaluationCriterion,
@@ -64,7 +64,7 @@ export type {
   SourceType,
   WorkflowAction,
   WorkflowSnapshot,
-} from './effect-api';
+} from '../api';
 
 export const workflowSteps = [
   'mode',

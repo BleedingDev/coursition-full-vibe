@@ -1,4 +1,4 @@
-import { Outlet } from '@modern-js/plugin-tanstack/runtime';
+import { Outlet } from '@tanstack/react-router';
 import './index.css';
 
 export default function Layout() {

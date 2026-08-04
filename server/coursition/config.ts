@@ -3,6 +3,8 @@ const defaultAuthSecret = 'coursition-dev-secret-2026-06-02-fully-local-auth-ses
 const defaultSiteUrl = 'http://localhost:8080';
 const productionSiteUrlErrorMessage =
   'MODERN_PUBLIC_SITE_URL must be set for production builds so canonical and hreflang URLs use the deployed origin.';
+const productionAuthSecretErrorMessage =
+  'BETTER_AUTH_SECRET must be set to a private, high-entropy value in production and on Cloudflare.';
 
 export interface CoursitionModernConfig {
   appId: string;
@@ -16,7 +18,9 @@ export interface CoursitionModernConfig {
 }
 
 export interface CoursitionAuthConfig {
+  backend: string;
   baseURL: string;
+  databasePath: string;
   secret: string;
 }
 
@@ -36,6 +40,7 @@ export interface CoursitionSourceProviderConfig {
   aiModel: string | undefined;
   deepgramApiKey: string | undefined;
   deepgramBaseUrl: string;
+  deepgramLanguage: string;
   deepgramModel: string;
   exaApiKey: string | undefined;
   exaBaseUrl: string;
@@ -55,17 +60,20 @@ const hasText = (value: string | undefined): value is string =>
 
 export const providerKeyConfigured = (value: string | undefined): value is string => hasText(value);
 
-const runtimeEnv = () =>
+type RuntimeEnvironment = Record<string, string | undefined>;
+
+const runtimeEnv = (): RuntimeEnvironment =>
   (
     globalThis as typeof globalThis & {
       process?: { env?: Record<string, string | undefined> };
     }
   ).process?.env ?? {};
 
-const envString = (name: string) => runtimeEnv()[name];
+const envString = (name: string, environment: RuntimeEnvironment = runtimeEnv()) =>
+  environment[name];
 
-const optionalTrimmedString = (name: string) => {
-  const value = envString(name);
+const optionalTrimmedString = (name: string, environment: RuntimeEnvironment = runtimeEnv()) => {
+  const value = envString(name, environment);
   if (typeof value !== 'string') {
     return;
   }
@@ -73,7 +81,11 @@ const optionalTrimmedString = (name: string) => {
   return hasText(trimmed) ? trimmed : undefined;
 };
 
-const stringWithDefault = (name: string, defaultValue: string) => envString(name) ?? defaultValue;
+const stringWithDefault = (
+  name: string,
+  defaultValue: string,
+  environment: RuntimeEnvironment = runtimeEnv(),
+) => envString(name, environment) ?? defaultValue;
 
 const enabledUnlessFalse = (name: string) => stringWithDefault(name, 'true') !== 'false';
 
@@ -84,7 +96,7 @@ const optionalPositiveInteger = (name: string) => {
   if (typeof value !== 'string') {
     return;
   }
-  const parsed = Number.parseInt(value, 10);
+  const parsed = Math.trunc(Number(value));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 };
 
@@ -123,10 +135,30 @@ export const loadCoursitionModernConfig = (options: {
   };
 };
 
-export const loadCoursitionAuthConfig = (): CoursitionAuthConfig => ({
-  baseURL: stringWithDefault('BETTER_AUTH_URL', defaultSiteUrl),
-  secret: stringWithDefault('BETTER_AUTH_SECRET', defaultAuthSecret),
-});
+export const loadCoursitionAuthConfig = (
+  environment: RuntimeEnvironment = runtimeEnv(),
+): CoursitionAuthConfig => {
+  const dataDirectory = stringWithDefault('COURSITION_DATA_DIR', '.coursition-data', environment);
+  const backend = stringWithDefault('COURSITION_STORE_BACKEND', 'json-file', environment);
+  const configuredSecret = optionalTrimmedString('BETTER_AUTH_SECRET', environment);
+  const nodeEnv = stringWithDefault('NODE_ENV', 'development', environment);
+  if ((nodeEnv === 'production' || backend === 'cloudflare') && configuredSecret === undefined) {
+    throw new Error(productionAuthSecretErrorMessage);
+  }
+  return {
+    backend,
+    baseURL:
+      optionalTrimmedString('BETTER_AUTH_URL', environment) ??
+      optionalTrimmedString('MODERN_PUBLIC_SITE_URL', environment) ??
+      defaultSiteUrl,
+    databasePath: stringWithDefault(
+      'COURSITION_AUTH_DATABASE',
+      `${dataDirectory.replace(/[/\\]+$/u, '')}/auth.sqlite`,
+      environment,
+    ),
+    secret: configuredSecret ?? defaultAuthSecret,
+  };
+};
 
 export const loadCoursitionAiRuntimeConfig = (): CoursitionAiRuntimeConfig => ({
   aiAttempts: optionalPositiveInteger('COURSITION_AI_ATTEMPTS'),
@@ -144,6 +176,11 @@ export const loadCoursitionSourceProviderConfig = (): CoursitionSourceProviderCo
   aiModel: optionalTrimmedString('COURSITION_AI_MODEL'),
   deepgramApiKey: optionalTrimmedString('DEEPGRAM_API_KEY'),
   deepgramBaseUrl: stringWithDefault('DEEPGRAM_BASE_URL', 'https://api.deepgram.com'),
+  /* Deepgram falls back to English when no language is given, which returns an
+   * empty transcript for Czech recordings. `multi` is the nova-3 setting that
+   * covers both languages the app ships in; older models take a plain code such
+   * as `cs`, hence the override. */
+  deepgramLanguage: stringWithDefault('DEEPGRAM_LANGUAGE', 'multi'),
   deepgramModel: stringWithDefault('DEEPGRAM_MODEL', 'nova-3'),
   exaApiKey: optionalTrimmedString('EXA_API_KEY'),
   exaBaseUrl: stringWithDefault('EXA_BASE_URL', 'https://api.exa.ai'),

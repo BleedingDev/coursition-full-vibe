@@ -1,0 +1,32 @@
+diff --git a/lib/index.esm.js b/lib/index.esm.js
+index 5b9b5c4c3c746ce8af07750cceae29b1fe45bc25..9b78f2a1a12abd6fbd5a94534862aff7497aaae2 100644
+--- a/lib/index.esm.js
++++ b/lib/index.esm.js
+@@ -439,7 +439,10 @@ var HelmetData = class {
+ // src/reactVersion.ts
+ import React2 from "react";
+ var major = parseInt(React2.version.split(".")[0], 10);
+-var isReact19 = major >= 19;
++// Modern.js extracts Helmet state into the server document. Its client must
++// therefore reconcile the data-rh nodes instead of using React 19 head hoisting,
++// which would render a second copy and fail hydration.
++var isReact19 = false;
+ 
+ // src/Provider.tsx
+ var defaultValue = {};
+diff --git a/lib/index.js b/lib/index.js
+index e10b526b1430a76caf0f1ce585bc437b5510b8e4..bea93924bbb9838e4795ca63cc5e4fc411524097 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -475,7 +475,10 @@ var HelmetData = class {
+ // src/reactVersion.ts
+ var import_react2 = __toESM(require("react"));
+ var major = parseInt(import_react2.default.version.split(".")[0], 10);
+-var isReact19 = major >= 19;
++// Modern.js extracts Helmet state into the server document. Its client must
++// therefore reconcile the data-rh nodes instead of using React 19 head hoisting,
++// which would render a second copy and fail hydration.
++var isReact19 = false;
+ 
+ // src/Provider.tsx
+ var defaultValue = {};

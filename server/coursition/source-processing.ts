@@ -1,9 +1,10 @@
 import { Data, Effect, Option, Schema } from 'effect';
 import { HttpClient, HttpClientRequest } from 'effect/unstable/http';
-import parseDataUrl from 'data-urls';
 import { fileTypeFromBuffer } from 'file-type';
 import { lookup as lookupMimeType } from 'mime-types';
+import { MAX_SOURCE_FILE_BYTES } from '../../shared/api.ts';
 import type { SourceAsset, WorkflowAction } from '../../shared/coursition/workflow.ts';
+import { coursitionCloudflareAi } from './cloudflare-bindings.ts';
 import { loadCoursitionSourceProviderConfig, providerKeyConfigured } from './config.ts';
 
 /*
@@ -27,10 +28,23 @@ export interface FileSourcePayload {
   declaredMimeType: string;
 }
 
-interface BinarySourcePayload {
+export interface BinarySourcePayload {
   bytes: Uint8Array;
   mimeType: string;
 }
+
+interface DocumentConversionResult {
+  content: string;
+  mimeType?: string;
+  processor?: string;
+  providerJobId?: string;
+  storageReference?: string;
+}
+
+type DocumentConverter = (
+  sourceName: string,
+  binary: BinarySourcePayload,
+) => Effect.Effect<DocumentConversionResult, SourceProcessingError, HttpClient.HttpClient>;
 
 export type ProcessSourceInput = Extract<WorkflowAction, { action: 'addSource' }>['source'] & {
   filePayload?: FileSourcePayload | null | undefined;
@@ -39,6 +53,8 @@ export type ProcessSourceInput = Extract<WorkflowAction, { action: 'addSource' }
 };
 
 export interface SourceProcessorDeps {
+  convertDocument?: DocumentConverter;
+  deleteSourceBlob: (reference: string) => Effect.Effect<void, SourceProcessingError>;
   newSourceId: (draftId: string) => string;
   now: () => string;
   writeSourceBlob: (
@@ -68,6 +84,54 @@ const toSourceError = (cause: unknown): SourceProcessingError =>
   cause instanceof SourceProcessingError
     ? cause
     : new SourceProcessingError({ message: messageFromError(cause) });
+
+export const convertDocumentWithCloudflare = (
+  sourceName: string,
+  binary: BinarySourcePayload,
+  resolveAi = coursitionCloudflareAi,
+) =>
+  Effect.gen(function* convertDocumentWithCloudflareProgram() {
+    const ai = yield* Effect.tryPromise({ catch: toSourceError, try: resolveAi });
+    const conversion = yield* Effect.tryPromise({
+      catch: toSourceError,
+      try: () =>
+        ai.toMarkdown(
+          {
+            blob: new Blob([new Uint8Array(binary.bytes).buffer], { type: binary.mimeType }),
+            name: sourceName,
+          },
+          {
+            conversionOptions: {
+              output: { format: 'text' },
+              pdf: { metadata: false },
+            },
+          },
+        ),
+    });
+    const result = Array.isArray(conversion) ? conversion[0] : conversion;
+    if (result === undefined) {
+      return yield* new SourceProcessingError({
+        message: 'Cloudflare document conversion returned no result.',
+      });
+    }
+    if (result.format === 'error') {
+      return yield* new SourceProcessingError({
+        message: result.error ?? 'Cloudflare document conversion failed.',
+      });
+    }
+    const content = result.data?.trim() ?? '';
+    if (content.length === 0) {
+      return yield* new SourceProcessingError({
+        message: 'Cloudflare document conversion returned no readable text.',
+      });
+    }
+    return {
+      content,
+      mimeType: result.mimeType ?? result.mimetype ?? binary.mimeType,
+      processor: 'cloudflare_markdown',
+      providerJobId: result.id,
+    };
+  });
 
 const localTextMimeTypes = new Set([
   'application/json',
@@ -143,15 +207,35 @@ const parseHttpUrl = (value: string) => {
   }
 };
 
-const decodeFileDataUrl = (value: string): FileSourcePayload | null => {
-  const parsed = parseDataUrl(value.trim());
-  if (parsed === null) {
+const maxDataUrlHeaderLength = 256;
+const maxBase64PayloadLength = Math.ceil(MAX_SOURCE_FILE_BYTES / 3) * 4;
+
+export const decodeFileDataUrl = (value: string): FileSourcePayload | null => {
+  if (!value.startsWith('data:')) {
     return null;
   }
-  return {
-    bytes: parsed.body,
-    declaredMimeType: parsed.mimeType.essence,
-  };
+  const separatorIndex = value.indexOf(',');
+  if (separatorIndex === -1 || separatorIndex > maxDataUrlHeaderLength) {
+    return null;
+  }
+  const metadata = value.slice(5, separatorIndex);
+  const metadataParts = metadata.split(';');
+  const declaredMimeType = metadataParts[0]?.trim().toLowerCase() ?? '';
+  if (declaredMimeType.length === 0 || metadataParts.at(-1)?.trim().toLowerCase() !== 'base64') {
+    return null;
+  }
+  const payload = value.slice(separatorIndex + 1);
+  if (payload.length > maxBase64PayloadLength) {
+    return null;
+  }
+  try {
+    return {
+      bytes: Uint8Array.fromBase64(payload),
+      declaredMimeType,
+    };
+  } catch {
+    return null;
+  }
 };
 
 const textFromUnknownJson = (value: unknown, preferredKeys: string[]): string => {
@@ -356,6 +440,15 @@ const parseLlamaDocument = (sourceName: string, binary: BinarySourcePayload) =>
     };
   });
 
+const configuredDocumentConverter = (deps: SourceProcessorDeps): DocumentConverter => {
+  if (deps.convertDocument !== undefined) {
+    return deps.convertDocument;
+  }
+  return providerKeyConfigured(sourceProviderConfig().llamaCloudApiKey)
+    ? parseLlamaDocument
+    : convertDocumentWithCloudflare;
+};
+
 const extractWithFirecrawl = (url: URL) =>
   Effect.gen(function* extractWithFirecrawlProgram() {
     const config = sourceProviderConfig();
@@ -470,14 +563,26 @@ const transcribeWithDeepgram = (sourceName: string, binary: BinarySourcePayload)
     const response = recordFromUnknown(
       yield* executeJson(
         HttpClientRequest.post(
-          `${config.deepgramBaseUrl}/v1/listen?model=${encodeURIComponent(model)}&smart_format=true&paragraphs=true&utterances=true&diarize_model=latest`,
+          `${config.deepgramBaseUrl}/v1/listen?model=${encodeURIComponent(model)}&language=${encodeURIComponent(config.deepgramLanguage)}&smart_format=true&paragraphs=true&utterances=true&diarize_model=latest`,
         ).pipe(
           HttpClientRequest.setHeader('Authorization', `Token ${apiKey}`),
           HttpClientRequest.bodyUint8Array(binary.bytes, binary.mimeType),
         ),
       ),
     );
-    const transcript = textFromUnknownJson(response, ['transcript']);
+    /* Deepgram nests the text in `results.channels[].alternatives[]`, so the
+     * whole path has to be named: the walker only descends through the keys it
+     * is given, and asking for `transcript` alone finds nothing at the top
+     * level. `paragraphs` comes before `transcript` because the smart-formatted
+     * paragraph text reads better as course source material than the flat
+     * single-line alternative. */
+    const transcript = textFromUnknownJson(response, [
+      'results',
+      'channels',
+      'alternatives',
+      'paragraphs',
+      'transcript',
+    ]);
     if (transcript.length === 0) {
       return yield* new SourceProcessingError({
         message: 'Deepgram completed without a readable transcript.',
@@ -560,16 +665,21 @@ const isProviderBackedProcessor = (fileProcessor: string) =>
   fileProcessor !== 'local_text' && fileProcessor !== 'unsupported_file';
 
 const providerBackedFileAsset = (
+  deps: SourceProcessorDeps,
   source: ProcessSourceInput,
   common: SourceAssetCommon,
   fileProcessor: string,
   binary: BinarySourcePayload,
   fileStorageReference: string | undefined,
-) =>
-  (fileProcessor.includes('deepgram')
+) => {
+  const providerEffect: Effect.Effect<
+    DocumentConversionResult,
+    SourceProcessingError,
+    HttpClient.HttpClient
+  > = fileProcessor.includes('deepgram')
     ? transcribeWithDeepgram(common.sourceName, binary)
-    : parseLlamaDocument(common.sourceName, binary)
-  ).pipe(
+    : configuredDocumentConverter(deps)(common.sourceName, binary);
+  return providerEffect.pipe(
     Effect.match({
       onFailure: (error): SourceAsset => ({
         content: '',
@@ -589,7 +699,7 @@ const providerBackedFileAsset = (
         createdAt: common.createdAt,
         id: common.sourceId,
         name: common.sourceName,
-        processor: fileProcessor,
+        processor: providerResult.processor ?? fileProcessor,
         sizeLabel: source.sizeLabel ?? `${providerResult.content.length} chars`,
         status: providerResult.content.length > 0 ? 'processed' : 'failed',
         storageReference: fileStorageReference,
@@ -606,6 +716,7 @@ const providerBackedFileAsset = (
       }),
     }),
   );
+};
 
 const localTextSourceAsset = (
   source: ProcessSourceInput,
@@ -679,60 +790,75 @@ const fileSourceAsset = (
   draftId: string,
   source: ProcessSourceInput,
   common: SourceAssetCommon,
-  trimmedContent: string,
+  content: string,
 ) =>
   Effect.gen(function* fileSourceAssetProgram() {
-    const filePayload = source.filePayload ?? decodeFileDataUrl(trimmedContent);
+    const filePayload = source.filePayload ?? decodeFileDataUrl(content);
+    if (filePayload !== null && filePayload.bytes.byteLength > MAX_SOURCE_FILE_BYTES) {
+      return yield* new SourceProcessingError({
+        message: `Source files are limited to ${MAX_SOURCE_FILE_BYTES} bytes.`,
+      });
+    }
+    const ownsNewBlob = filePayload !== null && source.storageReference === undefined;
     const fileStorageReference =
       filePayload === null
         ? undefined
         : (source.storageReference ??
           (yield* deps.writeSourceBlob(draftId, common.sourceId, filePayload.bytes)));
-    const detectedMimeType =
-      filePayload === null ? undefined : yield* detectBinaryMimeType(filePayload.bytes);
-    const declaredMimeType = filePayload?.declaredMimeType;
-    const fileNameMimeType = mimeTypeFromFileName(common.sourceName);
-    const fileProcessor = chooseFileProcessor(
-      filePayload,
-      detectedMimeType,
-      declaredMimeType,
-      fileNameMimeType,
-    );
-    const binary =
-      filePayload !== null && detectedMimeType !== undefined
-        ? { bytes: filePayload.bytes, mimeType: detectedMimeType }
-        : null;
-    if (isProviderBackedProcessor(fileProcessor) && binary !== null) {
-      return yield* providerBackedFileAsset(
-        source,
-        common,
-        fileProcessor,
-        binary,
-        fileStorageReference,
-      );
-    }
-    if (fileProcessor === 'local_text') {
-      return localTextSourceAsset(
-        source,
-        common,
-        trimmedContent,
-        filePayload,
-        fileStorageReference,
-        declaredMimeType,
-        fileNameMimeType,
-      );
-    }
-    if (filePayload !== null && fileProcessor === 'unsupported_file') {
-      return unsupportedFileSourceAsset(
-        source,
-        common,
+    return yield* Effect.gen(function* inspectFileSourceProgram() {
+      const detectedMimeType =
+        filePayload === null ? undefined : yield* detectBinaryMimeType(filePayload.bytes);
+      const declaredMimeType = filePayload?.declaredMimeType;
+      const fileNameMimeType = mimeTypeFromFileName(common.sourceName);
+      const fileProcessor = chooseFileProcessor(
         filePayload,
         detectedMimeType,
         declaredMimeType,
-        fileStorageReference,
+        fileNameMimeType,
       );
-    }
-    return plainSourceAsset(source, common, trimmedContent, fileProcessor, false);
+      const binary =
+        filePayload !== null && detectedMimeType !== undefined
+          ? { bytes: filePayload.bytes, mimeType: detectedMimeType }
+          : null;
+      if (isProviderBackedProcessor(fileProcessor) && binary !== null) {
+        return yield* providerBackedFileAsset(
+          deps,
+          source,
+          common,
+          fileProcessor,
+          binary,
+          fileStorageReference,
+        );
+      }
+      if (fileProcessor === 'local_text') {
+        return localTextSourceAsset(
+          source,
+          common,
+          content,
+          filePayload,
+          fileStorageReference,
+          declaredMimeType,
+          fileNameMimeType,
+        );
+      }
+      if (filePayload !== null && fileProcessor === 'unsupported_file') {
+        return unsupportedFileSourceAsset(
+          source,
+          common,
+          filePayload,
+          detectedMimeType,
+          declaredMimeType,
+          fileStorageReference,
+        );
+      }
+      return plainSourceAsset(source, common, content, fileProcessor, false);
+    }).pipe(
+      Effect.tapError(() =>
+        ownsNewBlob && fileStorageReference !== undefined
+          ? deps.deleteSourceBlob(fileStorageReference)
+          : Effect.void,
+      ),
+    );
   });
 
 export const processSource = (
@@ -747,15 +873,15 @@ export const processSource = (
       sourceId: source.sourceId ?? deps.newSourceId(draftId),
       sourceName: trimmedSourceName.length > 0 ? trimmedSourceName : source.type,
     };
+    if (source.type === 'file') {
+      return yield* fileSourceAsset(deps, draftId, source, common, source.content);
+    }
     const trimmedContent = source.content.trim();
     if (source.type === 'url') {
       const url = parseHttpUrl(trimmedContent);
       if (url !== null) {
         return yield* webExtractionSourceAsset(source, common, url);
       }
-    }
-    if (source.type === 'file') {
-      return yield* fileSourceAsset(deps, draftId, source, common, trimmedContent);
     }
     return plainSourceAsset(source, common, trimmedContent, null, true);
   });

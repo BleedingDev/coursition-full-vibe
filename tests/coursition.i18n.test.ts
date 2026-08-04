@@ -2,6 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, test } from '@rstest/core';
 import { resolveCurrentLanguage } from '../src/features/coursition/i18n';
+import {
+  authRoutePath,
+  localizedPathForLanguage,
+  parseAuthRoutePath,
+  parseCourseRoutePath,
+} from '../shared/coursition/routes';
 
 const root = process.cwd();
 const routePath = 'src/routes/[lang]/page.tsx';
@@ -103,6 +109,24 @@ describe('Coursition native i18n discipline', () => {
         runtimeLanguage: 'cs',
       }),
     ).toBe('en');
+  });
+
+  test('keeps authentication modes in localized URLs', () => {
+    expect(authRoutePath('en', 'signIn')).toBe('/en/sign-in');
+    expect(authRoutePath('en', 'signUp')).toBe('/en/sign-up');
+    expect(authRoutePath('cs', 'signIn')).toBe('/cs/prihlaseni');
+    expect(authRoutePath('cs', 'signUp')).toBe('/cs/registrace');
+    expect(parseAuthRoutePath('/en/sign-up')).toEqual({ language: 'en', mode: 'signUp' });
+    expect(parseAuthRoutePath('/cs/prihlaseni')).toEqual({ language: 'cs', mode: 'signIn' });
+    expect(localizedPathForLanguage('/en/sign-up', 'cs')).toBe('/cs/registrace');
+  });
+
+  test('rejects malformed or extended localized application URLs', () => {
+    expect(parseAuthRoutePath('/en/sign-in/extra')).toBeNull();
+    expect(parseAuthRoutePath('/cs/prihlaseni/extra')).toBeNull();
+    expect(parseCourseRoutePath('/en/course-creation/course_123/sources/extra')).toBeNull();
+    expect(parseCourseRoutePath('/cs/tvorba-kurzu/course_123/zdroje/extra')).toBeNull();
+    expect(parseCourseRoutePath('/en/course-creation/%E0%A4%A/sources')).toBeNull();
   });
 
   test('keeps obvious Coursition product copy out of route and component literals', () => {

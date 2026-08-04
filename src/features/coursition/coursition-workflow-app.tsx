@@ -1,13 +1,15 @@
-import { Link, useNavigate } from '@modern-js/plugin-tanstack/runtime';
+/* eslint-disable jsx-a11y/no-noninteractive-element-interactions, unicorn/require-post-message-target-origin -- Objective and activity forms autosave at the form boundary; BroadcastChannel.postMessage has no target-origin parameter. */
 import { Badge } from '@techsio/ui-kit/atoms/badge';
 import { Button } from '@techsio/ui-kit/atoms/button';
 import { Icon } from '@techsio/ui-kit/atoms/icon';
 import { Input } from '@techsio/ui-kit/atoms/input';
+import { Accordion } from '@techsio/ui-kit/molecules/accordion';
 import { FormCheckbox } from '@techsio/ui-kit/molecules/form-checkbox';
 import { FormInput } from '@techsio/ui-kit/molecules/form-input';
 import { FormTextarea } from '@techsio/ui-kit/molecules/form-textarea';
 import { RadioCard } from '@techsio/ui-kit/molecules/radio-card';
 import { Steps } from '@techsio/ui-kit/molecules/steps';
+import { Tabs } from '@techsio/ui-kit/molecules/tabs';
 import { Toaster, useToast } from '@techsio/ui-kit/molecules/toast';
 import { SelectTemplate } from '@techsio/ui-kit/templates/select';
 import * as Cause from 'effect/Cause';
@@ -16,10 +18,20 @@ import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
 import * as Option from 'effect/Option';
 import * as Schema from 'effect/Schema';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent, ComponentType, FocusEvent, FormEvent } from 'react';
-import type { MDXEditorMethods } from '@mdxeditor/editor';
-import effectBff from '@api/effect/index';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { ChangeEvent, FocusEvent, FormEvent } from 'react';
+import { Link, useNavigate } from '@tanstack/react-router';
+import effectBff from '@api/index';
+import { ConfirmDeleteButton } from '@/features/coursition/confirm-delete-button';
 import type {
   ActivityEvaluationResponse,
   AiMode,
@@ -27,7 +39,6 @@ import type {
   DraftStep,
   SourceAsset,
   SourceType,
-  WorkflowGate,
 } from '@shared/coursition/workflow';
 import {
   activityTypes,
@@ -43,89 +54,180 @@ import {
   workflowStepIndex,
   workflowSteps,
 } from '@shared/coursition/workflow';
-import type {
-  CoursePreparation,
-  SessionUser,
-  WorkflowAction,
-  WorkflowSnapshot,
-} from '@shared/coursition/effect-api';
+import type { CoursePreparation, SessionUser, WorkflowAction, WorkflowSnapshot } from '@shared/api';
 import {
   activityEvaluationRequestSchema,
   activityEvaluationResponseSchema,
+  CoursitionWorkflowConflict,
   coursePreparationSchema,
+  MAX_SOURCE_FILE_BYTES,
   sessionPayloadSchema,
   workflowActionSchema,
   workflowSnapshotSchema,
-} from '@shared/coursition/effect-api';
-import type { CourseRouteLanguage, CourseRouteMatch } from '@shared/coursition/routes';
-import { courseRoutePattern, courseRouteStepSlug } from '@shared/coursition/routes';
+} from '@shared/api';
+import { authRoutePath, courseRoutePattern, courseRouteStepSlug } from '@shared/coursition/routes';
+import type { CoursitionWorkflowAppProps } from './coursition-workflow-app.types';
+import { CoursitionLoadingView } from './coursition-loading-view';
+import { sessionRedirectPathFor, snapshotLoadStatusFor, snapshotRouteKeyFor } from './route-state';
 import type { Translate } from './translation';
+import {
+  addedSourceAfterSubmission,
+  commitEditBuffer,
+  coursitionPendingDraftSaves,
+  editBuffer,
+  emptySourceFormDrafts,
+  ExclusiveActionGate,
+  focusLeftContainer,
+  reconcileEditBuffer,
+  resetSubmittedSourceDraft,
+  restorableTransientDraftState,
+  selectSourceFile,
+  transientDraftCacheKey,
+  transientDraftStateFor,
+  updateEditBuffer,
+  updateSourceFormDraft as updateVersionedSourceFormDraft,
+  updateSourceName,
+} from './workflow-form-integrity';
+import type {
+  ActivityBriefEditValue,
+  EditBuffer,
+  ObjectiveEditValue,
+  SourceFormDraft,
+  SourceFormDrafts,
+  TransientDraftState,
+} from './workflow-form-integrity';
+import { updateModeWithoutNavigation } from './workflow-navigation';
+import {
+  browserOperationId,
+  initialSessionStateFor,
+  shouldRevalidateWorkflow,
+  WorkflowTransportError,
+  workflowInvalidationKindForSession,
+  workflowRequestCoordinatorForBrowser,
+} from './workflow-request-coordinator';
+import type { WorkflowActionIntent, WorkflowConflictPayload } from './workflow-request-coordinator';
 
-interface CoursitionWorkflowAppProps {
-  initialRoute?: CourseRouteMatch | null;
-  initialSessionUser?: SessionUser | null;
-  initialSnapshot?: WorkflowSnapshot | null;
-  language: CourseRouteLanguage;
-  t: Translate;
-}
-
-type AuthMode = 'signIn' | 'signUp';
 type BusyAction = WorkflowAction['action'] | 'auth' | 'file';
 type CourseDraft = NonNullable<WorkflowSnapshot['draft']>;
 type AiRun = CourseDraft['aiRuns'][number];
 type GeneratedActivity = CourseDraft['learningBlueprint']['generatedActivities'][number];
-type PlayableGeneratedActivityType = Exclude<GeneratedActivity['type'], 'not_playable'>;
-type WorkflowRunner = (action: WorkflowAction, shouldNavigate?: boolean) => void;
+type WorkflowRunner = (action: WorkflowActionIntent, shouldNavigate?: boolean) => void;
 type InputChangeEvent = ChangeEvent<HTMLInputElement>;
 type TextareaChangeEvent = ChangeEvent<HTMLTextAreaElement>;
-interface MarkdownEditorModule {
-  default: ComponentType<MarkdownEditorClientProps>;
+interface SnapshotLoadError {
+  readonly message: string;
+  readonly routeKey: string;
 }
+
+interface FileSourceFeedback {
+  readonly kind: 'error' | 'pending';
+  readonly message: string;
+}
+
+interface CoursitionBrowserRuntimeCache {
+  channel: BroadcastChannel | null;
+  clientId: string;
+  sessionUser: SessionUser | null;
+  snapshot: WorkflowSnapshot | null;
+  transientDrafts: Map<string, TransientDraftState>;
+}
+
+interface CoursitionCacheWindow extends Window {
+  __coursitionRuntimeCache?: CoursitionBrowserRuntimeCache;
+}
+
+const browserRuntimeCacheFor = (): CoursitionBrowserRuntimeCache | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const cacheWindow = window as CoursitionCacheWindow;
+  cacheWindow.__coursitionRuntimeCache ??= {
+    channel:
+      typeof globalThis.BroadcastChannel === 'function'
+        ? new globalThis.BroadcastChannel('coursition-workflow-v1')
+        : null,
+    clientId: browserOperationId(),
+    sessionUser: null,
+    snapshot: null,
+    transientDrafts: new Map(),
+  };
+  return cacheWindow.__coursitionRuntimeCache;
+};
+
+const cachedSessionUserFor = () => browserRuntimeCacheFor()?.sessionUser ?? null;
+
+const cachedSnapshotFor = (
+  sessionUser: SessionUser | null,
+  routeKey: string | null,
+): WorkflowSnapshot | null => {
+  const runtimeCache = browserRuntimeCacheFor();
+  if (
+    sessionUser === null ||
+    routeKey === null ||
+    runtimeCache?.sessionUser?.id !== sessionUser.id ||
+    runtimeCache.snapshot === null
+  ) {
+    return null;
+  }
+  if (routeKey === 'dashboard') {
+    return { ...runtimeCache.snapshot, draft: null };
+  }
+  const cachedDraft = runtimeCache.snapshot.draft;
+  return cachedDraft !== null && routeKey.startsWith(`${cachedDraft.id}:`)
+    ? runtimeCache.snapshot
+    : null;
+};
+
+const cacheSnapshot = (sessionUser: SessionUser | null, snapshot: WorkflowSnapshot) => {
+  const runtimeCache = browserRuntimeCacheFor();
+  if (sessionUser === null || runtimeCache === null) {
+    return;
+  }
+  runtimeCache.sessionUser = sessionUser;
+  runtimeCache.snapshot = snapshot;
+};
+
+const cachedTransientDraftFor = (
+  sessionUser: SessionUser | null,
+  draft: CourseDraft | null,
+): TransientDraftState | null => {
+  const runtimeCache = browserRuntimeCacheFor();
+  if (sessionUser === null || draft === null || runtimeCache === null) {
+    return null;
+  }
+  return runtimeCache.transientDrafts.get(transientDraftCacheKey(sessionUser.id, draft.id)) ?? null;
+};
+
+const cacheTransientDraft = (
+  sessionUser: SessionUser | null,
+  draft: CourseDraft | null,
+  state: TransientDraftState,
+) => {
+  const runtimeCache = browserRuntimeCacheFor();
+  if (sessionUser === null || draft === null || runtimeCache === null) {
+    return;
+  }
+  runtimeCache.transientDrafts.set(
+    transientDraftCacheKey(sessionUser.id, draft.id),
+    restorableTransientDraftState(state),
+  );
+};
 
 class CoursitionUiEffectError extends Data.TaggedError('CoursitionUiEffectError')<{
   readonly cause: unknown;
   readonly message: string;
 }> {}
 
-interface MarkdownEditorClientProps {
-  onChange?: (value: string) => void;
-  placeholder?: string;
-  readOnly?: boolean;
-  value: string;
-}
+const ClientToaster = () => {
+  const [mounted, setMounted] = useState(false);
 
-interface SourceMarkdownToolbarComponents {
-  BlockTypeSelect: ComponentType;
-  BoldItalicUnderlineToggles: ComponentType;
-  CreateLink: ComponentType;
-  InsertThematicBreak: ComponentType;
-  ListsToggle: ComponentType;
-  Separator: ComponentType;
-  UndoRedo: ComponentType;
-}
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setMounted(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
-const SourceMarkdownToolbarContents = ({
-  BlockTypeSelect,
-  BoldItalicUnderlineToggles,
-  CreateLink,
-  InsertThematicBreak,
-  ListsToggle,
-  Separator,
-  UndoRedo,
-}: SourceMarkdownToolbarComponents) => (
-  <>
-    <UndoRedo />
-    <Separator />
-    <BlockTypeSelect />
-    <BoldItalicUnderlineToggles />
-    <ListsToggle />
-    <CreateLink />
-    <InsertThematicBreak />
-  </>
-);
-
-const createSourceMarkdownToolbarContents = (components: SourceMarkdownToolbarComponents) =>
-  SourceMarkdownToolbarContents.bind(null, components);
+  return mounted ? <Toaster /> : null;
+};
 
 interface NavigationStepVisualState {
   isComplete: boolean;
@@ -146,6 +248,7 @@ const sessionPayloadFromUnknown = Schema.decodeUnknownEffect(sessionPayloadSchem
 const workflowErrorBodyJsonSchema = Schema.fromJsonString(
   Schema.Struct({ message: Schema.optional(Schema.String) }),
 );
+const workflowConflictBodyJsonSchema = Schema.fromJsonString(CoursitionWorkflowConflict);
 const coursePreparationKeyJsonSchema = Schema.fromJsonString(coursePreparationSchema);
 const objectiveEditKeyJsonSchema = Schema.fromJsonString(
   Schema.Struct({
@@ -165,6 +268,7 @@ const activityBriefEditKeyJsonSchema = Schema.fromJsonString(
 );
 const sourceTypes = ['notes', 'url', 'file'] as const satisfies readonly SourceType[];
 const navigationSteps = [...workflowSteps, 'preview'] as const satisfies readonly DraftStep[];
+type AutosaveFeedback = 'dirty' | 'error' | 'idle' | 'saved';
 const languagePreferences = [
   'source',
   'en',
@@ -174,15 +278,42 @@ const sourceDataUrlPattern = /^data:[^,]+;base64,/u;
 
 const labelClass = 'text-sm font-semibold text-fg-primary';
 const mutedTextClass = 'text-sm text-fg-secondary';
-const tinyMetaClass = 'text-xs font-medium tracking-normal text-fg-secondary';
-const errorTextClass = 'text-sm font-semibold text-button-bg-danger-active';
-const cardClass = 'rounded-md bg-base p-3';
-const panelClass = 'grid gap-3';
+const tinyMetaClass = 'text-sm font-medium tracking-normal text-fg-secondary';
+const errorTextClass = 'text-base font-semibold text-danger sm:text-sm';
+const studioHeaderClass =
+  'grid min-w-0 gap-4 border-b border-border-primary bg-base py-4 lg:sticky lg:top-14 lg:z-20';
+const workspaceSectionClass = 'grid min-w-0 gap-6 py-4 sm:py-6';
+const insetSurfaceClass = 'rounded-lg bg-fill-base p-4 sm:p-5';
+const editorialListClass = 'divide-y divide-border-primary border-y border-border-primary';
+const readingColumnClass = 'w-full max-w-4xl';
+const SnapshotErrorView = ({
+  message,
+  onRetry,
+  t,
+}: {
+  message: string;
+  onRetry: () => void;
+  t: Translate;
+}) => (
+  <section
+    className={`${workspaceSectionClass} min-h-80 content-center border-y border-border-primary`}
+    role="alert"
+  >
+    <div className="grid gap-2">
+      <h1 className="text-balance text-xl font-semibold text-fg-primary">
+        {t('coursition.app.loading.failedTitle')}
+      </h1>
+      <p className="text-pretty text-base text-fg-secondary sm:text-sm">{message}</p>
+    </div>
+    <div>
+      <Button onClick={onRetry} type="button" variant="primary">
+        {t('coursition.app.loading.retry')}
+      </Button>
+    </div>
+  </section>
+);
 
-const formString = (formData: FormData, field: string) => {
-  const value = formData.get(field);
-  return typeof value === 'string' ? value.trim() : '';
-};
+const normalizedGeneratedText = (value: string) => value.replaceAll(/\\+r\\+n|\\+[nr]/gu, '\n');
 
 const activeSources = (draft: CourseDraft | null) =>
   draft?.sources.filter((source) => source.status !== 'deleted') ?? [];
@@ -239,12 +370,19 @@ const failedGenerationRunFor = (
   nextDraft: CourseDraft | null,
   action: WorkflowAction['action'],
 ) => {
+  const previousRunIds =
+    previousDraft === null ? new Set<string>() : new Set(previousDraft.aiRuns.map((run) => run.id));
+  if (action === 'advanceDraft') {
+    return (
+      nextDraft?.aiRuns
+        .toReversed()
+        .find((run) => run.status === 'failed' && !previousRunIds.has(run.id)) ?? null
+    );
+  }
   const runType = generationRunTypeFor(action);
   if (nextDraft === null || runType === null) {
     return null;
   }
-  const previousRunIds =
-    previousDraft === null ? new Set<string>() : new Set(previousDraft.aiRuns.map((run) => run.id));
   return (
     nextDraft.aiRuns
       .toReversed()
@@ -293,33 +431,6 @@ const isLanguagePreference = (value: string): value is CourseLanguagePreference 
 const contentBlockBody = (
   block: CourseDraft['courseContent']['sections'][number]['blocks'][number],
 ) => (block.body.trim().length > 0 ? block.body : block.title);
-
-const gateText = (gate: WorkflowGate, t: Translate) => {
-  if (gate.reason === 'blockingFinding' && gate.finding !== undefined) {
-    return t('coursition.app.navigation.blockedReasons.blockingFinding', {
-      title: gate.finding.title,
-    });
-  }
-  if (gate.reason !== undefined) {
-    return t(`coursition.app.navigation.blockedReasons.${gate.reason}`);
-  }
-  return t('coursition.app.errors.generic');
-};
-
-const nextGateFor = (draft: CourseDraft | null, activeStep: DraftStep): WorkflowGate => {
-  if (draft === null) {
-    return { allowed: false };
-  }
-  if (activeStep === 'courseContent') {
-    return getWorkflowPreviewGate(draft);
-  }
-  if (activeStep === 'sources' && draft.mode === 'generate') {
-    return hasUsableSourceMaterial(draft)
-      ? { allowed: true }
-      : { allowed: false, blockedStep: 'sources', reason: 'sourceRequired' };
-  }
-  return getWorkflowStepGate(draft, workflowSteps[workflowStepIndex(activeStep) + 1] ?? activeStep);
-};
 
 const isNavigationStepComplete = (draft: CourseDraft, step: DraftStep) => {
   switch (step) {
@@ -396,7 +507,7 @@ const navigationGateFor = (draft: CourseDraft, step: DraftStep) =>
   step === 'preview' ? getWorkflowPreviewGate(draft) : getWorkflowStepGate(draft, step);
 
 const navigationTriggerClass =
-  'shrink-0 rounded-md px-1.5 py-1 transition enabled:hover:bg-fill-hover data-[current-step=true]:cursor-default disabled:pointer-events-none disabled:bg-transparent disabled:opacity-45';
+  'min-w-0 shrink rounded-md px-1 py-1 enabled:hover:bg-fill-hover data-[current-step=true]:cursor-default disabled:pointer-events-none disabled:bg-transparent sm:px-1.5';
 
 const navigationIndicatorClass = ({
   isComplete,
@@ -406,16 +517,20 @@ const navigationIndicatorClass = ({
 }: NavigationStepVisualState) => {
   const classes = ['border-border-primary bg-fill-base text-fg-primary group-hover:bg-fill-hover'];
   if (isStale) {
-    classes.push('!border-warning !bg-warning !text-black group-hover:!bg-warning');
-  } else if (isReady) {
     classes.push(
-      '!border-border-primary !bg-fill-base !text-fg-primary group-hover:!bg-fill-hover',
+      'border-badge-border-warning bg-badge-bg-warning text-badge-fg-warning group-hover:bg-badge-bg-warning',
     );
+  } else if (isReady) {
+    classes.push('border-border-primary bg-fill-base text-fg-primary group-hover:bg-fill-hover');
   } else if (isComplete) {
-    classes.push('!border-success !bg-success !text-fg-reverse');
+    classes.push(
+      'border-steps-indicator-border-complete bg-steps-indicator-bg-complete text-steps-indicator-fg-complete',
+    );
   }
   if (isCurrent && !isComplete && !isReady && !isStale) {
-    classes.push('border-primary bg-primary text-fg-reverse');
+    classes.push(
+      'border-steps-indicator-border-current bg-steps-indicator-bg-current text-steps-indicator-fg-current',
+    );
   }
   return classes.join(' ');
 };
@@ -428,20 +543,20 @@ const navigationTitleClass = ({
 }: NavigationStepVisualState) => {
   const classes = ['overflow-visible text-clip whitespace-nowrap text-fg-primary'];
   if (isComplete && !isReady && !isStale) {
-    classes.push('text-success');
+    classes.push('text-steps-title-fg-complete');
   }
   if (isStale) {
-    classes.push('font-semibold !text-fg-primary');
+    classes.push('font-semibold text-fg-primary');
   }
   if (isReady) {
-    classes.push('font-bold !text-fg-primary');
+    classes.push('font-semibold text-fg-primary');
   } else if (isCurrent) {
-    classes.push('font-bold !text-primary');
+    classes.push('font-semibold text-steps-title-fg-current');
   }
   return classes.join(' ');
 };
 
-const navigationSeparatorClass = 'flex w-8 shrink-0 items-center text-fg-secondary/40';
+const navigationSeparatorClass = 'flex w-3 shrink-0 items-center text-fg-secondary/40 sm:w-8';
 
 const errorMessageFrom = (error: unknown, fallback: string) => {
   if (error instanceof CoursitionUiEffectError && error.message.trim().length > 0) {
@@ -467,7 +582,7 @@ const workflowErrorMessageFromBody = (body: string, fallback: string) => {
   return body;
 };
 
-const workflowRequestEffect = (action: WorkflowAction, fallback: string) =>
+const workflowRequestEffect = (action: WorkflowAction, fallback: string, signal?: AbortSignal) =>
   Effect.gen(function* workflowRequestProgram() {
     const requestBody = yield* Schema.encodeEffect(workflowActionJsonSchema)(action);
     const response = yield* Effect.tryPromise({
@@ -485,6 +600,7 @@ const workflowRequestEffect = (action: WorkflowAction, fallback: string) =>
             'content-type': 'application/json',
           },
           method: 'POST',
+          ...(signal === undefined ? {} : { signal }),
         }),
     });
     if (!response.ok) {
@@ -496,9 +612,14 @@ const workflowRequestEffect = (action: WorkflowAction, fallback: string) =>
           }),
         try: () => response.text(),
       });
-      return yield* new CoursitionUiEffectError({
-        cause: response.status,
+      const conflict =
+        response.status === 409
+          ? Schema.decodeUnknownOption(workflowConflictBodyJsonSchema)(body)
+          : Option.none<WorkflowConflictPayload>();
+      return yield* new WorkflowTransportError({
+        conflict: Option.isSome(conflict) ? conflict.value : null,
         message: workflowErrorMessageFromBody(body, fallback),
+        status: response.status,
       });
     }
     const body = yield* Effect.tryPromise({
@@ -612,7 +733,30 @@ const readFileAsDataUrlEffect = (file: File) =>
 
 const filePayloadFromEffect = readFileAsDataUrlEffect;
 
+const sessionRequestEffect = (fallbackMessage: string) =>
+  Effect.tryPromise({
+    catch: (cause) =>
+      new CoursitionUiEffectError({
+        cause,
+        message: errorMessageFrom(cause, fallbackMessage),
+      }),
+    try: () => Promise.resolve(effectBff.client.auth.session({})),
+  }).pipe(
+    Effect.flatMap((payload) =>
+      sessionPayloadFromUnknown(payload).pipe(
+        Effect.mapError(
+          (cause) =>
+            new CoursitionUiEffectError({
+              cause,
+              message: errorMessageFrom(cause, fallbackMessage),
+            }),
+        ),
+      ),
+    ),
+  );
+
 const TextInputField = ({
+  disabled = false,
   id,
   label,
   name,
@@ -622,6 +766,7 @@ const TextInputField = ({
   type = 'text',
   value,
 }: {
+  disabled?: boolean;
   id?: string;
   label: string;
   name: string;
@@ -632,6 +777,7 @@ const TextInputField = ({
   value: string;
 }) => (
   <FormInput
+    disabled={disabled}
     id={id ?? name}
     label={label}
     name={name}
@@ -670,126 +816,30 @@ const TextareaField = ({
     placeholder={placeholder}
     required={required}
     rows={rows}
-    value={value}
+    value={normalizedGeneratedText(value)}
   />
 );
 
-const MarkdownEditorClient = lazy(() =>
-  Effect.runPromise(
-    Effect.promise(() => import('@mdxeditor/editor')).pipe(
-      Effect.map(
-        ({
-          BlockTypeSelect,
-          BoldItalicUnderlineToggles,
-          CreateLink,
-          InsertThematicBreak,
-          ListsToggle,
-          MDXEditor,
-          Separator,
-          UndoRedo,
-          codeBlockPlugin,
-          headingsPlugin,
-          imagePlugin,
-          linkDialogPlugin,
-          linkPlugin,
-          listsPlugin,
-          markdownShortcutPlugin,
-          quotePlugin,
-          tablePlugin,
-          thematicBreakPlugin,
-          toolbarPlugin,
-        }): MarkdownEditorModule => {
-          const sourceMarkdownToolbarContents = createSourceMarkdownToolbarContents({
-            BlockTypeSelect,
-            BoldItalicUnderlineToggles,
-            CreateLink,
-            InsertThematicBreak,
-            ListsToggle,
-            Separator,
-            UndoRedo,
-          });
-
-          const SourceMarkdownEditor = ({
-            onChange,
-            placeholder,
-            readOnly = false,
-            value,
-          }: MarkdownEditorClientProps) => {
-            const editorRef = useRef<MDXEditorMethods>(null);
-            useEffect(() => {
-              const editor = editorRef.current;
-              if (editor !== null && editor.getMarkdown() !== value) {
-                editor.setMarkdown(value);
-              }
-            }, [value]);
-
-            const plugins = [
-              headingsPlugin(),
-              listsPlugin(),
-              quotePlugin(),
-              linkPlugin(),
-              linkDialogPlugin(),
-              codeBlockPlugin(),
-              imagePlugin({
-                disableImageResize: true,
-                disableImageSettingsButton: true,
-              }),
-              tablePlugin(),
-              thematicBreakPlugin(),
-              markdownShortcutPlugin(),
-              ...(readOnly
-                ? []
-                : [
-                    toolbarPlugin({
-                      toolbarContents: sourceMarkdownToolbarContents,
-                    }),
-                  ]),
-            ];
-
-            return (
-              <MDXEditor
-                ref={editorRef}
-                className={`coursition-mdx-editor ${
-                  readOnly ? 'coursition-mdx-editor--readonly' : ''
-                }`}
-                contentEditableClassName={`coursition-mdx-editor-content ${
-                  readOnly ? 'coursition-mdx-editor-content--readonly' : ''
-                }`}
-                markdown={value}
-                onChange={(markdown) => {
-                  if (!readOnly) {
-                    onChange?.(markdown);
-                  }
-                }}
-                placeholder={placeholder}
-                plugins={plugins}
-                readOnly={readOnly}
-                spellCheck
-                trim={false}
-              />
-            );
-          };
-
-          return { default: SourceMarkdownEditor };
-        },
-      ),
-    ),
-  ),
-);
+const MarkdownEditorClient = lazy(() => import('./markdown-editor-client'));
 
 const SourceTextPreview = ({ value }: { value: string }) => (
   <div className="max-h-72 overflow-auto rounded-md bg-base p-3">
-    <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-fg-primary">{value}</pre>
+    <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-fg-primary">
+      {normalizedGeneratedText(value)}
+    </pre>
   </div>
 );
 
-const MarkdownText = ({ className = '', value }: { className?: string; value: string }) => (
-  <div className={`coursition-markdown-text text-sm leading-6 text-fg-primary ${className}`}>
-    <Suspense fallback={<p className="whitespace-pre-wrap">{value}</p>}>
-      <MarkdownEditorClient readOnly value={value} />
-    </Suspense>
-  </div>
-);
+const MarkdownText = ({ className = '', value }: { className?: string; value: string }) => {
+  const normalizedValue = normalizedGeneratedText(value);
+  return (
+    <div className={`coursition-markdown-text text-sm leading-6 text-fg-primary ${className}`}>
+      <Suspense fallback={<p className="whitespace-pre-wrap">{normalizedValue}</p>}>
+        <MarkdownEditorClient readOnly value={normalizedValue} />
+      </Suspense>
+    </div>
+  );
+};
 
 const NavigationStepIndicatorContent = ({
   index,
@@ -854,7 +904,7 @@ const FeedbackPanel = ({
   tone: 'success' | 'warning';
 }) => (
   <output
-    className={`coursition-feedback-panel rounded-md p-3 text-sm leading-6 ${
+    className={`coursition-feedback-panel border-s-2 py-2 pe-3 ps-4 text-sm leading-6 ${
       tone === 'success'
         ? 'coursition-feedback-panel--success'
         : 'coursition-feedback-panel--warning'
@@ -929,43 +979,40 @@ const useActivityEvaluation = ({
     setEvaluationError('');
   }, []);
 
-  const evaluateAnswer = useCallback(
-    (answer: string, checkedCriteria: readonly string[] = []) => {
-      Effect.runFork(
-        Effect.gen(function* evaluateActivityProgram() {
-          yield* Effect.sync(() => {
-            setIsEvaluating(true);
-            setEvaluationError('');
-          });
-          const resultExit = yield* Effect.exit(
-            activityEvaluationRequestEffect(
-              {
-                activityId,
-                answer,
-                checkedCriteria,
-                draftId,
-              },
-              t('coursition.app.preview.evaluationFailed'),
-            ),
-          );
-          yield* Effect.sync(() => {
-            if (Exit.isFailure(resultExit)) {
-              setEvaluation(null);
-              setEvaluationError(
-                errorMessageFrom(
-                  resultExit.cause.pipe(Cause.squash),
-                  t('coursition.app.preview.evaluationFailed'),
-                ),
-              );
-              return;
-            }
-            setEvaluation(resultExit.value);
-          });
-        }).pipe(Effect.ensuring(Effect.sync(() => setIsEvaluating(false)))),
-      );
-    },
-    [activityId, draftId, t],
-  );
+  const evaluateAnswer = (answer: string, checkedCriteria: readonly string[] = []) => {
+    Effect.runFork(
+      Effect.gen(function* evaluateActivityProgram() {
+        yield* Effect.sync(() => {
+          setIsEvaluating(true);
+          setEvaluationError('');
+        });
+        const resultExit = yield* Effect.exit(
+          activityEvaluationRequestEffect(
+            {
+              activityId,
+              answer,
+              checkedCriteria,
+              draftId,
+            },
+            t('coursition.app.preview.evaluationFailed'),
+          ),
+        );
+        yield* Effect.sync(() => {
+          if (Exit.isFailure(resultExit)) {
+            setEvaluation(null);
+            setEvaluationError(
+              errorMessageFrom(
+                resultExit.cause.pipe(Cause.squash),
+                t('coursition.app.preview.evaluationFailed'),
+              ),
+            );
+            return;
+          }
+          setEvaluation(resultExit.value);
+        });
+      }).pipe(Effect.ensuring(Effect.sync(() => setIsEvaluating(false)))),
+    );
+  };
 
   return {
     evaluateAnswer,
@@ -1071,7 +1118,7 @@ const IncompleteActivityPanel = ({
   reason: IncompleteActivityReason;
   t: Translate;
 }) => (
-  <div className="grid gap-1 rounded-md bg-button-bg-warning-light p-3 text-sm leading-6 text-button-fg-warning-light">
+  <div className="grid gap-1 border-s-2 border-badge-border-warning bg-badge-bg-warning py-3 pe-4 ps-4 text-sm leading-6 text-badge-fg-warning">
     <p className="font-semibold">{t('coursition.app.preview.incompleteActivity')}</p>
     <p>{t(`coursition.app.preview.incompleteActivityReasons.${reason}`)}</p>
   </div>
@@ -1181,7 +1228,7 @@ const PracticeTaskEngine = ({
         rows={6}
         value={answer}
       />
-      <div className="grid gap-2 rounded-md bg-base p-3">
+      <div className="grid gap-2 border-s-2 border-border-primary py-2 ps-4">
         <p className={labelClass}>{t('coursition.app.preview.criteria')}</p>
         <ul className="grid gap-1">
           {interaction.checklist.map((item) => (
@@ -1373,12 +1420,12 @@ const OrderingMatchingEngine = ({
             total: interaction.items.length,
           })}
         </p>
-        <div className="grid gap-3">
+        <div className={editorialListClass}>
           {interaction.items.map((item, index) => {
             const selectedMatch = matches[item.id] ?? '';
             const isCorrect = selectedMatch === item.matchLabel;
             return (
-              <div className="grid gap-2 rounded-md bg-base p-3" key={item.id}>
+              <div className="grid gap-3 py-5 first:pt-0 last:pb-0" key={item.id}>
                 <div className="grid gap-1">
                   <p className={tinyMetaClass}>
                     {t('coursition.app.preview.matchCard', {
@@ -1478,11 +1525,11 @@ const OrderingMatchingEngine = ({
           total: orderedItems.length,
         })}
       </p>
-      <ol className="grid gap-2">
+      <ol className={editorialListClass}>
         {orderedItems.map((item, index) => {
           const isCorrect = item.correctPosition === index + 1;
           return (
-            <li className="grid gap-2 rounded-md bg-base p-3" key={item.id}>
+            <li className="grid gap-3 py-4 first:pt-0 last:pb-0" key={item.id}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className={tinyMetaClass}>
@@ -1498,9 +1545,9 @@ const OrderingMatchingEngine = ({
                       setOrderedIds((current) => moveOrderItem(current, item.id, -1));
                       setHasChecked(false);
                     }}
-                    theme="outlined"
+                    theme="light"
                     type="button"
-                    variant="secondary"
+                    variant="primary"
                   >
                     {t('coursition.app.preview.moveUp')}
                   </Button>
@@ -1511,9 +1558,9 @@ const OrderingMatchingEngine = ({
                       setOrderedIds((current) => moveOrderItem(current, item.id, 1));
                       setHasChecked(false);
                     }}
-                    theme="outlined"
+                    theme="light"
                     type="button"
-                    variant="secondary"
+                    variant="primary"
                   >
                     {t('coursition.app.preview.moveDown')}
                   </Button>
@@ -1597,7 +1644,7 @@ const RubricAnswerEngine = ({
         rows={5}
         value={answer}
       />
-      <div className="grid gap-2 rounded-md bg-base p-3">
+      <div className="grid gap-2 border-s-2 border-border-primary py-2 ps-4">
         <p className={labelClass}>{t('coursition.app.preview.selfCheck')}</p>
         {interaction.criteria.map((criterion) => (
           <FormCheckbox
@@ -1677,25 +1724,6 @@ const activityPromptFor = (activity: GeneratedActivity): string => {
   }
 };
 
-const activitySkinTypeFor = (activity: GeneratedActivity): PlayableGeneratedActivityType | null => {
-  switch (activity.type) {
-    case 'retrieval_check':
-    case 'practice_task':
-    case 'scenario_decision':
-    case 'ordering_matching':
-    case 'rubric_answer': {
-      return activity.type;
-    }
-    case 'not_playable': {
-      return null;
-    }
-    default: {
-      const unsupportedActivity: never = activity;
-      return unsupportedActivity;
-    }
-  }
-};
-
 const ActivityPreviewCard = ({
   activity,
   draftId,
@@ -1741,36 +1769,25 @@ const ActivityPreviewCard = ({
   const typeLabel = t(`coursition.app.activityPlan.types.${activity.type}`);
   const prompt = activityPromptFor(activity).trim();
   const incompleteReason = incompleteActivityReasonFor(activity);
-  const activitySkinType = activitySkinTypeFor(activity);
   const heading = hasText(prompt)
     ? typeLabel
     : t('coursition.app.preview.incompleteActivityHeading');
 
   return (
-    <article className="grid gap-3 rounded-md bg-fill-base p-3" key={activity.id}>
+    <article
+      className="grid gap-5 border-t border-border-primary py-6 first:border-t-0 first:pt-0 last:pb-0"
+      key={activity.id}
+    >
       <header className="grid gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <p className={tinyMetaClass}>
             {t('coursition.app.preview.activityNumber', { number: index + 1 })}
           </p>
         </div>
-        <h4 className="text-base font-bold leading-6 text-fg-primary">{heading}</h4>
+        <h4 className="text-base font-semibold leading-6 text-fg-primary">{heading}</h4>
         {hasText(prompt) ? (
           <MarkdownText className="text-sm leading-6 text-fg-primary" value={prompt} />
         ) : null}
-        {activitySkinType === null ? null : (
-          <div className="grid gap-1 rounded-md bg-base p-2">
-            <p className="text-sm font-semibold text-fg-primary">
-              {t(`coursition.app.preview.skins.${activitySkinType}.label`)}
-            </p>
-            <p className={mutedTextClass}>
-              {t(`coursition.app.preview.skins.${activitySkinType}.what`)}
-            </p>
-            <p className={tinyMetaClass}>
-              {t(`coursition.app.preview.skins.${activitySkinType}.why`)}
-            </p>
-          </div>
-        )}
       </header>
       {incompleteReason === null ? (
         renderEngine()
@@ -1799,9 +1816,25 @@ const unlinkedGeneratedActivitiesFor = (draft: CourseDraft) => {
   );
 };
 
-const normalizedPreviewText = (value: string) => value.replaceAll(/\s+/gu, ' ').trim();
+const normalizedPreviewText = (value: string) =>
+  normalizedGeneratedText(value).replaceAll(/\s+/gu, ' ').trim();
 
 const CourseContentView = ({ draft, t }: { draft: CourseDraft; t: Translate }) => {
+  const { sections } = draft.courseContent;
+  const [selectedSectionId, setSelectedSectionId] = useState(sections[0]?.id ?? '');
+  const sectionTabRefs = useRef(new Map<string, HTMLButtonElement>());
+  const activeSectionId = sections.some((section) => section.id === selectedSectionId)
+    ? selectedSectionId
+    : (sections[0]?.id ?? '');
+  const activeSectionIndex = sections.findIndex((section) => section.id === activeSectionId);
+  const selectAdjacentSection = (offset: -1 | 1) => {
+    const section = sections[activeSectionIndex + offset];
+    if (section === undefined) {
+      return;
+    }
+    setSelectedSectionId(section.id);
+    globalThis.requestAnimationFrame(() => sectionTabRefs.current.get(section.id)?.focus());
+  };
   const generatedActivitiesById = new Map(
     draft.learningBlueprint.generatedActivities.map((activity) => [activity.id, activity]),
   );
@@ -1810,57 +1843,116 @@ const CourseContentView = ({ draft, t }: { draft: CourseDraft; t: Translate }) =
   );
 
   return (
-    <div className="grid gap-6">
-      {draft.courseContent.sections.map((section, sectionIndex) => (
-        <section
-          className="grid gap-4 border-t border-border-primary pt-4 first:border-t-0 first:pt-0"
-          key={section.id}
-        >
-          <header className="grid gap-2">
-            <p className={tinyMetaClass}>
-              {t('coursition.app.courseContent.section')} {sectionIndex + 1}
-            </p>
-            <h3 className="text-lg font-bold text-fg-primary">{section.title}</h3>
-            <MarkdownText className="text-sm leading-6 text-fg-primary" value={section.summary} />
-          </header>
-          <div className="grid gap-4">
-            {section.blocks.map((block) => {
-              const activity =
-                block.type === 'interactive_activity' && block.activityId !== undefined
-                  ? generatedActivitiesById.get(block.activityId)
-                  : undefined;
-              if (activity !== undefined) {
-                return (
-                  <ActivityPreviewCard
-                    activity={activity}
-                    draftId={draft.id}
-                    index={activityIndexById.get(activity.id) ?? 0}
-                    key={block.id}
-                    t={t}
-                  />
-                );
+    <Tabs
+      className="min-w-0"
+      onValueChange={setSelectedSectionId}
+      size="sm"
+      value={activeSectionId}
+      variant="line"
+    >
+      <div className="coursition-section-tabs">
+        <Button
+          aria-label={t('coursition.app.courseContent.previousSection')}
+          className="coursition-tab-scroll-button"
+          disabled={activeSectionIndex <= 0}
+          icon="token-icon-chevron-left"
+          onClick={() => selectAdjacentSection(-1)}
+          size="sm"
+          theme="light"
+          type="button"
+          variant="primary"
+        />
+        <Tabs.List className="coursition-section-tab-list">
+          {sections.map((section, sectionIndex) => (
+            <Tabs.Trigger
+              className="coursition-section-tab-trigger"
+              key={section.id}
+              onFocus={(event) =>
+                event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'center' })
               }
+              ref={(node) => {
+                if (node === null) {
+                  sectionTabRefs.current.delete(section.id);
+                  return;
+                }
+                sectionTabRefs.current.set(section.id, node);
+              }}
+              value={section.id}
+            >
+              {sectionIndex + 1}. {section.title}
+            </Tabs.Trigger>
+          ))}
+          <Tabs.Indicator />
+        </Tabs.List>
+        <Button
+          aria-label={t('coursition.app.courseContent.nextSection')}
+          className="coursition-tab-scroll-button"
+          disabled={activeSectionIndex >= sections.length - 1}
+          icon="token-icon-chevron-right"
+          onClick={() => selectAdjacentSection(1)}
+          size="sm"
+          theme="light"
+          type="button"
+          variant="primary"
+        />
+      </div>
+      {sections.map((section, sectionIndex) => (
+        <Tabs.Content className="pt-8" key={section.id} value={section.id}>
+          <section className={`${readingColumnClass} grid gap-7`}>
+            <header className="grid gap-3 border-b border-border-primary pb-6">
+              <p className={tinyMetaClass}>
+                {t('coursition.app.courseContent.section')} {sectionIndex + 1}
+              </p>
+              <h3 className="text-balance text-xl font-semibold tracking-tight text-fg-primary">
+                {section.title}
+              </h3>
+              <MarkdownText
+                className="text-base leading-7 text-fg-secondary sm:text-sm sm:leading-6"
+                value={section.summary}
+              />
+            </header>
+            <div className="grid gap-7">
+              {section.blocks.map((block) => {
+                const activity =
+                  block.type === 'interactive_activity' && block.activityId !== undefined
+                    ? generatedActivitiesById.get(block.activityId)
+                    : undefined;
+                if (activity !== undefined) {
+                  return (
+                    <ActivityPreviewCard
+                      activity={activity}
+                      draftId={draft.id}
+                      index={activityIndexById.get(activity.id) ?? 0}
+                      key={block.id}
+                      t={t}
+                    />
+                  );
+                }
 
-              const body = contentBlockBody(block);
-              if (
-                normalizedPreviewText(body) === normalizedPreviewText(section.summary) &&
-                section.blocks.findIndex((candidate) => candidate.id === block.id) === 0
-              ) {
-                return null;
-              }
-              return (
-                <article className="grid gap-2" key={block.id}>
-                  <h4 className="text-base font-bold text-fg-primary">
-                    {t(`coursition.app.blockTypes.${block.type}`)}
-                  </h4>
-                  <MarkdownText className="text-sm leading-6 text-fg-primary" value={body} />
-                </article>
-              );
-            })}
-          </div>
-        </section>
+                const body = contentBlockBody(block);
+                if (
+                  normalizedPreviewText(body) === normalizedPreviewText(section.summary) &&
+                  section.blocks.findIndex((candidate) => candidate.id === block.id) === 0
+                ) {
+                  return null;
+                }
+                return (
+                  <article className="grid gap-2" key={block.id}>
+                    <h4 className="text-base font-semibold text-fg-primary">
+                      {t(`coursition.app.blockTypes.${block.type}`)}
+                    </h4>
+                    <MarkdownText
+                      className="text-base leading-7 text-fg-primary sm:text-sm sm:leading-6"
+                      value={body}
+                    />
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        </Tabs.Content>
       ))}
-    </div>
+    </Tabs>
   );
 };
 
@@ -1868,11 +1960,11 @@ const UnlinkedGeneratedActivitiesView = ({ draft, t }: { draft: CourseDraft; t: 
   const unlinkedActivities = unlinkedGeneratedActivitiesFor(draft);
   if (unlinkedActivities.length > 0) {
     return (
-      <section className="grid gap-3">
-        <h3 className="text-lg font-bold text-fg-primary">
+      <section className={`${readingColumnClass} grid gap-4 border-t border-border-primary pt-8`}>
+        <h3 className="text-lg font-semibold text-fg-primary">
           {t('coursition.app.preview.activities')}
         </h3>
-        <div className="grid gap-3">
+        <div>
           {unlinkedActivities.map((activity, index) => (
             <ActivityPreviewCard
               activity={activity}
@@ -1889,8 +1981,8 @@ const UnlinkedGeneratedActivitiesView = ({ draft, t }: { draft: CourseDraft; t: 
 
   if (draft.learningBlueprint.generatedActivities.length === 0) {
     return (
-      <section className="grid gap-3">
-        <h3 className="text-lg font-bold text-fg-primary">
+      <section className={`${readingColumnClass} grid gap-3 border-t border-border-primary pt-8`}>
+        <h3 className="text-lg font-semibold text-fg-primary">
           {t('coursition.app.preview.activities')}
         </h3>
         <p className={mutedTextClass}>{t('coursition.app.preview.noActivities')}</p>
@@ -1910,18 +2002,18 @@ const ReviewView = ({
   runWorkflow: WorkflowRunner;
   t: Translate;
 }) => (
-  <section className="grid gap-3">
-    <h3 className="text-xl font-bold text-fg-primary">{t('coursition.app.review.title')}</h3>
+  <section className={`${readingColumnClass} grid gap-4 border-t border-border-primary pt-8`}>
+    <h3 className="text-xl font-semibold text-fg-primary">{t('coursition.app.review.title')}</h3>
     {draft.findings.length === 0 ? (
       <p className={mutedTextClass}>{t('coursition.app.review.empty')}</p>
     ) : (
-      <div className="grid gap-2">
+      <div className={editorialListClass}>
         {draft.findings.map((finding) => (
-          <article className="grid gap-2 rounded-md bg-fill-base p-3" key={finding.id}>
+          <article className="grid gap-2 py-5 first:pt-0 last:pb-0" key={finding.id}>
             <p className={tinyMetaClass}>
               {t(`coursition.app.review.severity.${finding.severity}`)}
             </p>
-            <h4 className="text-base font-bold text-fg-primary">{finding.title}</h4>
+            <h4 className="text-base font-semibold text-fg-primary">{finding.title}</h4>
             <p className={mutedTextClass}>{finding.detail}</p>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -1934,7 +2026,7 @@ const ReviewView = ({
                   })
                 }
                 type="button"
-                variant="secondary"
+                variant="primary"
               >
                 {t('coursition.app.review.resolve')}
               </Button>
@@ -1948,7 +2040,8 @@ const ReviewView = ({
                   })
                 }
                 type="button"
-                variant="secondary"
+                variant="primary"
+                theme="light"
               >
                 {t('coursition.app.review.dismiss')}
               </Button>
@@ -1962,49 +2055,147 @@ const ReviewView = ({
 
 // eslint-disable-next-line complexity -- The active course-studio orchestrator still owns routing, forms, and generation state until the next component split.
 export const CoursitionWorkflowApp = ({
+  authMode = null,
   initialRoute = null,
-  initialSessionUser = null,
+  initialSessionUser,
   initialSnapshot = null,
   language,
+  onSessionUserChange,
+  routeKind,
   t,
 }: CoursitionWorkflowAppProps) => {
   const navigate = useNavigate();
   const toast = useToast();
-  const [sessionUser, setSessionUser] = useState<SessionUser | null>(initialSessionUser);
-  const [snapshot, setSnapshot] = useState<WorkflowSnapshot | null>(initialSnapshot);
-  const [authMode, setAuthMode] = useState<AuthMode>('signIn');
+  const requestedSnapshotRouteKey = snapshotRouteKeyFor(routeKind, initialRoute);
+  const isInitialSessionExplicit = initialSessionUser !== undefined;
+  const initialSessionState = initialSessionStateFor({
+    cachedSessionUser: cachedSessionUserFor(),
+    initialSessionUser,
+    sessionProvided: isInitialSessionExplicit,
+  });
+  const initialRuntimeSessionUser = initialSessionState.user;
+  const cachedRuntimeSnapshot = cachedSnapshotFor(
+    initialRuntimeSessionUser,
+    requestedSnapshotRouteKey,
+  );
+  const initialRuntimeSnapshot = cachedRuntimeSnapshot ?? initialSnapshot;
+  const initialRuntimeDraft = initialRuntimeSnapshot?.draft ?? null;
+  const initialTransientDraft =
+    cachedTransientDraftFor(initialRuntimeSessionUser, initialRuntimeDraft) ??
+    (initialRuntimeDraft === null
+      ? null
+      : transientDraftStateFor(initialRuntimeDraft, normalizedGeneratedText));
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(initialRuntimeSessionUser);
+  const [isSessionResolved, setIsSessionResolved] = useState(initialSessionState.isResolved);
+  const [snapshot, setSnapshot] = useState<WorkflowSnapshot | null>(initialRuntimeSnapshot);
+  const [loadedSnapshotRouteKey, setLoadedSnapshotRouteKey] = useState<string | null>(
+    initialRuntimeSnapshot === null ? null : requestedSnapshotRouteKey,
+  );
+  const [optimisticStep, setOptimisticStep] = useState<DraftStep | null>(null);
+  const [snapshotLoadError, setSnapshotLoadError] = useState<SnapshotLoadError | null>(null);
+  const [sessionBootstrapError, setSessionBootstrapError] = useState<string | null>(null);
+  const [sessionBootstrapAttempt, setSessionBootstrapAttempt] = useState(0);
   const [authEmail, setAuthEmail] = useState('');
   const [authName, setAuthName] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [busyActions, setBusyActions] = useState<readonly BusyAction[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
-  const [courseTitle, setCourseTitle] = useState(initialSnapshot?.draft?.title ?? '');
+  const [autosaveFeedback, setAutosaveFeedback] = useState<AutosaveFeedback>('idle');
+  const [courseTitleBuffer, setCourseTitleBuffer] = useState<EditBuffer<string>>(
+    initialTransientDraft?.courseTitle ?? editBuffer('', 0),
+  );
   const [draftTitle, setDraftTitle] = useState('');
   const [sourceType, setSourceType] = useState<SourceType>('notes');
-  const [sourceName, setSourceName] = useState('');
-  const [sourceContent, setSourceContent] = useState('');
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [sourceFormDrafts, setSourceFormDrafts] = useState<SourceFormDrafts>(
+    initialTransientDraft?.sources ?? emptySourceFormDrafts,
+  );
+  const sourceFormDraftsRef = useRef(sourceFormDrafts);
+  const [fileInputResetKey, setFileInputResetKey] = useState(0);
+  const [fileSourceFeedback, setFileSourceFeedback] = useState<FileSourceFeedback | null>(null);
   const [expandedSourcePreviewIds, setExpandedSourcePreviewIds] = useState<readonly string[]>([]);
-  const [preparation, setPreparation] = useState<CoursePreparation>(
-    initialSnapshot?.draft?.learningBlueprint.coursePreparation ?? emptyCoursePreparation(language),
+  const [preparationBuffer, setPreparationBuffer] = useState<EditBuffer<CoursePreparation>>(
+    initialTransientDraft?.preparation ?? editBuffer(emptyCoursePreparation(language), 0),
+  );
+  const [objectiveEditBuffers, setObjectiveEditBuffers] = useState<
+    Readonly<Record<string, EditBuffer<ObjectiveEditValue>>>
+  >(initialTransientDraft?.objectives ?? {});
+  const [activityBriefEditBuffers, setActivityBriefEditBuffers] = useState<
+    Readonly<Record<string, EditBuffer<ActivityBriefEditValue>>>
+  >(initialTransientDraft?.activityBriefs ?? {});
+  const [transientStateKey, setTransientStateKey] = useState<string | null>(
+    initialRuntimeSessionUser === null || initialRuntimeDraft === null
+      ? null
+      : transientDraftCacheKey(initialRuntimeSessionUser.id, initialRuntimeDraft.id),
   );
 
   const draft = snapshot?.draft ?? null;
+  const courseTitle = courseTitleBuffer.value;
+  const preparation = preparationBuffer.value;
   const visibleSources = useMemo(() => activeSources(draft), [draft]);
-  const expandedSourcePreviewIdSet = useMemo(
-    () => new Set(expandedSourcePreviewIds),
-    [expandedSourcePreviewIds],
-  );
-  const activeStep = draft?.step ?? initialRoute?.step ?? 'mode';
-  const currentNavigationIndex = Math.max(0, navigationSteps.indexOf(activeStep));
-  const activeNavigationStepRef = useRef<HTMLDivElement>(null);
-  const courseTitleAutosaveSequenceRef = useRef(0);
+  const expandedSourcePreviewIdSet = useMemo(() => {
+    const visibleSourceIds = new Set(visibleSources.map((source) => source.id));
+    return new Set(expandedSourcePreviewIds.filter((sourceId) => visibleSourceIds.has(sourceId)));
+  }, [expandedSourcePreviewIds, visibleSources]);
+  const routeStep =
+    initialRoute !== null && (draft === null || initialRoute.draftId === draft.id)
+      ? initialRoute.step
+      : (draft?.step ?? 'mode');
+  const activeStep = optimisticStep ?? routeStep;
+  const navigationDraft = draft === null ? null : { ...draft, step: activeStep };
+
+  useEffect(() => {
+    if (optimisticStep !== routeStep) {
+      return;
+    }
+    let cancelled = false;
+    globalThis.queueMicrotask(() => {
+      if (!cancelled) {
+        setOptimisticStep((currentStep) => (currentStep === routeStep ? null : currentStep));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [optimisticStep, routeStep]);
+
+  useLayoutEffect(() => {
+    sourceFormDraftsRef.current = sourceFormDrafts;
+  }, [sourceFormDrafts]);
+  const currentWorkflowStepIndex = Math.max(0, workflowStepIndex(activeStep));
+  const courseNavigationRef = useRef<HTMLElement>(null);
   const lastSubmittedCourseTitleRef = useRef<string | null>(null);
-  const objectiveAutosaveSequenceRef = useRef(new Map<string, number>());
   const lastSubmittedObjectiveKeyRef = useRef(new Map<string, string>());
   const lastSubmittedActivityBriefKeyRef = useRef(new Map<string, string>());
-  const preparationAutosaveSequenceRef = useRef(0);
   const lastSubmittedPreparationKeyRef = useRef<string | null>(null);
+  const workflowActionGateRef = useRef(new ExclusiveActionGate());
+  const sessionBootstrapStartedRef = useRef(false);
+  const sessionRedirectStartedRef = useRef(false);
+  const sessionUserIdRef = useRef<string | null>(initialRuntimeSessionUser?.id ?? null);
+  const coordinator = workflowRequestCoordinatorForBrowser({
+    initialRouteKey: requestedSnapshotRouteKey,
+    initialSessionId: initialRuntimeSessionUser?.id ?? null,
+    initialSnapshot: initialRuntimeSnapshot,
+    onMutationCommitted: ({ draftId, revision }) => {
+      const runtimeCache = browserRuntimeCacheFor();
+      const ownerId = sessionUserIdRef.current;
+      if (ownerId === null || runtimeCache?.channel === null || runtimeCache === null) {
+        return;
+      }
+      runtimeCache.channel.postMessage({
+        clientId: runtimeCache.clientId,
+        draftId,
+        kind: 'mutation-committed',
+        ownerId,
+        revision,
+      });
+    },
+    transport: {
+      request: (action, options) =>
+        Effect.runPromise(
+          workflowRequestEffect(action, t('coursition.app.errors.generic'), options.signal),
+        ),
+    },
+  });
   const busyAction = busyActions.at(-1) ?? null;
   const isBusyAction = (...actions: readonly BusyAction[]) =>
     actions.some((action) => busyActions.includes(action));
@@ -2022,15 +2213,21 @@ export const CoursitionWorkflowApp = ({
     });
   };
   const isAuthBusy = isBusyAction('auth');
+  const isAdvanceDraftBusy = isBusyAction('advanceDraft');
+  const isAutosaveBusy = isBusyAction(
+    'updateActivityBrief',
+    'updateCoursePreparation',
+    'updateDraftTitle',
+    'updateLearningObjective',
+  );
   const isCreateDraftBusy = isBusyAction('createDraft');
   const isDraftListBusy = isBusyAction('selectDraft', 'deleteDraft');
   const isRouteActionBusy = isBusyAction(
+    'advanceDraft',
     'deleteDraft',
     'generateCourse',
     'generateActivities',
     'generateCourseContent',
-    'goToStep',
-    'openPreview',
     'selectDraft',
     'setMode',
   );
@@ -2041,6 +2238,13 @@ export const CoursitionWorkflowApp = ({
   const isObjectiveGenerationBusy = isBusyAction('generateLearningBlueprint');
   const isActivityGenerationBusy = isBusyAction('generateActivities');
   const isCourseContentGenerationBusy = isBusyAction('generateCourseContent');
+  const activeAuthMode = authMode ?? 'signIn';
+  const sessionRedirectPath = sessionRedirectPathFor({
+    isSessionResolved,
+    language,
+    routeKind,
+    sessionUser,
+  });
 
   useEffect(() => {
     if (notice === null) {
@@ -2063,32 +2267,156 @@ export const CoursitionWorkflowApp = ({
     };
   }, [notice, toast]);
 
-  useEffect(() => {
-    setSessionUser(initialSessionUser);
-  }, [initialSessionUser]);
+  useLayoutEffect(() => {
+    const syncSnapshot = () => {
+      const nextSnapshot = coordinator.snapshot;
+      setSnapshot(nextSnapshot);
+      if (nextSnapshot !== null) {
+        cacheSnapshot(sessionUser, nextSnapshot);
+      }
+    };
+    syncSnapshot();
+    return coordinator.subscribe(syncSnapshot);
+  }, [coordinator, sessionUser]);
 
+  /* eslint-disable react-compiler/react-compiler -- Server snapshots and per-route transient drafts intentionally reconcile into controlled form state. */
   useEffect(() => {
-    setSnapshot(initialSnapshot);
-    if (initialSnapshot?.draft !== undefined && initialSnapshot.draft !== null) {
-      setCourseTitle(initialSnapshot.draft.title);
-      setPreparation(initialSnapshot.draft.learningBlueprint.coursePreparation);
+    if (sessionUser === null || draft === null) {
+      setTransientStateKey(null);
+      return;
     }
-  }, [initialSnapshot]);
-
-  useEffect(() => {
-    const visibleSourceIds = new Set(visibleSources.map((source) => source.id));
-    setExpandedSourcePreviewIds((currentIds) =>
-      currentIds.filter((sourceId) => visibleSourceIds.has(sourceId)),
+    const nextStateKey = transientDraftCacheKey(sessionUser.id, draft.id);
+    if (nextStateKey !== transientStateKey) {
+      const nextState =
+        cachedTransientDraftFor(sessionUser, draft) ??
+        transientDraftStateFor(draft, normalizedGeneratedText);
+      setCourseTitleBuffer(nextState.courseTitle);
+      setPreparationBuffer(nextState.preparation);
+      setSourceFormDrafts(nextState.sources);
+      setObjectiveEditBuffers(nextState.objectives);
+      setActivityBriefEditBuffers(nextState.activityBriefs);
+      setTransientStateKey(nextStateKey);
+      return;
+    }
+    setCourseTitleBuffer((current) => reconcileEditBuffer(current, draft.title, draft.revision));
+    setPreparationBuffer((current) =>
+      reconcileEditBuffer(
+        current,
+        draft.learningBlueprint.coursePreparation,
+        draft.revision,
+        (left, right) => coursePreparationKey(left) === coursePreparationKey(right),
+      ),
     );
-  }, [visibleSources]);
+    setObjectiveEditBuffers((current) =>
+      Object.fromEntries(
+        draft.learningBlueprint.objectives.map((objective) => {
+          const serverValue = {
+            capability: normalizedGeneratedText(objective.capability),
+            title: objective.title,
+          };
+          const existing = current[objective.id] ?? editBuffer(serverValue, draft.revision);
+          return [
+            objective.id,
+            reconcileEditBuffer(
+              existing,
+              serverValue,
+              draft.revision,
+              (left, right) =>
+                objectiveEditKey(left.title, left.capability) ===
+                objectiveEditKey(right.title, right.capability),
+            ),
+          ];
+        }),
+      ),
+    );
+    setActivityBriefEditBuffers((current) =>
+      Object.fromEntries(
+        draft.learningBlueprint.activityBriefs.map((brief) => {
+          const serverValue: ActivityBriefEditValue = {
+            feedbackGuidance: normalizedGeneratedText(brief.feedbackGuidance),
+            instructions: normalizedGeneratedText(brief.instructions),
+            learnerAction: normalizedGeneratedText(brief.learnerAction),
+            successCriteria: normalizedGeneratedText(brief.successCriteria),
+            title: brief.title,
+            type: brief.type,
+          };
+          const existing = current[brief.id] ?? editBuffer(serverValue, draft.revision);
+          return [
+            brief.id,
+            reconcileEditBuffer(
+              existing,
+              serverValue,
+              draft.revision,
+              (left, right) => activityBriefEditKey(left) === activityBriefEditKey(right),
+            ),
+          ];
+        }),
+      ),
+    );
+  }, [draft, sessionUser, transientStateKey]);
+  /* eslint-enable react-compiler/react-compiler */
 
   useEffect(() => {
-    activeNavigationStepRef.current?.scrollIntoView({
+    if (
+      sessionUser === null ||
+      draft === null ||
+      transientStateKey !== transientDraftCacheKey(sessionUser.id, draft.id)
+    ) {
+      return;
+    }
+    cacheTransientDraft(sessionUser, draft, {
+      activityBriefs: activityBriefEditBuffers,
+      courseTitle: courseTitleBuffer,
+      objectives: objectiveEditBuffers,
+      preparation: preparationBuffer,
+      sources: sourceFormDrafts,
+    });
+  }, [
+    activityBriefEditBuffers,
+    courseTitleBuffer,
+    draft,
+    objectiveEditBuffers,
+    preparationBuffer,
+    sessionUser,
+    sourceFormDrafts,
+    transientStateKey,
+  ]);
+
+  useEffect(() => {
+    const runtimeCache = browserRuntimeCacheFor();
+    if (runtimeCache !== null) {
+      if (runtimeCache.sessionUser?.id !== sessionUser?.id) {
+        runtimeCache.snapshot = null;
+      }
+      runtimeCache.sessionUser = sessionUser;
+    }
+    sessionUserIdRef.current = sessionUser?.id ?? null;
+    coordinator.setSession(sessionUser?.id ?? null);
+    onSessionUserChange?.(sessionUser);
+  }, [coordinator, onSessionUserChange, sessionUser]);
+
+  useLayoutEffect(() => {
+    if (cachedRuntimeSnapshot === null && initialSnapshot !== null) {
+      cacheSnapshot(initialRuntimeSessionUser, initialSnapshot);
+      coordinator.setSession(initialRuntimeSessionUser?.id ?? null, initialSnapshot);
+    }
+  }, [cachedRuntimeSnapshot, coordinator, initialRuntimeSessionUser, initialSnapshot]);
+
+  useEffect(() => {
+    if (sessionRedirectPath === null || sessionRedirectStartedRef.current) {
+      return;
+    }
+    sessionRedirectStartedRef.current = true;
+    globalThis.location.replace(sessionRedirectPath);
+  }, [sessionRedirectPath]);
+
+  useEffect(() => {
+    courseNavigationRef.current?.querySelector('[aria-current="step"]')?.scrollIntoView({
       behavior: 'auto',
       block: 'nearest',
       inline: 'center',
     });
-  }, [currentNavigationIndex]);
+  }, [currentWorkflowStepIndex, draft?.id]);
 
   const toggleSourcePreview = (sourceId: string) => {
     setExpandedSourcePreviewIds((currentIds) =>
@@ -2119,30 +2447,97 @@ export const CoursitionWorkflowApp = ({
       shouldSyncPreparation = true,
       shouldSyncCourseTitle = true,
     ) => {
-      setSnapshot(nextSnapshot);
       if (nextSnapshot.draft !== null) {
         if (shouldSyncCourseTitle) {
-          setCourseTitle(nextSnapshot.draft.title);
+          setCourseTitleBuffer((current) =>
+            reconcileEditBuffer(
+              current,
+              nextSnapshot.draft?.title ?? '',
+              nextSnapshot.draft?.revision ?? 0,
+            ),
+          );
         }
         if (shouldSyncPreparation) {
-          setPreparation(nextSnapshot.draft.learningBlueprint.coursePreparation);
+          setPreparationBuffer((current) =>
+            reconcileEditBuffer(
+              current,
+              nextSnapshot.draft?.learningBlueprint.coursePreparation ??
+                emptyCoursePreparation(language),
+              nextSnapshot.draft?.revision ?? 0,
+              (left, right) => coursePreparationKey(left) === coursePreparationKey(right),
+            ),
+          );
         }
         if (shouldNavigate) {
+          setOptimisticStep(nextSnapshot.draft.step);
+          setLoadedSnapshotRouteKey(`${nextSnapshot.draft.id}:${nextSnapshot.draft.step}`);
           navigateTo(nextSnapshot.draft);
         }
       }
     },
-    [navigateTo],
+    [language, navigateTo],
   );
 
-  const runWorkflowEffect = (action: WorkflowAction, shouldNavigate = true) =>
-    Effect.gen(function* runWorkflowProgram() {
+  const requestIntent = (action: WorkflowActionIntent) => {
+    if (
+      action.action === 'getState' ||
+      action.action === 'getRouteState' ||
+      action.action === 'selectDraft'
+    ) {
+      const routeKey = requestedSnapshotRouteKey ?? coordinator.routeKey ?? 'dashboard';
+      return coordinator.read(action, routeKey);
+    }
+    return coordinator.mutate(action);
+  };
+
+  const handleUnauthorized = useCallback(() => {
+    const runtimeCache = browserRuntimeCacheFor();
+    if (runtimeCache !== null) {
+      const ownerId = sessionUser?.id ?? null;
+      if (ownerId !== null) {
+        runtimeCache.channel?.postMessage({
+          clientId: runtimeCache.clientId,
+          kind: 'session-invalidated',
+          ownerId,
+        });
+      }
+      runtimeCache.sessionUser = null;
+      runtimeCache.snapshot = null;
+    }
+    setSessionUser(null);
+    setIsSessionResolved(true);
+    globalThis.location.replace(authRoutePath(language, 'signIn'));
+  }, [language, sessionUser]);
+
+  const runWorkflowEffect = (action: WorkflowActionIntent, shouldNavigate = true) => {
+    let ownsActionLock = false;
+    return Effect.gen(function* runWorkflowProgram() {
+      const canRun = yield* Effect.sync(() => {
+        ownsActionLock = workflowActionGateRef.current.acquire(action.action);
+        return ownsActionLock;
+      });
+      if (!canRun) {
+        return null;
+      }
       yield* Effect.sync(() => {
         beginBusyAction(action.action);
       });
+      const pendingSavesSucceeded = yield* Effect.promise(() =>
+        coursitionPendingDraftSaves.flushAll(),
+      );
+      if (!pendingSavesSucceeded) {
+        return null;
+      }
       const previousDraft = snapshot?.draft ?? null;
       const resultExit = yield* Effect.exit(
-        workflowRequestEffect(action, t('coursition.app.errors.generic')),
+        Effect.tryPromise({
+          catch: (cause) =>
+            new CoursitionUiEffectError({
+              cause,
+              message: errorMessageFrom(cause, t('coursition.app.errors.generic')),
+            }),
+          try: () => requestIntent(action),
+        }),
       );
       if (Exit.isFailure(resultExit)) {
         yield* Effect.sync(() => {
@@ -2155,8 +2550,23 @@ export const CoursitionWorkflowApp = ({
         });
         return null;
       }
-      const result = resultExit.value;
-      yield* Effect.sync(() => applySnapshot(result, shouldNavigate));
+      const outcome = resultExit.value;
+      if (outcome.kind === 'unauthorized') {
+        yield* Effect.sync(handleUnauthorized);
+        return null;
+      }
+      if (outcome.kind === 'conflict') {
+        yield* Effect.sync(() => {
+          applySnapshot(outcome.snapshot, false);
+          setNotice(outcome.conflict.message);
+        });
+        return null;
+      }
+      if (outcome.kind === 'ignored') {
+        return null;
+      }
+      const result = outcome.snapshot;
+      yield* Effect.sync(() => applySnapshot(result, shouldNavigate && outcome.canNavigate));
       const failedRun = failedGenerationRunFor(previousDraft, result.draft, action.action);
       if (failedRun !== null) {
         yield* Effect.sync(() => {
@@ -2164,192 +2574,51 @@ export const CoursitionWorkflowApp = ({
         });
       }
       return result;
-    }).pipe(Effect.ensuring(Effect.sync(() => endBusyAction(action.action))));
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (!ownsActionLock) {
+            return;
+          }
+          workflowActionGateRef.current.release(action.action);
+          endBusyAction(action.action);
+        }),
+      ),
+    );
+  };
 
-  const runWorkflow = (action: WorkflowAction, shouldNavigate = true) => {
+  const runWorkflow = (action: WorkflowActionIntent, shouldNavigate = true) => {
     Effect.runFork(runWorkflowEffect(action, shouldNavigate));
   };
 
-  const runCourseTitleAutosave = useCallback(
-    (draftId: string, nextTitle: string) => {
-      const autosaveSequence = courseTitleAutosaveSequenceRef.current + 1;
-      courseTitleAutosaveSequenceRef.current = autosaveSequence;
-      Effect.runFork(
-        Effect.gen(function* courseTitleAutosaveProgram() {
-          const resultExit = yield* Effect.exit(
-            workflowRequestEffect(
-              {
-                action: 'updateDraftTitle',
-                draftId,
-                title: nextTitle,
-              },
-              t('coursition.app.errors.generic'),
-            ),
-          );
-          if (autosaveSequence !== courseTitleAutosaveSequenceRef.current) {
-            return;
-          }
-          if (Exit.isFailure(resultExit)) {
-            yield* Effect.sync(() => {
-              if (lastSubmittedCourseTitleRef.current === nextTitle) {
-                lastSubmittedCourseTitleRef.current = null;
-              }
-              setNotice(
-                errorMessageFrom(
-                  resultExit.cause.pipe(Cause.squash),
-                  t('coursition.app.errors.generic'),
-                ),
-              );
-            });
-            return;
-          }
-          yield* Effect.sync(() => applySnapshot(resultExit.value, false, true, false));
-        }),
-      );
-    },
-    [applySnapshot, t],
-  );
-
-  const saveCourseTitleOnBlur = () => {
-    if (draft === null) {
-      return;
-    }
-    const nextTitle = courseTitle.trim();
-    if (nextTitle.length === 0) {
-      setCourseTitle(draft.title);
-      setNotice(t('coursition.app.draft.titlePlaceholder'));
-      return;
-    }
-    if (nextTitle === draft.title) {
-      lastSubmittedCourseTitleRef.current = nextTitle;
-      setCourseTitle(nextTitle);
-      return;
-    }
-    if (nextTitle === lastSubmittedCourseTitleRef.current) {
-      setCourseTitle(nextTitle);
-      return;
-    }
-    lastSubmittedCourseTitleRef.current = nextTitle;
-    setCourseTitle(nextTitle);
-    runCourseTitleAutosave(draft.id, nextTitle);
-  };
-
-  const runPreparationAutosave = useCallback(
-    (draftId: string, nextPreparation: CoursePreparation, submittedPreparationKey: string) => {
-      const autosaveSequence = preparationAutosaveSequenceRef.current + 1;
-      preparationAutosaveSequenceRef.current = autosaveSequence;
-      Effect.runFork(
-        Effect.gen(function* preparationAutosaveProgram() {
-          const resultExit = yield* Effect.exit(
-            workflowRequestEffect(
-              {
-                action: 'updateCoursePreparation',
-                draftId,
-                preparation: nextPreparation,
-              },
-              t('coursition.app.errors.generic'),
-            ),
-          );
-          if (autosaveSequence !== preparationAutosaveSequenceRef.current) {
-            return;
-          }
-          if (Exit.isFailure(resultExit)) {
-            yield* Effect.sync(() => {
-              if (lastSubmittedPreparationKeyRef.current === submittedPreparationKey) {
-                lastSubmittedPreparationKeyRef.current = null;
-              }
-              setNotice(
-                errorMessageFrom(
-                  resultExit.cause.pipe(Cause.squash),
-                  t('coursition.app.errors.generic'),
-                ),
-              );
-            });
-            return;
-          }
-          yield* Effect.sync(() => applySnapshot(resultExit.value, false, false));
-        }),
-      );
-    },
-    [applySnapshot, t],
-  );
-
-  const savePreparationOnBlur = () => {
-    if (draft === null || activeStep !== 'preparation') {
-      return;
-    }
-    const savedPreparationKey = coursePreparationKey(draft.learningBlueprint.coursePreparation);
-    const localPreparationKey = coursePreparationKey(preparation);
-    if (localPreparationKey === savedPreparationKey) {
-      lastSubmittedPreparationKeyRef.current = localPreparationKey;
-      return;
-    }
-    if (localPreparationKey === lastSubmittedPreparationKeyRef.current) {
-      return;
-    }
-    lastSubmittedPreparationKeyRef.current = localPreparationKey;
-    runPreparationAutosave(draft.id, preparation, localPreparationKey);
-  };
-
-  const runObjectiveAutosave = useCallback(
-    (
-      draftId: string,
-      objectiveId: string,
-      title: string,
-      capability: string,
-      submittedObjectiveKey: string,
-    ) => {
-      const autosaveSequence = (objectiveAutosaveSequenceRef.current.get(objectiveId) ?? 0) + 1;
-      objectiveAutosaveSequenceRef.current.set(objectiveId, autosaveSequence);
-      Effect.runFork(
-        Effect.gen(function* objectiveAutosaveProgram() {
-          const resultExit = yield* Effect.exit(
-            workflowRequestEffect(
-              {
-                action: 'updateLearningObjective',
-                capability,
-                draftId,
-                objectiveId,
-                title,
-              },
-              t('coursition.app.errors.generic'),
-            ),
-          );
-          if (objectiveAutosaveSequenceRef.current.get(objectiveId) !== autosaveSequence) {
-            return;
-          }
-          if (Exit.isFailure(resultExit)) {
-            yield* Effect.sync(() => {
-              if (lastSubmittedObjectiveKeyRef.current.get(objectiveId) === submittedObjectiveKey) {
-                lastSubmittedObjectiveKeyRef.current.delete(objectiveId);
-              }
-              setNotice(
-                errorMessageFrom(
-                  resultExit.cause.pipe(Cause.squash),
-                  t('coursition.app.errors.generic'),
-                ),
-              );
-            });
-            return;
-          }
-          yield* Effect.sync(() => applySnapshot(resultExit.value, false));
-        }),
-      );
-    },
-    [applySnapshot, t],
-  );
-
-  const refreshSnapshot = useCallback(() => {
-    Effect.runFork(
-      Effect.gen(function* refreshSnapshotProgram() {
-        yield* Effect.sync(() => {
-          beginBusyAction('getState');
-        });
+  const commitAutosave = (
+    action: Extract<
+      WorkflowActionIntent,
+      {
+        action:
+          | 'updateActivityBrief'
+          | 'updateCoursePreparation'
+          | 'updateDraftTitle'
+          | 'updateLearningObjective';
+      }
+    >,
+  ): Promise<WorkflowSnapshot | null> =>
+    Effect.runPromise(
+      Effect.gen(function* commitAutosaveProgram() {
+        yield* Effect.sync(() => beginBusyAction(action.action));
         const resultExit = yield* Effect.exit(
-          workflowRequestEffect({ action: 'getState' }, t('coursition.app.errors.generic')),
+          Effect.tryPromise({
+            catch: (cause) =>
+              new CoursitionUiEffectError({
+                cause,
+                message: errorMessageFrom(cause, t('coursition.app.errors.generic')),
+              }),
+            try: () => coordinator.mutate(action),
+          }),
         );
         if (Exit.isFailure(resultExit)) {
           yield* Effect.sync(() => {
+            setAutosaveFeedback('error');
             setNotice(
               errorMessageFrom(
                 resultExit.cause.pipe(Cause.squash),
@@ -2357,39 +2626,298 @@ export const CoursitionWorkflowApp = ({
               ),
             );
           });
+          return null;
+        }
+        const outcome = resultExit.value;
+        if (outcome.kind === 'unauthorized') {
+          yield* Effect.sync(handleUnauthorized);
+          return null;
+        }
+        if (outcome.kind === 'conflict') {
+          yield* Effect.sync(() => {
+            setAutosaveFeedback('error');
+            applySnapshot(outcome.snapshot, false);
+            setNotice(outcome.conflict.message);
+          });
+          return null;
+        }
+        if (outcome.kind !== 'applied') {
+          yield* Effect.sync(() => setAutosaveFeedback('error'));
+          return null;
+        }
+        yield* Effect.sync(() => {
+          applySnapshot(outcome.snapshot, false);
+          setAutosaveFeedback('saved');
+        });
+        return outcome.snapshot;
+      }).pipe(Effect.ensuring(Effect.sync(() => endBusyAction(action.action)))),
+    );
+
+  const scheduleCourseTitleAutosave = (draftId: string, buffer: EditBuffer<string>) => {
+    const title = buffer.value.trim();
+    coursitionPendingDraftSaves.schedule(
+      `${draftId}:title`,
+      () => {
+        lastSubmittedCourseTitleRef.current = title;
+        return commitAutosave({ action: 'updateDraftTitle', draftId, title }).then((result) => {
+          if (result?.draft === null || result?.draft === undefined) {
+            lastSubmittedCourseTitleRef.current = null;
+            return false;
+          }
+          setCourseTitleBuffer((current) =>
+            commitEditBuffer(
+              current,
+              buffer.version,
+              result.draft?.title ?? title,
+              result.revision,
+            ),
+          );
+          return true;
+        });
+      },
+      450,
+    );
+  };
+
+  const updateCourseTitle = (value: string) => {
+    if (draft === null) {
+      return;
+    }
+    const nextBuffer = updateEditBuffer(courseTitleBuffer, value);
+    setCourseTitleBuffer(nextBuffer);
+    setAutosaveFeedback('dirty');
+    if (value.trim().length > 0) {
+      scheduleCourseTitleAutosave(draft.id, nextBuffer);
+    }
+  };
+
+  const saveCourseTitleOnBlur = () => {
+    if (draft === null) {
+      return;
+    }
+    const nextTitle = courseTitle.trim();
+    if (nextTitle.length === 0) {
+      setCourseTitleBuffer(editBuffer(draft.title, draft.revision));
+      setNotice(t('coursition.app.draft.titlePlaceholder'));
+      return;
+    }
+    const nextBuffer =
+      nextTitle === courseTitle
+        ? courseTitleBuffer
+        : updateEditBuffer(courseTitleBuffer, nextTitle);
+    setCourseTitleBuffer(nextBuffer);
+    if (nextBuffer.dirty) {
+      scheduleCourseTitleAutosave(draft.id, nextBuffer);
+      void coursitionPendingDraftSaves.flush(`${draft.id}:title`);
+    }
+  };
+
+  const schedulePreparationAutosave = (draftId: string, buffer: EditBuffer<CoursePreparation>) => {
+    const submittedPreparationKey = coursePreparationKey(buffer.value);
+    if (lastSubmittedPreparationKeyRef.current === submittedPreparationKey) {
+      return;
+    }
+    coursitionPendingDraftSaves.schedule(
+      `${draftId}:preparation`,
+      () => {
+        lastSubmittedPreparationKeyRef.current = submittedPreparationKey;
+        return commitAutosave({
+          action: 'updateCoursePreparation',
+          draftId,
+          preparation: buffer.value,
+        }).then((result) => {
+          if (result?.draft === null || result?.draft === undefined) {
+            lastSubmittedPreparationKeyRef.current = null;
+            return false;
+          }
+          const committedPreparation =
+            result.draft?.learningBlueprint.coursePreparation ?? buffer.value;
+          setPreparationBuffer((current) =>
+            coursePreparationKey(current.value) === submittedPreparationKey
+              ? editBuffer(committedPreparation, result.revision)
+              : commitEditBuffer(current, buffer.version, committedPreparation, result.revision),
+          );
+          return true;
+        });
+      },
+      650,
+    );
+  };
+
+  const savePreparationOnPanelLeave = (event: FocusEvent<HTMLDivElement>) => {
+    if (!focusLeftContainer(event.currentTarget, event.relatedTarget)) {
+      return;
+    }
+    if (draft !== null && preparationBuffer.dirty) {
+      schedulePreparationAutosave(draft.id, preparationBuffer);
+      void coursitionPendingDraftSaves.flush(`${draft.id}:preparation`);
+    }
+  };
+
+  const refreshSnapshot = useCallback(() => {
+    Effect.runFork(
+      Effect.gen(function* refreshSnapshotProgram() {
+        yield* Effect.sync(() => {
+          beginBusyAction('getState');
+          setSnapshotLoadError(null);
+        });
+        const pendingSavesSucceeded = yield* Effect.promise(() =>
+          coursitionPendingDraftSaves.flushAll(),
+        );
+        if (!pendingSavesSucceeded) {
           return;
         }
-        yield* Effect.sync(() => applySnapshot(resultExit.value, false));
+        const routeStateAction: Extract<
+          WorkflowActionIntent,
+          { action: 'getRouteState' | 'getState' }
+        > =
+          initialRoute === null
+            ? { action: 'getState' }
+            : {
+                action: 'getRouteState',
+                draftId: initialRoute.draftId,
+                step: initialRoute.step,
+              };
+        const resultExit = yield* Effect.exit(
+          Effect.tryPromise({
+            catch: (cause) =>
+              new CoursitionUiEffectError({
+                cause,
+                message: errorMessageFrom(cause, t('coursition.app.errors.generic')),
+              }),
+            try: () =>
+              coordinator.read(
+                routeStateAction,
+                requestedSnapshotRouteKey ?? coordinator.routeKey ?? 'dashboard',
+              ),
+          }),
+        );
+        if (Exit.isFailure(resultExit)) {
+          yield* Effect.sync(() => {
+            const message = errorMessageFrom(
+              resultExit.cause.pipe(Cause.squash),
+              t('coursition.app.errors.generic'),
+            );
+            setNotice(message);
+            if (requestedSnapshotRouteKey !== null) {
+              setSnapshotLoadError({ message, routeKey: requestedSnapshotRouteKey });
+            }
+          });
+          return;
+        }
+        const outcome = resultExit.value;
+        if (outcome.kind === 'unauthorized') {
+          yield* Effect.sync(handleUnauthorized);
+          return;
+        }
+        if (outcome.kind === 'ignored') {
+          return;
+        }
+        if (outcome.kind === 'conflict') {
+          yield* Effect.sync(() => setNotice(outcome.conflict.message));
+          return;
+        }
+        const nextSnapshot = outcome.snapshot;
+        if (
+          initialRoute !== null &&
+          nextSnapshot.draft !== null &&
+          nextSnapshot.draft.step !== initialRoute.step
+        ) {
+          const canonicalDraft = nextSnapshot.draft;
+          yield* Effect.sync(() => {
+            applySnapshot(nextSnapshot, false);
+            setLoadedSnapshotRouteKey(`${canonicalDraft.id}:${canonicalDraft.step}`);
+            setSnapshotLoadError(null);
+            void navigate({
+              params: {
+                courseId: canonicalDraft.id,
+                lang: language,
+                step: courseRouteStepSlug(language, canonicalDraft.step),
+              },
+              replace: true,
+              to: courseRoutePattern(language),
+            });
+          });
+          return;
+        }
+        yield* Effect.sync(() => {
+          applySnapshot(nextSnapshot, false);
+          setLoadedSnapshotRouteKey(requestedSnapshotRouteKey);
+          setSnapshotLoadError(null);
+        });
+        // eslint-disable-next-line react-compiler/react-compiler -- The guarded bootstrap owns this Effect callback's lifecycle.
       }).pipe(Effect.ensuring(Effect.sync(() => endBusyAction('getState')))),
     );
-  }, [applySnapshot, t]);
+    // The refs and Effect callbacks intentionally capture the current route and translator.
+    // eslint-disable-next-line react-compiler/react-compiler -- The route bootstrap must remain stable until its guarded effect runs.
+  }, [
+    applySnapshot,
+    coordinator,
+    handleUnauthorized,
+    initialRoute,
+    language,
+    navigate,
+    requestedSnapshotRouteKey,
+    t,
+  ]);
+
+  useEffect(() => {
+    const runtimeCache = browserRuntimeCacheFor();
+    const routeKey = requestedSnapshotRouteKey;
+    if (runtimeCache === null || sessionUser === null || routeKey === null) {
+      return;
+    }
+    const revalidate = () => {
+      if (
+        shouldRevalidateWorkflow({
+          isReading: coordinator.isReadingRoute(routeKey),
+          isVisible: document.visibilityState === 'visible',
+          routeKey,
+          sessionId: sessionUser.id,
+        })
+      ) {
+        refreshSnapshot();
+      }
+    };
+    const onFocus = () => revalidate();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        revalidate();
+      }
+    };
+    const onChannelMessage = (event: MessageEvent<unknown>) => {
+      const invalidationKind = workflowInvalidationKindForSession(event.data, {
+        clientId: runtimeCache.clientId,
+        ownerId: sessionUser.id,
+      });
+      if (invalidationKind === 'session-invalidated') {
+        coordinator.invalidateSession();
+        runtimeCache.sessionUser = null;
+        runtimeCache.snapshot = null;
+        setSessionUser(null);
+        setIsSessionResolved(true);
+        globalThis.location.replace(authRoutePath(language, 'signIn'));
+        return;
+      }
+      if (invalidationKind !== 'mutation-committed') {
+        return;
+      }
+      revalidate();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    runtimeCache.channel?.addEventListener('message', onChannelMessage);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      runtimeCache.channel?.removeEventListener('message', onChannelMessage);
+    };
+  }, [coordinator, language, refreshSnapshot, requestedSnapshotRouteKey, sessionUser]);
 
   const showEffectError = (error: unknown) =>
     Effect.sync(() => {
       setNotice(errorMessageFrom(error, t('coursition.app.errors.generic')));
     });
-
-  const sessionRequestEffect = () =>
-    Effect.tryPromise({
-      catch: (cause) =>
-        new CoursitionUiEffectError({
-          cause,
-          message: errorMessageFrom(cause, t('coursition.app.errors.generic')),
-        }),
-      try: () => Promise.resolve(effectBff.client.auth.session({})),
-    }).pipe(
-      Effect.flatMap((payload) =>
-        sessionPayloadFromUnknown(payload).pipe(
-          Effect.mapError(
-            (cause) =>
-              new CoursitionUiEffectError({
-                cause,
-                message: errorMessageFrom(cause, t('coursition.app.errors.generic')),
-              }),
-          ),
-        ),
-      ),
-    );
 
   const authRequestEffect = () =>
     Effect.tryPromise({
@@ -2399,14 +2927,14 @@ export const CoursitionWorkflowApp = ({
           message: errorMessageFrom(
             cause,
             t(
-              authMode === 'signUp'
+              activeAuthMode === 'signUp'
                 ? 'coursition.app.auth.signUpFailed'
                 : 'coursition.app.auth.signInFailed',
             ),
           ),
         }),
       try: () =>
-        authMode === 'signUp'
+        activeAuthMode === 'signUp'
           ? effectBff.client.auth.signUp({
               payload: { email: authEmail, name: authName, password: authPassword },
             })
@@ -2425,30 +2953,85 @@ export const CoursitionWorkflowApp = ({
         yield* showEffectError(authExit.cause.pipe(Cause.squash));
         return;
       }
-      const payloadExit = yield* Effect.exit(sessionRequestEffect());
+      const payloadExit = yield* Effect.exit(
+        sessionRequestEffect(t('coursition.app.errors.generic')),
+      );
       if (Exit.isFailure(payloadExit)) {
         yield* showEffectError(payloadExit.cause.pipe(Cause.squash));
         return;
       }
       const user = payloadExit.value.session?.user ?? null;
-      yield* Effect.sync(() => setSessionUser(user));
-      if (user !== null) {
-        const resultExit = yield* Effect.exit(
-          workflowRequestEffect({ action: 'getState' }, t('coursition.app.errors.generic')),
-        );
-        if (Exit.isFailure(resultExit)) {
-          yield* showEffectError(resultExit.cause.pipe(Cause.squash));
-          return;
-        }
-        yield* Effect.sync(() => applySnapshot(resultExit.value, false));
-      }
+      yield* Effect.sync(() => {
+        setSessionUser(user);
+        setIsSessionResolved(true);
+      });
     }).pipe(Effect.ensuring(Effect.sync(() => endBusyAction('auth'))));
 
   useEffect(() => {
-    if (sessionUser !== null && snapshot === null) {
-      void refreshSnapshot();
+    if (initialRuntimeSessionUser !== null || sessionBootstrapStartedRef.current) {
+      return;
     }
-  }, [refreshSnapshot, sessionUser, snapshot]);
+    sessionBootstrapStartedRef.current = true;
+    const fallbackMessage = t('coursition.app.errors.generic');
+    Effect.runFork(
+      sessionRequestEffect(fallbackMessage).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.sync(() => {
+              setSessionBootstrapError(errorMessageFrom(error, fallbackMessage));
+              setIsSessionResolved(false);
+            }),
+          onSuccess: (payload) =>
+            Effect.sync(() => {
+              setSessionBootstrapError(null);
+              setSessionUser(payload.session?.user ?? null);
+              setIsSessionResolved(true);
+            }),
+        }),
+      ),
+    );
+  }, [initialRuntimeSessionUser, sessionBootstrapAttempt, t]);
+
+  useLayoutEffect(() => {
+    coordinator.setRoute(requestedSnapshotRouteKey);
+    if (
+      sessionUser === null ||
+      requestedSnapshotRouteKey === null ||
+      loadedSnapshotRouteKey === requestedSnapshotRouteKey
+    ) {
+      return;
+    }
+    const cachedRouteSnapshot = cachedSnapshotFor(sessionUser, requestedSnapshotRouteKey);
+    if (cachedRouteSnapshot === null) {
+      return;
+    }
+    // eslint-disable-next-line react-compiler/react-compiler -- Cached route state must be applied before paint to prevent a stale-screen flash.
+    applySnapshot(cachedRouteSnapshot, false);
+    setLoadedSnapshotRouteKey(requestedSnapshotRouteKey);
+    setSnapshotLoadError(null);
+  }, [applySnapshot, coordinator, loadedSnapshotRouteKey, requestedSnapshotRouteKey, sessionUser]);
+
+  useEffect(() => {
+    if (sessionUser === null) {
+      return;
+    }
+    if (
+      requestedSnapshotRouteKey === null ||
+      loadedSnapshotRouteKey === requestedSnapshotRouteKey ||
+      snapshotLoadError?.routeKey === requestedSnapshotRouteKey ||
+      coordinator.isReadingRoute(requestedSnapshotRouteKey)
+    ) {
+      return;
+    }
+    refreshSnapshot();
+  }, [
+    coordinator,
+    loadedSnapshotRouteKey,
+    refreshSnapshot,
+    requestedSnapshotRouteKey,
+    sessionUser,
+    snapshotLoadError?.routeKey,
+  ]);
 
   const handleAuth = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2483,24 +3066,11 @@ export const CoursitionWorkflowApp = ({
     void runWorkflow({ action: 'deleteDraft', confirm: true, draftId }, false);
   };
 
-  const setModeAndContinue = (mode: AiMode) => {
+  const setMode = (mode: AiMode) => {
     if (draft === null) {
       return;
     }
-    Effect.runFork(
-      runWorkflowEffect({ action: 'setMode', draftId: draft.id, mode }, false).pipe(
-        Effect.flatMap((result) => {
-          if (result?.draft !== undefined && result.draft !== null) {
-            return runWorkflowEffect({
-              action: 'goToStep',
-              draftId: result.draft.id,
-              step: 'sources',
-            });
-          }
-          return Effect.void;
-        }),
-      ),
-    );
+    updateModeWithoutNavigation(runWorkflow, draft.id, mode);
   };
 
   const addSource = (event: FormEvent<HTMLFormElement>) => {
@@ -2508,16 +3078,23 @@ export const CoursitionWorkflowApp = ({
     if (draft === null) {
       return;
     }
-    const formData = new FormData(event.currentTarget);
-    const submittedName = formString(formData, 'sourceName');
-    const submittedContent = formString(formData, 'sourceContent');
-    const name = submittedName || sourceName.trim() || (sourceFile?.name ?? '');
+    const sourceFormDraft = sourceFormDrafts[sourceType];
+    const submittedSourceType = sourceType;
+    const submittedSourceVersion = sourceFormDraft.version;
+    const previousSourceIds = new Set(draft.sources.map((source) => source.id));
+    const name = sourceFormDraft.name.trim() || (sourceFormDraft.file?.name ?? '');
     if (name.length === 0) {
+      if (submittedSourceType === 'file') {
+        setFileSourceFeedback({
+          kind: 'error',
+          message: t('coursition.app.sources.sourceNameRequired'),
+        });
+      }
       setNotice(t('coursition.app.sources.sourceNameRequired'));
       return;
     }
     const submitSource = (content: string) => {
-      if (sourceType !== 'file' && content.trim().length === 0) {
+      if (submittedSourceType !== 'file' && content.trim().length === 0) {
         return Effect.sync(() => setNotice(t('coursition.app.errors.generic')));
       }
       return runWorkflowEffect({
@@ -2526,31 +3103,106 @@ export const CoursitionWorkflowApp = ({
         source: {
           content,
           name,
-          type: sourceType,
+          type: submittedSourceType,
         },
       }).pipe(
         Effect.flatMap((result) =>
           Effect.sync(() => {
-            if (result !== null) {
-              setSourceContent('');
-              setSourceFile(null);
-              setSourceName('');
+            if (result === null) {
+              if (submittedSourceType === 'file') {
+                setFileSourceFeedback({
+                  kind: 'error',
+                  message: t('coursition.app.sources.fileAddFailed'),
+                });
+              }
+              return;
+            }
+            const addedSource = addedSourceAfterSubmission(
+              previousSourceIds,
+              result.draft?.sources ?? [],
+              submittedSourceType,
+              name,
+            );
+            if (addedSource === null) {
+              if (submittedSourceType === 'file') {
+                setFileSourceFeedback({
+                  kind: 'error',
+                  message: t('coursition.app.sources.fileAddFailed'),
+                });
+              }
+              return;
+            }
+            setSourceFormDrafts((current) =>
+              resetSubmittedSourceDraft(current, submittedSourceType, submittedSourceVersion),
+            );
+            if (submittedSourceType === 'file') {
+              if (sourceFormDraftsRef.current.file.version === submittedSourceVersion) {
+                setFileInputResetKey((current) => current + 1);
+              }
+              const failureReason = addedSource.failureReason?.trim() ?? '';
+              if (
+                failureReason.length > 0 ||
+                addedSource.status === 'failed' ||
+                addedSource.status === 'partially_processed' ||
+                addedSource.status === 'unsupported'
+              ) {
+                setFileSourceFeedback({
+                  kind: 'error',
+                  message:
+                    failureReason.length > 0
+                      ? failureReason
+                      : t('coursition.app.sources.fileAddFailed'),
+                });
+              } else if (
+                addedSource.status === 'processing' ||
+                addedSource.status === 'queued' ||
+                addedSource.status === 'uploaded'
+              ) {
+                setFileSourceFeedback({
+                  kind: 'pending',
+                  message: t('coursition.app.sources.fileProcessing'),
+                });
+              } else {
+                setFileSourceFeedback(null);
+              }
             }
           }),
         ),
       );
     };
     if (sourceType === 'file') {
+      const sourceFile = sourceFormDraft.file;
       if (sourceFile === null) {
+        setFileSourceFeedback({
+          kind: 'error',
+          message: t('coursition.app.sources.fileRequired'),
+        });
         setNotice(t('coursition.app.errors.generic'));
         return;
       }
+      if (sourceFile.size > MAX_SOURCE_FILE_BYTES) {
+        setFileSourceFeedback({
+          kind: 'error',
+          message: t('coursition.app.sources.fileTooLarge'),
+        });
+        setNotice(t('coursition.app.sources.fileTooLarge'));
+        return;
+      }
+      setFileSourceFeedback({
+        kind: 'pending',
+        message: t('coursition.app.sources.fileProcessing'),
+      });
       Effect.runFork(
         Effect.gen(function* addFileSourceProgram() {
           yield* Effect.sync(() => beginBusyAction('file'));
           const payloadExit = yield* Effect.exit(filePayloadFromEffect(sourceFile));
           if (Exit.isFailure(payloadExit)) {
-            yield* showEffectError(payloadExit.cause.pipe(Cause.squash));
+            const error = payloadExit.cause.pipe(Cause.squash);
+            const message = errorMessageFrom(error, t('coursition.app.sources.fileReadFailed'));
+            yield* Effect.sync(() => {
+              setFileSourceFeedback({ kind: 'error', message });
+              setNotice(message);
+            });
             return;
           }
           yield* submitSource(payloadExit.value);
@@ -2558,157 +3210,244 @@ export const CoursitionWorkflowApp = ({
       );
       return;
     }
-    Effect.runFork(submitSource(submittedContent || sourceContent));
+    Effect.runFork(submitSource(sourceFormDraft.content));
+  };
+
+  const selectSourceType = (type: SourceType) => {
+    if (type === sourceType) {
+      return;
+    }
+    setSourceType(type);
+  };
+
+  const updateSourceFormDraft = (type: SourceType, changes: Partial<SourceFormDraft>) => {
+    setSourceFormDrafts((current) => updateVersionedSourceFormDraft(current, type, changes));
   };
 
   const updatePreparationField = <Field extends keyof CoursePreparation>(
     field: Field,
     value: CoursePreparation[Field],
   ) => {
-    setPreparation((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  };
-
-  const saveObjectiveForm = (form: HTMLFormElement, objectiveId: string) => {
     if (draft === null) {
       return;
     }
-    const objective = draft.learningBlueprint.objectives.find(
-      (candidate) => candidate.id === objectiveId,
+    const nextPreparation = {
+      ...preparation,
+      [field]: value,
+    };
+    const nextBuffer = updateEditBuffer(preparationBuffer, nextPreparation);
+    setPreparationBuffer(nextBuffer);
+    setAutosaveFeedback('dirty');
+    schedulePreparationAutosave(draft.id, nextBuffer);
+  };
+
+  const scheduleObjectiveAutosave = (
+    draftId: string,
+    objectiveId: string,
+    buffer: EditBuffer<ObjectiveEditValue>,
+  ) => {
+    const submittedKey = objectiveEditKey(buffer.value.title, buffer.value.capability);
+    coursitionPendingDraftSaves.schedule(
+      `${draftId}:objective:${objectiveId}`,
+      () => {
+        lastSubmittedObjectiveKeyRef.current.set(objectiveId, submittedKey);
+        return commitAutosave({
+          action: 'updateLearningObjective',
+          capability: buffer.value.capability,
+          draftId,
+          objectiveId,
+          title: buffer.value.title,
+        }).then((result) => {
+          const committedObjective = result?.draft?.learningBlueprint.objectives.find(
+            (objective) => objective.id === objectiveId,
+          );
+          if (
+            result?.draft === null ||
+            result?.draft === undefined ||
+            committedObjective === undefined
+          ) {
+            lastSubmittedObjectiveKeyRef.current.delete(objectiveId);
+            return false;
+          }
+          setObjectiveEditBuffers((current) => ({
+            ...current,
+            [objectiveId]: commitEditBuffer(
+              current[objectiveId] ?? buffer,
+              buffer.version,
+              {
+                capability: normalizedGeneratedText(committedObjective.capability),
+                title: committedObjective.title,
+              },
+              result.draft?.revision ?? result.revision,
+            ),
+          }));
+          return true;
+        });
+      },
+      600,
     );
-    if (objective === undefined) {
+  };
+
+  const updateObjectiveBuffer = (objectiveId: string, changes: Partial<ObjectiveEditValue>) => {
+    if (draft === null) {
       return;
     }
-    const formData = new FormData(form);
-    const capability = formString(formData, 'capability');
-    const title = formString(formData, 'title');
-    const savedObjectiveKey = objectiveEditKey(objective.title, objective.capability);
-    const localObjectiveKey = objectiveEditKey(title, capability);
-    if (localObjectiveKey === savedObjectiveKey) {
-      lastSubmittedObjectiveKeyRef.current.set(objectiveId, localObjectiveKey);
+    const current = objectiveEditBuffers[objectiveId];
+    if (current === undefined) {
       return;
     }
-    if (localObjectiveKey === lastSubmittedObjectiveKeyRef.current.get(objectiveId)) {
-      return;
-    }
-    lastSubmittedObjectiveKeyRef.current.set(objectiveId, localObjectiveKey);
-    runObjectiveAutosave(draft.id, objectiveId, title, capability, localObjectiveKey);
+    const next = updateEditBuffer(current, { ...current.value, ...changes });
+    setObjectiveEditBuffers((buffers) => ({ ...buffers, [objectiveId]: next }));
+    setAutosaveFeedback('dirty');
+    scheduleObjectiveAutosave(draft.id, objectiveId, next);
   };
 
   const saveObjectiveOnBlur = (event: FocusEvent<HTMLFormElement>, objectiveId: string) => {
-    const nextFocusedElement = event.relatedTarget;
-    if (nextFocusedElement instanceof Node && event.currentTarget.contains(nextFocusedElement)) {
+    if (!focusLeftContainer(event.currentTarget, event.relatedTarget)) {
       return;
     }
-    saveObjectiveForm(event.currentTarget, objectiveId);
+    const buffer = objectiveEditBuffers[objectiveId];
+    if (draft !== null && buffer?.dirty === true) {
+      scheduleObjectiveAutosave(draft.id, objectiveId, buffer);
+      void coursitionPendingDraftSaves.flush(`${draft.id}:objective:${objectiveId}`);
+    }
   };
 
   const saveObjectiveOnSubmit = (event: FormEvent<HTMLFormElement>, objectiveId: string) => {
     event.preventDefault();
-    saveObjectiveForm(event.currentTarget, objectiveId);
+    const buffer = objectiveEditBuffers[objectiveId];
+    if (draft !== null && buffer?.dirty === true) {
+      scheduleObjectiveAutosave(draft.id, objectiveId, buffer);
+      void coursitionPendingDraftSaves.flush(`${draft.id}:objective:${objectiveId}`);
+    }
   };
 
-  const saveActivityBriefForm = (form: HTMLFormElement, briefId: string) => {
+  const scheduleActivityBriefAutosave = (
+    draftId: string,
+    briefId: string,
+    buffer: EditBuffer<ActivityBriefEditValue>,
+  ) => {
+    const submittedKey = activityBriefEditKey(buffer.value);
+    coursitionPendingDraftSaves.schedule(
+      `${draftId}:activity:${briefId}`,
+      () => {
+        lastSubmittedActivityBriefKeyRef.current.set(briefId, submittedKey);
+        return commitAutosave({
+          action: 'updateActivityBrief',
+          briefId,
+          draftId,
+          ...buffer.value,
+        }).then((result) => {
+          const committedBrief = result?.draft?.learningBlueprint.activityBriefs.find(
+            (brief) => brief.id === briefId,
+          );
+          if (
+            result?.draft === null ||
+            result?.draft === undefined ||
+            committedBrief === undefined
+          ) {
+            lastSubmittedActivityBriefKeyRef.current.delete(briefId);
+            return false;
+          }
+          setActivityBriefEditBuffers((current) => ({
+            ...current,
+            [briefId]: commitEditBuffer(
+              current[briefId] ?? buffer,
+              buffer.version,
+              {
+                feedbackGuidance: normalizedGeneratedText(committedBrief.feedbackGuidance),
+                instructions: normalizedGeneratedText(committedBrief.instructions),
+                learnerAction: normalizedGeneratedText(committedBrief.learnerAction),
+                successCriteria: normalizedGeneratedText(committedBrief.successCriteria),
+                title: committedBrief.title,
+                type: committedBrief.type,
+              },
+              result.draft?.revision ?? result.revision,
+            ),
+          }));
+          return true;
+        });
+      },
+      600,
+    );
+  };
+
+  const updateActivityBriefBuffer = (briefId: string, changes: Partial<ActivityBriefEditValue>) => {
     if (draft === null) {
       return;
     }
-    const brief = draft.learningBlueprint.activityBriefs.find(
-      (candidate) => candidate.id === briefId,
-    );
-    if (brief === undefined) {
+    const current = activityBriefEditBuffers[briefId];
+    if (current === undefined) {
       return;
     }
-    const formData = new FormData(form);
-    const submittedType = formString(formData, 'type');
-    const type =
-      activityTypes.find((activityType) => activityType === submittedType) ?? activityTypes[1];
-    const submittedBrief = {
-      feedbackGuidance: formString(formData, 'feedbackGuidance'),
-      instructions: formString(formData, 'instructions'),
-      learnerAction: formString(formData, 'learnerAction'),
-      successCriteria: formString(formData, 'successCriteria'),
-      title: formString(formData, 'title'),
-      type,
-    };
-    const savedActivityBriefKey = activityBriefEditKey({
-      feedbackGuidance: brief.feedbackGuidance,
-      instructions: brief.instructions,
-      learnerAction: brief.learnerAction,
-      successCriteria: brief.successCriteria,
-      title: brief.title,
-      type: brief.type,
-    });
-    const submittedActivityBriefKey = activityBriefEditKey(submittedBrief);
-    if (submittedActivityBriefKey === savedActivityBriefKey) {
-      lastSubmittedActivityBriefKeyRef.current.set(briefId, submittedActivityBriefKey);
-      return;
-    }
-    if (submittedActivityBriefKey === lastSubmittedActivityBriefKeyRef.current.get(briefId)) {
-      return;
-    }
-    lastSubmittedActivityBriefKeyRef.current.set(briefId, submittedActivityBriefKey);
-    runWorkflow({
-      action: 'updateActivityBrief',
-      briefId,
-      draftId: draft.id,
-      ...submittedBrief,
-    });
+    const next = updateEditBuffer(current, { ...current.value, ...changes });
+    setActivityBriefEditBuffers((buffers) => ({ ...buffers, [briefId]: next }));
+    setAutosaveFeedback('dirty');
+    scheduleActivityBriefAutosave(draft.id, briefId, next);
   };
 
   const saveActivityBriefOnBlur = (event: FocusEvent<HTMLFormElement>, briefId: string) => {
-    const nextFocusedElement = event.relatedTarget;
-    if (nextFocusedElement instanceof Node && event.currentTarget.contains(nextFocusedElement)) {
+    if (!focusLeftContainer(event.currentTarget, event.relatedTarget)) {
       return;
     }
-    saveActivityBriefForm(event.currentTarget, briefId);
+    const buffer = activityBriefEditBuffers[briefId];
+    if (draft !== null && buffer?.dirty === true) {
+      scheduleActivityBriefAutosave(draft.id, briefId, buffer);
+      void coursitionPendingDraftSaves.flush(`${draft.id}:activity:${briefId}`);
+    }
   };
 
   const saveActivityBriefOnSubmit = (event: FormEvent<HTMLFormElement>, briefId: string) => {
     event.preventDefault();
-    saveActivityBriefForm(event.currentTarget, briefId);
+    const buffer = activityBriefEditBuffers[briefId];
+    if (draft !== null && buffer?.dirty === true) {
+      scheduleActivityBriefAutosave(draft.id, briefId, buffer);
+      void coursitionPendingDraftSaves.flush(`${draft.id}:activity:${briefId}`);
+    }
   };
 
   const goToStep = (step: DraftStep) => {
     if (draft === null || step === activeStep) {
       return;
     }
-    void runWorkflow({ action: 'goToStep', draftId: draft.id, step });
-  };
-
-  const openPreview = () => {
-    if (draft === null || activeStep === 'preview') {
+    const gate = navigationGateFor(navigationDraft ?? draft, step);
+    if (!gate.allowed) {
       return;
     }
-    void runWorkflow({ action: 'openPreview', draftId: draft.id });
-  };
-
-  const goToNavigationStep = (step: DraftStep) => {
-    if (step === 'preview') {
-      openPreview();
-      return;
-    }
-    goToStep(step);
+    const routeKey = `${draft.id}:${step}`;
+    setOptimisticStep(step);
+    coordinator.setRoute(routeKey);
+    setLoadedSnapshotRouteKey(routeKey);
+    setSnapshotLoadError(null);
+    navigateTo(draft, step);
   };
 
   const nextStep = () => {
     if (draft === null) {
       return;
     }
-    if (activeStep === 'sources' && draft.mode === 'generate') {
-      void runWorkflow({ action: 'generateCourse', draftId: draft.id });
+    if (activeStep === 'mode') {
+      goToStep('sources');
       return;
     }
-    if (activeStep === 'courseContent') {
-      openPreview();
+    if (
+      draft.mode === 'generate' &&
+      isNavigationStepComplete(draft, 'preview') &&
+      !isNavigationStepStale(draft, 'preview')
+    ) {
+      goToStep('preview');
       return;
     }
-    const currentIndex = workflowStepIndex(activeStep);
-    const next = workflowSteps[currentIndex + 1];
-    if (next !== undefined) {
+    const next = navigationSteps[workflowStepIndex(activeStep) + 1];
+    if (
+      next !== undefined &&
+      isNavigationStepComplete(draft, next) &&
+      !isNavigationStepStale(draft, next)
+    ) {
       goToStep(next);
+      return;
     }
+    runWorkflow({ action: 'advanceDraft', draftId: draft.id, step: activeStep });
   };
 
   const previousStep = () => {
@@ -2726,106 +3465,162 @@ export const CoursitionWorkflowApp = ({
     }
   };
 
-  const currentGate =
-    draft === null || activeStep === 'preview'
-      ? { allowed: true }
-      : getWorkflowStepGate(draft, activeStep);
-  const nextGate = nextGateFor(draft, activeStep);
+  const advanceStatus =
+    draft?.mode === 'generate' && activeStep !== 'mode'
+      ? t('coursition.app.navigation.advancingByStep.generateCourse')
+      : t(`coursition.app.navigation.advancingByStep.${activeStep}`);
+  const autosaveStatus = isAutosaveBusy ? 'saving' : autosaveFeedback;
 
-  if (sessionUser === null) {
+  if (sessionBootstrapError !== null) {
     return (
-      <main className="mx-auto grid min-h-[calc(100dvh-3.5rem)] max-w-xl place-items-center px-4 py-8">
-        <Toaster />
-        <section className={`${cardClass} w-full`} id="course-studio">
-          <form className={panelClass} onSubmit={handleAuth}>
-            <fieldset className="grid gap-3">
-              <legend className="text-2xl font-bold text-fg-primary">
-                {t('coursition.app.auth.modeLabel')}
-              </legend>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  onClick={() => setAuthMode('signIn')}
-                  type="button"
-                  variant={authMode === 'signIn' ? 'primary' : 'secondary'}
-                >
-                  {t('coursition.app.auth.signIn')}
-                </Button>
-                <Button
-                  onClick={() => setAuthMode('signUp')}
-                  type="button"
-                  variant={authMode === 'signUp' ? 'primary' : 'secondary'}
-                >
-                  {t('coursition.app.auth.signUp')}
-                </Button>
-              </div>
-            </fieldset>
-            <TextInputField
-              label={t('coursition.app.auth.email')}
-              name="email"
-              onChange={(event) => setAuthEmail(event.currentTarget.value)}
-              placeholder={t('coursition.app.auth.emailPlaceholder')}
-              required
-              type="email"
-              value={authEmail}
-            />
-            {authMode === 'signUp' ? (
-              <TextInputField
-                label={t('coursition.app.auth.name')}
-                name="name"
-                onChange={(event) => setAuthName(event.currentTarget.value)}
-                placeholder={t('coursition.app.auth.namePlaceholder')}
-                required
-                value={authName}
-              />
-            ) : null}
-            <TextInputField
-              label={t('coursition.app.auth.password')}
-              name="password"
-              onChange={(event) => setAuthPassword(event.currentTarget.value)}
-              placeholder={t('coursition.app.auth.passwordPlaceholder')}
-              required
-              type="password"
-              value={authPassword}
-            />
-            <Button disabled={isAuthBusy} type="submit" variant="primary">
-              {busyAction === 'auth'
-                ? t(
-                    authMode === 'signUp'
-                      ? 'coursition.app.auth.creatingAccount'
-                      : 'coursition.app.auth.signingIn',
+      <div className="mx-auto grid w-full max-w-[80rem] gap-4">
+        <ClientToaster />
+        <SnapshotErrorView
+          message={sessionBootstrapError}
+          onRetry={() => {
+            sessionBootstrapStartedRef.current = false;
+            setSessionBootstrapError(null);
+            setSessionBootstrapAttempt((attempt) => attempt + 1);
+          }}
+          t={t}
+        />
+      </div>
+    );
+  }
+
+  if (!isSessionResolved || sessionRedirectPath !== null) {
+    return (
+      <div className="mx-auto grid min-h-[calc(100dvh-3.5rem)] w-full max-w-[80rem] gap-4">
+        <ClientToaster />
+        <CoursitionLoadingView routeKind={routeKind} t={t} />
+      </div>
+    );
+  }
+
+  if (sessionUser === null && authMode !== null) {
+    return (
+      <div className="mx-auto grid min-h-[calc(100dvh-3.5rem)] w-full max-w-lg place-items-center px-4 py-8">
+        <ClientToaster />
+        <div className="grid w-full gap-8">
+          <div className="grid gap-2 text-center">
+            <h1 className="text-3xl font-semibold tracking-tight text-fg-primary">
+              {t('coursition.common.productName')}
+            </h1>
+            <p className="text-sm text-fg-secondary">{t('coursition.app.eyebrow')}</p>
+          </div>
+          <section className="w-full rounded-xl bg-surface p-6 shadow-lg dark:shadow-none sm:p-9">
+            <form className="grid gap-6" onSubmit={handleAuth}>
+              <Tabs
+                fitted
+                onValueChange={(value) =>
+                  globalThis.location.assign(
+                    authRoutePath(language, value === 'signUp' ? 'signUp' : 'signIn'),
                   )
-                : t(
-                    authMode === 'signUp'
-                      ? 'coursition.app.auth.createAccount'
-                      : 'coursition.app.auth.signIn',
-                  )}
-            </Button>
-          </form>
-        </section>
-      </main>
+                }
+                value={activeAuthMode}
+                variant="solid"
+              >
+                <Tabs.List className="gap-1 rounded-lg bg-fill-base p-1">
+                  <Tabs.Trigger className="min-h-11" value="signIn">
+                    {t('coursition.app.auth.signIn')}
+                  </Tabs.Trigger>
+                  <Tabs.Trigger className="min-h-11" value="signUp">
+                    {t('coursition.app.auth.signUp')}
+                  </Tabs.Trigger>
+                </Tabs.List>
+              </Tabs>
+              <TextInputField
+                label={t('coursition.app.auth.email')}
+                name="email"
+                onChange={(event) => setAuthEmail(event.currentTarget.value)}
+                placeholder={t('coursition.app.auth.emailPlaceholder')}
+                required
+                type="email"
+                value={authEmail}
+              />
+              {activeAuthMode === 'signUp' ? (
+                <TextInputField
+                  label={t('coursition.app.auth.name')}
+                  name="name"
+                  onChange={(event) => setAuthName(event.currentTarget.value)}
+                  placeholder={t('coursition.app.auth.namePlaceholder')}
+                  required
+                  value={authName}
+                />
+              ) : null}
+              <TextInputField
+                label={t('coursition.app.auth.password')}
+                name="password"
+                onChange={(event) => setAuthPassword(event.currentTarget.value)}
+                placeholder={t('coursition.app.auth.passwordPlaceholder')}
+                required
+                type="password"
+                value={authPassword}
+              />
+              <Button disabled={isAuthBusy} type="submit" variant="primary">
+                {busyAction === 'auth'
+                  ? t(
+                      activeAuthMode === 'signUp'
+                        ? 'coursition.app.auth.creatingAccount'
+                        : 'coursition.app.auth.signingIn',
+                    )
+                  : t(
+                      activeAuthMode === 'signUp'
+                        ? 'coursition.app.auth.createAccount'
+                        : 'coursition.app.auth.signIn',
+                    )}
+              </Button>
+            </form>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  const currentSnapshotLoadError =
+    snapshotLoadError?.routeKey === requestedSnapshotRouteKey ? snapshotLoadError : null;
+  const snapshotLoadStatus = snapshotLoadStatusFor({
+    errorRouteKey: snapshotLoadError?.routeKey ?? null,
+    loadedRouteKey: loadedSnapshotRouteKey,
+    requestedRouteKey: requestedSnapshotRouteKey,
+  });
+  if (snapshotLoadStatus !== 'ready') {
+    if (snapshotLoadStatus === 'error' && currentSnapshotLoadError !== null) {
+      return (
+        <div className="mx-auto grid w-full max-w-[80rem] gap-4">
+          <ClientToaster />
+          <SnapshotErrorView
+            message={currentSnapshotLoadError.message}
+            onRetry={refreshSnapshot}
+            t={t}
+          />
+        </div>
+      );
+    }
+    return (
+      <div className="mx-auto grid w-full max-w-[80rem] gap-4">
+        <ClientToaster />
+        <CoursitionLoadingView routeKind={routeKind} t={t} />
+      </div>
     );
   }
 
   const draftSummaries = snapshot?.drafts ?? [];
 
   return (
-    <main className="mx-auto grid w-full max-w-7xl gap-3" id="course-studio">
-      <Toaster />
+    <div className="mx-auto grid w-full max-w-[80rem] gap-5">
+      <ClientToaster />
 
       {draft === null ? (
-        <section
-          className={
-            draftSummaries.length === 0
-              ? 'grid min-h-[20rem] place-items-start sm:place-items-center'
-              : 'grid gap-3'
-          }
-        >
+        <section className="grid gap-8">
+          <header className="grid max-w-3xl gap-1">
+            <h1 className="text-3xl font-semibold tracking-tight text-fg-primary sm:text-4xl">
+              {t('coursition.app.dashboard.title')}
+            </h1>
+            <p className={mutedTextClass}>{t('coursition.app.dashboard.summary')}</p>
+          </header>
           <form
-            className={
-              draftSummaries.length === 0
-                ? 'grid w-full max-w-2xl gap-3 rounded-md bg-base p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end'
-                : 'grid gap-3 rounded-md bg-base p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end'
-            }
+            className={`${insetSurfaceClass} grid w-full max-w-4xl gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end`}
             onSubmit={createDraft}
           >
             <TextInputField
@@ -2845,29 +3640,35 @@ export const CoursitionWorkflowApp = ({
             </Button>
           </form>
 
-          {draftSummaries.length === 0 ? null : (
-            <section className="grid gap-3 rounded-md bg-base p-3">
-              <h1 className="text-xl font-bold text-fg-primary">
-                {t('coursition.app.dashboard.title')}
-              </h1>
-              <ul className="grid gap-2">
+          {draftSummaries.length === 0 ? (
+            <p className={mutedTextClass}>{t('coursition.app.dashboard.empty')}</p>
+          ) : (
+            <section className="grid gap-5">
+              <ul className="grid gap-3">
                 {draftSummaries.map((summary) => (
                   <li
-                    className="grid gap-3 rounded-md bg-fill-base p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+                    className={`${insetSurfaceClass} grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center`}
                     key={summary.id}
                   >
                     <div className="min-w-0">
-                      <Link
-                        className="text-lg font-bold text-fg-primary no-underline"
-                        params={{
-                          courseId: summary.id,
-                          lang: language,
-                          step: courseRouteStepSlug(language, summary.step),
-                        }}
-                        to={courseRoutePattern(language)}
-                      >
-                        {summary.title}
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          className="text-lg font-semibold text-fg-primary no-underline"
+                          params={{
+                            courseId: summary.id,
+                            lang: language,
+                            step: courseRouteStepSlug(language, summary.step),
+                          }}
+                          to={courseRoutePattern(language)}
+                        >
+                          {summary.title}
+                        </Link>
+                        {summary.id.includes('_seed_') ? (
+                          <Badge size="sm" variant="outline">
+                            {t('coursition.app.dashboard.demoBadge')}
+                          </Badge>
+                        ) : null}
+                      </div>
                       <p className={mutedTextClass}>
                         {t('coursition.app.dashboard.courseMeta', {
                           activities: t('coursition.app.dashboard.counts.activities.other', {
@@ -2889,18 +3690,19 @@ export const CoursitionWorkflowApp = ({
                         disabled={isDraftListBusy}
                         onClick={() => selectDraft(summary.id)}
                         type="button"
-                        variant="secondary"
+                        variant="primary"
                       >
                         {t('coursition.app.draft.resume')}
                       </Button>
-                      <Button
+                      <ConfirmDeleteButton
+                        cancelLabel={t('coursition.app.dashboard.cancel')}
+                        confirmLabel={t('coursition.app.dashboard.delete')}
+                        description={t('coursition.app.dashboard.confirmDeleteMessage')}
                         disabled={isDraftListBusy}
-                        onClick={() => deleteDraft(summary.id)}
-                        type="button"
-                        variant="danger"
-                      >
-                        {t('coursition.app.dashboard.delete')}
-                      </Button>
+                        label={t('coursition.app.dashboard.delete')}
+                        onConfirm={() => deleteDraft(summary.id)}
+                        title={t('coursition.app.dashboard.confirmDelete')}
+                      />
                     </div>
                   </li>
                 ))}
@@ -2909,71 +3711,93 @@ export const CoursitionWorkflowApp = ({
           )}
         </section>
       ) : (
-        <section className="grid min-w-0 gap-3">
-          <section className={`${cardClass} grid min-w-0 gap-3`}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h1 className="min-w-0 flex-1">
-                <Input
-                  aria-label={t('coursition.app.draft.title')}
-                  className="w-full min-w-0 rounded-md border border-transparent bg-transparent px-1 py-1 text-xl font-bold text-fg-primary outline-none transition placeholder:text-fg-secondary/60 hover:bg-fill-hover focus:border-border-primary focus:bg-fill-base focus:ring-2 focus:ring-ring sm:text-2xl"
-                  onBlur={saveCourseTitleOnBlur}
-                  onChange={(event) => setCourseTitle(event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      event.currentTarget.blur();
+        <section className="grid min-w-0 gap-2">
+          <section className={studioHeaderClass}>
+            <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="grid min-w-0 gap-1 sm:flex-1">
+                <h1 className="min-w-0">
+                  <Input
+                    aria-label={t('coursition.app.draft.title')}
+                    className="coursition-title-input"
+                    onBlur={saveCourseTitleOnBlur}
+                    onChange={(event) => updateCourseTitle(event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                      }
+                    }}
+                    placeholder={t('coursition.app.draft.titlePlaceholder')}
+                    value={courseTitle}
+                  />
+                </h1>
+                <p className="text-sm font-medium text-fg-secondary">
+                  {t(`coursition.app.steps.${activeStep}`)}
+                </p>
+                {autosaveStatus === 'idle' ? null : (
+                  <output
+                    aria-atomic="true"
+                    aria-live="polite"
+                    className={
+                      autosaveStatus === 'error' ? `${mutedTextClass} text-danger` : mutedTextClass
                     }
-                  }}
-                  placeholder={t('coursition.app.draft.titlePlaceholder')}
-                  value={courseTitle}
-                />
-              </h1>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  disabled={isRouteActionBusy || workflowStepIndex(activeStep) <= 0}
-                  onClick={previousStep}
-                  type="button"
-                  variant="secondary"
-                >
-                  {t('coursition.app.navigation.back')}
-                </Button>
-                <Button
-                  disabled={isRouteActionBusy || !nextGate.allowed}
-                  onClick={nextStep}
-                  type="button"
-                  variant="primary"
-                >
-                  {t(
-                    activeStep === 'sources' && draft.mode === 'generate'
-                      ? 'coursition.app.modes.generate.action'
-                      : 'coursition.app.navigation.next',
-                  )}
-                </Button>
+                  >
+                    {t(`coursition.app.autosave.${autosaveStatus}`)}
+                  </output>
+                )}
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                {activeStep === 'mode' ? null : (
+                  <Button
+                    disabled={isRouteActionBusy}
+                    onClick={previousStep}
+                    type="button"
+                    variant="primary"
+                    theme="light"
+                  >
+                    {t('coursition.app.navigation.back')}
+                  </Button>
+                )}
+                {activeStep === 'preview' ? null : (
+                  <Button
+                    aria-busy={isAdvanceDraftBusy}
+                    disabled={isRouteActionBusy}
+                    onClick={nextStep}
+                    type="button"
+                    variant="primary"
+                  >
+                    {isAdvanceDraftBusy ? advanceStatus : t('coursition.app.navigation.next')}
+                  </Button>
+                )}
               </div>
             </div>
-            {currentGate.allowed ? null : (
-              <p className={errorTextClass}>{gateText(currentGate, t)}</p>
-            )}
-            {nextGate.allowed || activeStep === 'sources' ? null : (
-              <p className={mutedTextClass}>{gateText(nextGate, t)}</p>
-            )}
-            <nav aria-label={t('coursition.app.navigation.label')} className="min-w-0">
+            {isAdvanceDraftBusy ? (
+              <output aria-live="polite" className={mutedTextClass}>
+                {advanceStatus}
+              </output>
+            ) : null}
+            <nav
+              aria-label={t('coursition.app.navigation.label')}
+              className="coursition-workflow-navigation min-w-0"
+              ref={courseNavigationRef}
+            >
               <Steps
-                className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain pb-1"
+                className="max-w-full min-w-0 pb-1"
                 count={navigationSteps.length}
                 linear={false}
                 size="sm"
-                step={currentNavigationIndex}
+                step={currentWorkflowStepIndex}
                 variant="subtle"
               >
-                <Steps.List className="w-max min-w-full">
+                <Steps.List className="coursition-workflow-step-list w-full !justify-start">
                   {navigationSteps.map((step, index) => {
-                    const gate = navigationGateFor(draft, step);
-                    const isCurrentStep = index === currentNavigationIndex;
+                    const gate = navigationGateFor(navigationDraft ?? draft, step);
+                    const isCurrentStep = step === activeStep;
                     const isStepComplete = isNavigationStepComplete(draft, step);
                     const isStepStale = isNavigationStepStale(draft, step);
-                    const isStepReady = step === 'preview' && gate.allowed && !isStepStale;
-                    const isStepVisuallyComplete = isStepComplete && !isStepReady;
+                    const isStepReady =
+                      step === 'preview' && getWorkflowPreviewGate(draft).allowed && !isStepStale;
+                    const isStepVisuallyComplete = isStepComplete && !isCurrentStep;
                     const visualState = {
                       isComplete: isStepVisuallyComplete,
                       isCurrent: isCurrentStep,
@@ -2981,16 +3805,9 @@ export const CoursitionWorkflowApp = ({
                       isStale: isStepStale,
                     };
                     const isStepDisabled = isRouteActionBusy || !gate.allowed;
-                    const canNavigateToStep = !isCurrentStep && !isStepDisabled;
+                    const canNavigateToStep = step !== activeStep && !isStepDisabled;
                     return (
-                      <Steps.Item
-                        className="data-[orientation=horizontal]:flex-none"
-                        index={index}
-                        key={step}
-                        {...(index === currentNavigationIndex
-                          ? { ref: activeNavigationStepRef }
-                          : {})}
-                      >
+                      <Steps.Item className="min-w-max flex-1" index={index} key={step}>
                         <Steps.Trigger
                           aria-current={isCurrentStep ? 'step' : undefined}
                           className={navigationTriggerClass}
@@ -3001,7 +3818,7 @@ export const CoursitionWorkflowApp = ({
                             if (!canNavigateToStep) {
                               return;
                             }
-                            goToNavigationStep(step);
+                            goToStep(step);
                           }}
                         >
                           <Steps.Indicator
@@ -3030,8 +3847,7 @@ export const CoursitionWorkflowApp = ({
                         </Steps.Trigger>
                         {index < navigationSteps.length - 1 ? (
                           <span aria-hidden="true" className={navigationSeparatorClass}>
-                            <span className="h-px flex-1 bg-current" />
-                            <span className="h-1.5 w-1.5 rotate-45 border-r border-t border-current" />
+                            <span className="h-px w-full rounded-full bg-gradient-to-r from-transparent via-current to-transparent" />
                           </span>
                         ) : null}
                       </Steps.Item>
@@ -3043,9 +3859,9 @@ export const CoursitionWorkflowApp = ({
           </section>
 
           {activeStep === 'mode' ? (
-            <section className={`${cardClass} ${panelClass}`}>
+            <section className={workspaceSectionClass}>
               <div>
-                <h2 className="text-xl font-bold text-fg-primary">
+                <h2 className="text-xl font-semibold text-fg-primary">
                   {t('coursition.app.steps.mode')}
                 </h2>
                 <p className={mutedTextClass}>{t('coursition.app.modes.help')}</p>
@@ -3056,12 +3872,12 @@ export const CoursitionWorkflowApp = ({
                 itemOrientation="horizontal"
                 onValueChange={(value) => {
                   if (value !== null && isAiMode(value)) {
-                    setModeAndContinue(value);
+                    setMode(value);
                   }
                 }}
                 orientation="horizontal"
                 value={draft.mode}
-                variant="solid"
+                variant="subtle"
               >
                 <RadioCard.Label className="sr-only">
                   {t('coursition.app.steps.mode')}
@@ -3090,78 +3906,154 @@ export const CoursitionWorkflowApp = ({
           ) : null}
 
           {activeStep === 'sources' ? (
-            <section className={`${cardClass} ${panelClass}`}>
+            <section className={workspaceSectionClass}>
               <div>
-                <h2 className="text-xl font-bold text-fg-primary">
+                <h2 className="text-xl font-semibold text-fg-primary">
                   {t('coursition.app.sources.title')}
                 </h2>
               </div>
-              <form className="grid gap-3" onSubmit={addSource}>
-                <fieldset className="flex flex-wrap gap-2">
-                  <legend className="sr-only">{t('coursition.app.sources.title')}</legend>
-                  {sourceTypes.map((type) => (
+              <form className={`${insetSurfaceClass} grid max-w-4xl gap-4`} onSubmit={addSource}>
+                <Tabs
+                  className="grid gap-4"
+                  onValueChange={(value) => {
+                    if (value === 'notes' || value === 'url' || value === 'file') {
+                      selectSourceType(value);
+                    }
+                  }}
+                  size="md"
+                  value={sourceType}
+                  variant="line"
+                >
+                  <Tabs.List>
+                    {sourceTypes.map((type) => (
+                      <Tabs.Trigger key={type} value={type}>
+                        {t(`coursition.app.sourceTypes.${type}`)}
+                      </Tabs.Trigger>
+                    ))}
+                    <Tabs.Indicator />
+                  </Tabs.List>
+                  <Tabs.Content className="grid gap-4" value="notes">
+                    <TextInputField
+                      disabled={sourceType !== 'notes'}
+                      id="notesSourceName"
+                      label={t('coursition.app.sources.sourceName')}
+                      name="sourceName"
+                      onChange={(event) =>
+                        updateSourceFormDraft('notes', { name: event.currentTarget.value })
+                      }
+                      placeholder={t('coursition.app.sources.notesNamePlaceholder')}
+                      required
+                      value={sourceFormDrafts.notes.name}
+                    />
+                    <FormTextarea
+                      disabled={sourceType !== 'notes'}
+                      id="notesSourceContent"
+                      label={t('coursition.app.sources.notesContent')}
+                      name="sourceContent"
+                      onChange={(event) =>
+                        updateSourceFormDraft('notes', { content: event.currentTarget.value })
+                      }
+                      placeholder={t('coursition.app.sources.notesPlaceholder')}
+                      required
+                      rows={8}
+                      value={sourceFormDrafts.notes.content}
+                    />
                     <Button
-                      key={type}
-                      onClick={() => setSourceType(type)}
-                      type="button"
-                      variant={sourceType === type ? 'primary' : 'secondary'}
+                      className="justify-self-start"
+                      disabled={isSourceAddBusy}
+                      type="submit"
+                      variant="primary"
                     >
-                      {t(`coursition.app.sourceTypes.${type}`)}
+                      {busyAction === 'addSource' || busyAction === 'file'
+                        ? t('coursition.app.sources.adding')
+                        : t('coursition.app.sources.add')}
                     </Button>
-                  ))}
-                </fieldset>
-                {sourceType === 'file' ? (
-                  <FormInput
-                    id="sourceFile"
-                    label={t('coursition.app.sources.chooseFile')}
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0] ?? null;
-                      setSourceFile(file);
-                      setSourceName(file?.name ?? '');
-                    }}
-                    type="file"
-                  />
-                ) : null}
-                <TextInputField
-                  label={t('coursition.app.sources.sourceName')}
-                  name="sourceName"
-                  onChange={(event) => setSourceName(event.currentTarget.value)}
-                  placeholder={t(
-                    sourceType === 'url'
-                      ? 'coursition.app.sources.urlNamePlaceholder'
-                      : 'coursition.app.sources.notesNamePlaceholder',
-                  )}
-                  required
-                  value={sourceName}
-                />
-                {sourceType === 'url' ? (
-                  <TextInputField
-                    label={t('coursition.app.sources.urlContent')}
-                    name="sourceContent"
-                    onChange={(event) => setSourceContent(event.currentTarget.value)}
-                    placeholder={t('coursition.app.sources.urlPlaceholder')}
-                    required
-                    type="url"
-                    value={sourceContent}
-                  />
-                ) : null}
-                {sourceType === 'notes' ? (
-                  <FormTextarea
-                    id="sourceContent"
-                    label={t('coursition.app.sources.notesContent')}
-                    name="sourceContent"
-                    onChange={(event) => setSourceContent(event.currentTarget.value)}
-                    placeholder={t('coursition.app.sources.notesPlaceholder')}
-                    required
-                    rows={8}
-                    value={sourceContent}
-                  />
-                ) : null}
-                <Button disabled={isSourceAddBusy} type="submit" variant="primary">
-                  {busyAction === 'addSource' || busyAction === 'file'
-                    ? t('coursition.app.sources.adding')
-                    : t('coursition.app.sources.add')}
-                </Button>
+                  </Tabs.Content>
+                  <Tabs.Content className="grid gap-4" value="url">
+                    <TextInputField
+                      disabled={sourceType !== 'url'}
+                      id="urlSourceName"
+                      label={t('coursition.app.sources.sourceName')}
+                      name="sourceName"
+                      onChange={(event) =>
+                        updateSourceFormDraft('url', { name: event.currentTarget.value })
+                      }
+                      placeholder={t('coursition.app.sources.urlNamePlaceholder')}
+                      required
+                      value={sourceFormDrafts.url.name}
+                    />
+                    <TextInputField
+                      disabled={sourceType !== 'url'}
+                      id="urlSourceContent"
+                      label={t('coursition.app.sources.urlContent')}
+                      name="sourceContent"
+                      onChange={(event) =>
+                        updateSourceFormDraft('url', { content: event.currentTarget.value })
+                      }
+                      placeholder={t('coursition.app.sources.urlPlaceholder')}
+                      required
+                      type="url"
+                      value={sourceFormDrafts.url.content}
+                    />
+                    <Button
+                      className="justify-self-start"
+                      disabled={isSourceAddBusy}
+                      type="submit"
+                      variant="primary"
+                    >
+                      {busyAction === 'addSource' || busyAction === 'file'
+                        ? t('coursition.app.sources.adding')
+                        : t('coursition.app.sources.add')}
+                    </Button>
+                  </Tabs.Content>
+                  <Tabs.Content className="grid gap-4" value="file">
+                    <TextInputField
+                      disabled={sourceType !== 'file'}
+                      id="fileSourceName"
+                      label={t('coursition.app.sources.sourceName')}
+                      name="sourceName"
+                      onChange={(event) => {
+                        const { value } = event.currentTarget;
+                        setSourceFormDrafts((current) => updateSourceName(current, 'file', value));
+                      }}
+                      placeholder={t('coursition.app.sources.fileNamePlaceholder')}
+                      required
+                      value={sourceFormDrafts.file.name}
+                    />
+                    <FormInput
+                      disabled={sourceType !== 'file'}
+                      id="sourceFile"
+                      key={`source-file-${fileInputResetKey}`}
+                      label={t('coursition.app.sources.chooseFile')}
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0] ?? null;
+                        setSourceFormDrafts((current) => selectSourceFile(current, file));
+                        setFileSourceFeedback(null);
+                      }}
+                      type="file"
+                    />
+                    <Button
+                      className="justify-self-start"
+                      disabled={isSourceAddBusy}
+                      type="submit"
+                      variant="primary"
+                    >
+                      {busyAction === 'addSource' || busyAction === 'file'
+                        ? t('coursition.app.sources.adding')
+                        : t('coursition.app.sources.add')}
+                    </Button>
+                    {fileSourceFeedback === null ? null : (
+                      <p
+                        className={
+                          fileSourceFeedback.kind === 'error' ? errorTextClass : mutedTextClass
+                        }
+                        role={fileSourceFeedback.kind === 'error' ? 'alert' : 'status'}
+                      >
+                        {fileSourceFeedback.message}
+                      </p>
+                    )}
+                  </Tabs.Content>
+                </Tabs>
               </form>
               {visibleSources.length === 0 ? (
                 <p className={mutedTextClass}>
@@ -3170,17 +4062,19 @@ export const CoursitionWorkflowApp = ({
                     : t('coursition.app.sources.emptyCopy')}
                 </p>
               ) : (
-                <ul className="grid gap-2">
+                <ul className="grid gap-3">
                   {visibleSources.map((source) => {
                     const canPreview = canPreviewSource(source);
                     const isPreviewExpanded = expandedSourcePreviewIdSet.has(source.id);
                     const previewId = `source-preview-${source.id}`;
                     return (
-                      <li className="grid gap-2 rounded-md bg-fill-base p-3" key={source.id}>
+                      <li className={`${insetSurfaceClass} grid gap-3`} key={source.id}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="grid gap-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-base font-bold text-fg-primary">{source.name}</h3>
+                              <h3 className="text-base font-semibold text-fg-primary">
+                                {source.name}
+                              </h3>
                               <Badge size="sm" variant={sourceStatusBadgeVariant(source.status)}>
                                 {t(`coursition.app.sources.statuses.${source.status}`)}
                               </Badge>
@@ -3192,8 +4086,9 @@ export const CoursitionWorkflowApp = ({
                                 aria-controls={previewId}
                                 aria-expanded={isPreviewExpanded}
                                 onClick={() => toggleSourcePreview(source.id)}
+                                theme="light"
                                 type="button"
-                                variant="secondary"
+                                variant="primary"
                               >
                                 {t(
                                   isPreviewExpanded
@@ -3213,26 +4108,28 @@ export const CoursitionWorkflowApp = ({
                                     sourceId: source.id,
                                   })
                                 }
+                                theme="light"
                                 type="button"
-                                variant="secondary"
+                                variant="primary"
                               >
                                 {t('coursition.app.sources.retry')}
                               </Button>
                             ) : null}
-                            <Button
+                            <ConfirmDeleteButton
+                              cancelLabel={t('coursition.app.dashboard.cancel')}
+                              confirmLabel={t('coursition.app.sources.delete')}
+                              description={t('coursition.app.dashboard.confirmDeleteMessage')}
                               disabled={isSourceDeleteBusy}
-                              onClick={() =>
+                              label={t('coursition.app.sources.delete')}
+                              onConfirm={() =>
                                 void runWorkflow({
                                   action: 'deleteSource',
                                   draftId: draft.id,
                                   sourceId: source.id,
                                 })
                               }
-                              type="button"
-                              variant="danger"
-                            >
-                              {t('coursition.app.sources.delete')}
-                            </Button>
+                              title={t('coursition.app.sources.delete')}
+                            />
                           </div>
                         </div>
                         {source.failureReason === undefined ? null : (
@@ -3254,11 +4151,11 @@ export const CoursitionWorkflowApp = ({
           ) : null}
 
           {activeStep === 'preparation' ? (
-            <section className={`${cardClass} ${panelClass}`}>
-              <h2 className="text-xl font-bold text-fg-primary">
+            <section className={`${workspaceSectionClass} ${readingColumnClass}`}>
+              <h2 className="text-xl font-semibold text-fg-primary">
                 {t('coursition.app.preparation.title')}
               </h2>
-              <div className="grid gap-3" onBlur={savePreparationOnBlur}>
+              <div className="grid gap-3" onBlur={savePreparationOnPanelLeave}>
                 <RadioCard
                   className="grid gap-2 sm:grid-cols-3"
                   itemOrientation="horizontal"
@@ -3309,31 +4206,6 @@ export const CoursitionWorkflowApp = ({
                   value={preparation.audience}
                 />
                 <TextareaField
-                  label={t('coursition.app.preparation.prior')}
-                  name="priorKnowledge"
-                  onChange={(event) =>
-                    updatePreparationField('priorKnowledge', event.currentTarget.value)
-                  }
-                  placeholder={t('coursition.app.preparation.priorPlaceholder')}
-                  value={preparation.priorKnowledge}
-                />
-                <TextareaField
-                  label={t('coursition.app.preparation.depth')}
-                  name="depth"
-                  onChange={(event) => updatePreparationField('depth', event.currentTarget.value)}
-                  placeholder={t('coursition.app.preparation.depthPlaceholder')}
-                  value={preparation.depth}
-                />
-                <TextareaField
-                  label={t('coursition.app.preparation.avoid')}
-                  name="constraints"
-                  onChange={(event) =>
-                    updatePreparationField('constraints', event.currentTarget.value)
-                  }
-                  placeholder={t('coursition.app.preparation.avoidPlaceholder')}
-                  value={preparation.constraints}
-                />
-                <TextareaField
                   label={t('coursition.app.preparation.practice')}
                   name="activityMixPreference"
                   onChange={(event) =>
@@ -3343,23 +4215,72 @@ export const CoursitionWorkflowApp = ({
                   required
                   value={preparation.activityMixPreference}
                 />
-                <FormCheckbox
-                  checked={preparation.sourceStrictness === 'strict'}
-                  id="sourceStrictness"
-                  label={t('coursition.app.preparation.strict')}
-                  onCheckedChange={(checked) =>
-                    updatePreparationField('sourceStrictness', checked ? 'strict' : 'standard')
-                  }
-                />
+                <Accordion
+                  className="border-t border-border-primary pt-2"
+                  collapsible
+                  defaultValue={[]}
+                  multiple={false}
+                  size="sm"
+                  variant="borderless"
+                >
+                  <Accordion.Item value="advanced-preparation">
+                    <Accordion.Header>
+                      <Accordion.Title>{t('coursition.app.preparation.advanced')}</Accordion.Title>
+                      <Accordion.Indicator />
+                    </Accordion.Header>
+                    <Accordion.Content>
+                      <div className="grid gap-3">
+                        <TextareaField
+                          label={t('coursition.app.preparation.prior')}
+                          name="priorKnowledge"
+                          onChange={(event) =>
+                            updatePreparationField('priorKnowledge', event.currentTarget.value)
+                          }
+                          placeholder={t('coursition.app.preparation.priorPlaceholder')}
+                          value={preparation.priorKnowledge}
+                        />
+                        <TextareaField
+                          label={t('coursition.app.preparation.depth')}
+                          name="depth"
+                          onChange={(event) =>
+                            updatePreparationField('depth', event.currentTarget.value)
+                          }
+                          placeholder={t('coursition.app.preparation.depthPlaceholder')}
+                          value={preparation.depth}
+                        />
+                        <TextareaField
+                          label={t('coursition.app.preparation.avoid')}
+                          name="constraints"
+                          onChange={(event) =>
+                            updatePreparationField('constraints', event.currentTarget.value)
+                          }
+                          placeholder={t('coursition.app.preparation.avoidPlaceholder')}
+                          value={preparation.constraints}
+                        />
+                        <FormCheckbox
+                          checked={preparation.sourceStrictness === 'strict'}
+                          id="sourceStrictness"
+                          label={t('coursition.app.preparation.strict')}
+                          onCheckedChange={(checked) =>
+                            updatePreparationField(
+                              'sourceStrictness',
+                              checked ? 'strict' : 'standard',
+                            )
+                          }
+                        />
+                      </div>
+                    </Accordion.Content>
+                  </Accordion.Item>
+                </Accordion>
               </div>
             </section>
           ) : null}
 
           {activeStep === 'objectives' ? (
-            <section className={`${cardClass} ${panelClass}`}>
+            <section className={`${workspaceSectionClass} ${readingColumnClass}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="grid gap-1">
-                  <h2 className="text-xl font-bold text-fg-primary">
+                  <h2 className="text-xl font-semibold text-fg-primary">
                     {t('coursition.app.objectives.title')}
                   </h2>
                   <p className={mutedTextClass}>{t('coursition.app.objectives.purpose')}</p>
@@ -3369,6 +4290,7 @@ export const CoursitionWorkflowApp = ({
                   onClick={() =>
                     void runWorkflow({ action: 'generateLearningBlueprint', draftId: draft.id })
                   }
+                  theme="light"
                   type="button"
                   variant="primary"
                 >
@@ -3385,7 +4307,7 @@ export const CoursitionWorkflowApp = ({
                 <ul className="grid gap-1 rounded-md bg-fill-base p-3">
                   {draft.learningBlueprint.assumptions.map((assumption) => (
                     <li className={mutedTextClass} key={assumption}>
-                      {assumption}
+                      {normalizedGeneratedText(assumption)}
                     </li>
                   ))}
                 </ul>
@@ -3393,46 +4315,74 @@ export const CoursitionWorkflowApp = ({
               {draft.learningBlueprint.objectives.length === 0 ? (
                 <p className={mutedTextClass}>{t('coursition.app.objectives.emptyObjectives')}</p>
               ) : (
-                <div className="grid gap-3">
+                <Accordion
+                  className={editorialListClass}
+                  collapsible={false}
+                  defaultValue={[draft.learningBlueprint.objectives[0]?.id ?? '']}
+                  multiple={false}
+                  size="md"
+                  variant="borderless"
+                >
                   {draft.learningBlueprint.objectives.map((objective, index) => (
-                    <form
-                      className="grid gap-2 rounded-md bg-fill-base p-3"
-                      key={objective.id}
-                      onBlur={(event) => saveObjectiveOnBlur(event, objective.id)}
-                      onSubmit={(event) => saveObjectiveOnSubmit(event, objective.id)}
-                    >
-                      <p className={tinyMetaClass}>
-                        {t('coursition.app.objectives.objectiveNumber', { number: index + 1 })}
-                      </p>
-                      <FormInput
-                        defaultValue={objective.title}
-                        id={`${objective.id}-title`}
-                        label={t('coursition.app.objectives.objectiveTitle')}
-                        name="title"
-                        placeholder={t('coursition.app.objectives.objectiveTitlePlaceholder')}
-                      />
-                      <FormTextarea
-                        defaultValue={objective.capability}
-                        id={`${objective.id}-capability`}
-                        label={t('coursition.app.objectives.capability')}
-                        name="capability"
-                        placeholder={t('coursition.app.objectives.capabilityPlaceholder')}
-                        rows={4}
-                      />
-                      <p className={mutedTextClass}>
-                        {t(`coursition.app.objectives.sourceSupport.${objective.sourceSupport}`)}
-                      </p>
-                    </form>
+                    <Accordion.Item key={objective.id} value={objective.id}>
+                      <Accordion.Header>
+                        <Accordion.Title>
+                          {index + 1}. {objective.title}
+                        </Accordion.Title>
+                        <Accordion.Subtitle>
+                          {t(`coursition.app.objectives.sourceSupport.${objective.sourceSupport}`)}
+                        </Accordion.Subtitle>
+                        <Accordion.Indicator />
+                      </Accordion.Header>
+                      <Accordion.Content>
+                        <form
+                          className="grid gap-3"
+                          onBlur={(event) => saveObjectiveOnBlur(event, objective.id)}
+                          onSubmit={(event) => saveObjectiveOnSubmit(event, objective.id)}
+                        >
+                          <FormInput
+                            id={`${objective.id}-title`}
+                            label={t('coursition.app.objectives.objectiveTitle')}
+                            name="title"
+                            onChange={(event) =>
+                              updateObjectiveBuffer(objective.id, {
+                                title: event.currentTarget.value,
+                              })
+                            }
+                            placeholder={t('coursition.app.objectives.objectiveTitlePlaceholder')}
+                            value={
+                              objectiveEditBuffers[objective.id]?.value.title ?? objective.title
+                            }
+                          />
+                          <FormTextarea
+                            id={`${objective.id}-capability`}
+                            label={t('coursition.app.objectives.capability')}
+                            name="capability"
+                            onChange={(event) =>
+                              updateObjectiveBuffer(objective.id, {
+                                capability: event.currentTarget.value,
+                              })
+                            }
+                            placeholder={t('coursition.app.objectives.capabilityPlaceholder')}
+                            rows={4}
+                            value={
+                              objectiveEditBuffers[objective.id]?.value.capability ??
+                              normalizedGeneratedText(objective.capability)
+                            }
+                          />
+                        </form>
+                      </Accordion.Content>
+                    </Accordion.Item>
                   ))}
-                </div>
+                </Accordion>
               )}
             </section>
           ) : null}
 
           {activeStep === 'activityPlan' ? (
-            <section className={`${cardClass} ${panelClass}`}>
+            <section className={`${workspaceSectionClass} ${readingColumnClass}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-xl font-bold text-fg-primary">
+                <h2 className="text-xl font-semibold text-fg-primary">
                   {t('coursition.app.activityPlan.title')}
                 </h2>
                 <Button
@@ -3440,6 +4390,7 @@ export const CoursitionWorkflowApp = ({
                   onClick={() =>
                     void runWorkflow({ action: 'generateActivities', draftId: draft.id })
                   }
+                  theme="light"
                   type="button"
                   variant="primary"
                 >
@@ -3455,79 +4406,144 @@ export const CoursitionWorkflowApp = ({
               {draft.learningBlueprint.activityBriefs.length === 0 ? (
                 <p className={mutedTextClass}>{t('coursition.app.activityPlan.empty')}</p>
               ) : (
-                <div className="grid gap-3">
+                <Accordion
+                  className={editorialListClass}
+                  collapsible={false}
+                  defaultValue={[draft.learningBlueprint.activityBriefs[0]?.id ?? '']}
+                  multiple={false}
+                  size="md"
+                  variant="borderless"
+                >
                   {draft.learningBlueprint.activityBriefs.map((brief, index) => (
-                    <form
-                      className="grid gap-2 rounded-md bg-fill-base p-3"
-                      key={brief.id}
-                      onBlur={(event) => saveActivityBriefOnBlur(event, brief.id)}
-                      onSubmit={(event) => saveActivityBriefOnSubmit(event, brief.id)}
-                    >
-                      <p className={tinyMetaClass}>
-                        {t('coursition.app.activityPlan.activityNumber', { number: index + 1 })}
-                      </p>
-                      <FormInput
-                        defaultValue={brief.title}
-                        id={`${brief.id}-title`}
-                        label={t('coursition.app.activityPlan.activityTitle')}
-                        name="title"
-                        placeholder={t('coursition.app.activityPlan.activityTitlePlaceholder')}
-                      />
-                      <SelectTemplate
-                        defaultValue={[brief.type]}
-                        id={`${brief.id}-type`}
-                        items={activityTypes.map((type) => ({
-                          displayValue: t(`coursition.app.activityPlan.types.${type}`),
-                          label: t(`coursition.app.activityPlan.types.${type}`),
-                          value: type,
-                        }))}
-                        label={t('coursition.app.activityPlan.type')}
-                        name="type"
-                        placeholder={t('coursition.app.activityPlan.type')}
-                      />
-                      <FormTextarea
-                        defaultValue={brief.instructions}
-                        id={`${brief.id}-instructions`}
-                        label={t('coursition.app.activityPlan.instructions')}
-                        name="instructions"
-                        placeholder={t('coursition.app.activityPlan.instructionsPlaceholder')}
-                        rows={4}
-                      />
-                      <FormTextarea
-                        defaultValue={brief.learnerAction}
-                        id={`${brief.id}-learnerAction`}
-                        label={t('coursition.app.activityPlan.learnerAction')}
-                        name="learnerAction"
-                        placeholder={t('coursition.app.activityPlan.learnerActionPlaceholder')}
-                        rows={4}
-                      />
-                      <FormTextarea
-                        defaultValue={brief.successCriteria}
-                        id={`${brief.id}-successCriteria`}
-                        label={t('coursition.app.activityPlan.successCriteria')}
-                        name="successCriteria"
-                        placeholder={t('coursition.app.activityPlan.successCriteriaPlaceholder')}
-                        rows={4}
-                      />
-                      <FormTextarea
-                        defaultValue={brief.feedbackGuidance}
-                        id={`${brief.id}-feedbackGuidance`}
-                        label={t('coursition.app.activityPlan.feedbackGuidance')}
-                        name="feedbackGuidance"
-                        placeholder={t('coursition.app.activityPlan.feedbackGuidancePlaceholder')}
-                        rows={4}
-                      />
-                    </form>
+                    <Accordion.Item key={brief.id} value={brief.id}>
+                      <Accordion.Header>
+                        <Accordion.Title>
+                          {index + 1}. {brief.title}
+                        </Accordion.Title>
+                        <Accordion.Subtitle>
+                          {t(`coursition.app.activityPlan.types.${brief.type}`)}
+                        </Accordion.Subtitle>
+                        <Accordion.Indicator />
+                      </Accordion.Header>
+                      <Accordion.Content>
+                        <form
+                          className="grid gap-3"
+                          onBlur={(event) => saveActivityBriefOnBlur(event, brief.id)}
+                          onSubmit={(event) => saveActivityBriefOnSubmit(event, brief.id)}
+                        >
+                          <FormInput
+                            id={`${brief.id}-title`}
+                            label={t('coursition.app.activityPlan.activityTitle')}
+                            name="title"
+                            onChange={(event) =>
+                              updateActivityBriefBuffer(brief.id, {
+                                title: event.currentTarget.value,
+                              })
+                            }
+                            placeholder={t('coursition.app.activityPlan.activityTitlePlaceholder')}
+                            value={activityBriefEditBuffers[brief.id]?.value.title ?? brief.title}
+                          />
+                          <SelectTemplate
+                            id={`${brief.id}-type`}
+                            items={activityTypes.map((type) => ({
+                              displayValue: t(`coursition.app.activityPlan.types.${type}`),
+                              label: t(`coursition.app.activityPlan.types.${type}`),
+                              value: type,
+                            }))}
+                            label={t('coursition.app.activityPlan.type')}
+                            name="type"
+                            onValueChange={(details) => {
+                              const type = activityTypes.find((candidate) =>
+                                details.value.includes(candidate),
+                              );
+                              if (type !== undefined) {
+                                updateActivityBriefBuffer(brief.id, { type });
+                              }
+                            }}
+                            placeholder={t('coursition.app.activityPlan.type')}
+                            value={[activityBriefEditBuffers[brief.id]?.value.type ?? brief.type]}
+                          />
+                          <FormTextarea
+                            id={`${brief.id}-instructions`}
+                            label={t('coursition.app.activityPlan.instructions')}
+                            name="instructions"
+                            onChange={(event) =>
+                              updateActivityBriefBuffer(brief.id, {
+                                instructions: event.currentTarget.value,
+                              })
+                            }
+                            placeholder={t('coursition.app.activityPlan.instructionsPlaceholder')}
+                            rows={4}
+                            value={
+                              activityBriefEditBuffers[brief.id]?.value.instructions ??
+                              normalizedGeneratedText(brief.instructions)
+                            }
+                          />
+                          <FormTextarea
+                            id={`${brief.id}-learnerAction`}
+                            label={t('coursition.app.activityPlan.learnerAction')}
+                            name="learnerAction"
+                            onChange={(event) =>
+                              updateActivityBriefBuffer(brief.id, {
+                                learnerAction: event.currentTarget.value,
+                              })
+                            }
+                            placeholder={t('coursition.app.activityPlan.learnerActionPlaceholder')}
+                            rows={4}
+                            value={
+                              activityBriefEditBuffers[brief.id]?.value.learnerAction ??
+                              normalizedGeneratedText(brief.learnerAction)
+                            }
+                          />
+                          <FormTextarea
+                            id={`${brief.id}-successCriteria`}
+                            label={t('coursition.app.activityPlan.successCriteria')}
+                            name="successCriteria"
+                            onChange={(event) =>
+                              updateActivityBriefBuffer(brief.id, {
+                                successCriteria: event.currentTarget.value,
+                              })
+                            }
+                            placeholder={t(
+                              'coursition.app.activityPlan.successCriteriaPlaceholder',
+                            )}
+                            rows={4}
+                            value={
+                              activityBriefEditBuffers[brief.id]?.value.successCriteria ??
+                              normalizedGeneratedText(brief.successCriteria)
+                            }
+                          />
+                          <FormTextarea
+                            id={`${brief.id}-feedbackGuidance`}
+                            label={t('coursition.app.activityPlan.feedbackGuidance')}
+                            name="feedbackGuidance"
+                            onChange={(event) =>
+                              updateActivityBriefBuffer(brief.id, {
+                                feedbackGuidance: event.currentTarget.value,
+                              })
+                            }
+                            placeholder={t(
+                              'coursition.app.activityPlan.feedbackGuidancePlaceholder',
+                            )}
+                            rows={4}
+                            value={
+                              activityBriefEditBuffers[brief.id]?.value.feedbackGuidance ??
+                              normalizedGeneratedText(brief.feedbackGuidance)
+                            }
+                          />
+                        </form>
+                      </Accordion.Content>
+                    </Accordion.Item>
                   ))}
-                </div>
+                </Accordion>
               )}
             </section>
           ) : null}
 
           {activeStep === 'courseContent' ? (
-            <section className={`${cardClass} ${panelClass}`}>
+            <section className={workspaceSectionClass}>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-xl font-bold text-fg-primary">
+                <h2 className="text-xl font-semibold text-fg-primary">
                   {t('coursition.app.courseContent.title')}
                 </h2>
                 <Button
@@ -3535,6 +4551,7 @@ export const CoursitionWorkflowApp = ({
                   onClick={() =>
                     void runWorkflow({ action: 'generateCourseContent', draftId: draft.id })
                   }
+                  theme="light"
                   type="button"
                   variant="primary"
                 >
@@ -3556,8 +4573,8 @@ export const CoursitionWorkflowApp = ({
           ) : null}
 
           {activeStep === 'preview' ? (
-            <section className={`${cardClass} ${panelClass}`}>
-              <h2 className="text-xl font-bold text-fg-primary">
+            <section className={workspaceSectionClass}>
+              <h2 className="text-xl font-semibold text-fg-primary">
                 {t('coursition.app.preview.title')}
               </h2>
               <CourseContentView draft={draft} t={t} />
@@ -3567,6 +4584,8 @@ export const CoursitionWorkflowApp = ({
           ) : null}
         </section>
       )}
-    </main>
+    </div>
   );
 };
+
+export default CoursitionWorkflowApp;

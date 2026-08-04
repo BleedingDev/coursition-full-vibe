@@ -1,130 +1,158 @@
 {
-  "voice": "Daniel",
+  "provider": "boson",
+  "voice": "eleanor",
   "audio": "assets/voiceover.mp3",
-  "total": 83.327,
-  "audioDuration": 83.327,
+  "total": 62.75,
+  "audioDuration": 62.75,
   "lines": {
     "hook-1": {
       "scene": "hook",
-      "start": 0.6,
-      "dur": 2.659,
-      "end": 3.259,
+      "start": 0.41,
+      "end": 3.61,
+      "dur": 3.2,
       "text": "Course text is easy. Good learning is hard."
     },
     "pos-1": {
       "scene": "positioning",
-      "start": 3.959,
-      "dur": 6.959,
-      "end": 10.918,
-      "text": "Teachable, Thinkific, and Moodle help you host and sell courses. Coursition helps you prepare better learning."
+      "start": 3.7,
+      "end": 9.53,
+      "dur": 5.83,
+      "text": "Teachable, Thinkific and Moodle host and sell courses. Coursition prepares the learning."
     },
     "fight-1": {
       "scene": "fight",
-      "start": 11.618,
-      "dur": 7.958,
-      "end": 19.576,
-      "text": "I came in with a rough prototype and one risky bet: that A.I. could turn source material into activities that actually help people learn."
+      "start": 9.53,
+      "end": 17.85,
+      "dur": 8.32,
+      "text": "I came in with a rough prototype and one risky bet: that A.I. could turn raw material into practice that actually teaches."
     },
     "fight-2": {
       "scene": "fight",
-      "start": 19.896,
-      "dur": 8.406,
-      "end": 28.302,
-      "text": "The surprise? Generating content is easy. Generating practice is hard. So I stopped asking the model to invent random mini-games."
+      "start": 17.85,
+      "end": 25.53,
+      "dur": 7.68,
+      "text": "Generating content is easy. Generating practice is hard. So I stopped asking the model for random mini-games."
     },
     "eng-1": {
       "scene": "engines",
-      "start": 29.002,
-      "dur": 10.557,
-      "end": 39.558,
-      "text": "Instead, it fills reusable activity engines: retrieval checks, scenario decisions, ordering and matching, practice tasks, and rubric answers."
+      "start": 25.53,
+      "end": 34,
+      "dur": 8.47,
+      "text": "It fills reusable activity engines: retrieval checks, scenario decisions, ordering, practice tasks, and rubric answers."
     },
     "demo-1": {
       "scene": "demo",
-      "start": 40.258,
-      "dur": 6.727,
-      "end": 46.986,
-      "text": "Here is the flow. Choose how much help you want, then add a source — a dense German statistics PDF."
+      "start": 34.05,
+      "end": 37.77,
+      "dur": 3.72,
+      "text": "Add a source — here, a dense German statistics PDF."
     },
     "demo-2": {
       "scene": "demo",
-      "start": 47.306,
-      "dur": 5.041,
-      "end": 52.346,
-      "text": "Coursition writes the course preparation — who it is for and what they should be able to do."
+      "start": 37.77,
+      "end": 40.74,
+      "dur": 2.97,
+      "text": "Coursition drafts the course preparation,"
     },
     "demo-3": {
       "scene": "demo",
-      "start": 52.666,
-      "dur": 1.721,
-      "end": 54.388,
-      "text": "It maps the learning objectives,"
+      "start": 40.74,
+      "end": 42.31,
+      "dur": 1.57,
+      "text": "the learning objectives,"
     },
     "demo-4": {
       "scene": "demo",
-      "start": 54.708,
-      "dur": 5.007,
-      "end": 59.715,
-      "text": "and an activity plan, where every activity is one of those reusable engines."
+      "start": 42.31,
+      "end": 44.87,
+      "dur": 2.56,
+      "text": "an activity plan built from those engines,"
     },
     "demo-5": {
       "scene": "demo",
-      "start": 60.035,
-      "dur": 4.76,
-      "end": 64.795,
-      "text": "Then a playable preview — where the course stops being text and becomes practice."
+      "start": 44.87,
+      "end": 48.35,
+      "dur": 3.48,
+      "text": "and a playable preview, where content becomes practice."
     },
     "res-1": {
       "scene": "result",
-      "start": 65.495,
-      "dur": 10.499,
-      "end": 75.994,
-      "text": "It is not sold yet, and it is not finished. But the wedge is sharper. Next, I test it with real creators — two thousand on my newsletter, ten thousand on LinkedIn."
+      "start": 48.35,
+      "end": 57.53,
+      "dur": 9.18,
+      "text": "It's not sold, and it's not finished. But the wedge is sharper. Next: real creators — two thousand on my newsletter, ten thousand on LinkedIn."
     },
     "close-1": {
       "scene": "close",
-      "start": 76.694,
-      "dur": 5.533,
-      "end": 82.227,
-      "text": "Coursition. AI-native course preparation for reusable, interactive learning."
+      "start": 57.53,
+      "end": 62.17,
+      "dur": 4.64,
+      "text": "Coursition. Course preparation for reusable, interactive learning."
     }
   },
   "scenes": {
     "hook": {
-      "start": 0.6,
-      "end": 3.259,
-      "lineIds": ["hook-1"]
+      "start": 0.41,
+      "end": 3.61,
+      "lineIds": [
+        "hook-1"
+      ]
     },
     "positioning": {
-      "start": 3.959,
-      "end": 10.918,
-      "lineIds": ["pos-1"]
+      "start": 3.7,
+      "end": 9.53,
+      "lineIds": [
+        "pos-1"
+      ]
     },
     "fight": {
-      "start": 11.618,
-      "end": 28.302,
-      "lineIds": ["fight-1", "fight-2"]
+      "start": 9.53,
+      "end": 25.53,
+      "lineIds": [
+        "fight-1",
+        "fight-2"
+      ]
     },
     "engines": {
-      "start": 29.002,
-      "end": 39.558,
-      "lineIds": ["eng-1"]
+      "start": 25.53,
+      "end": 34,
+      "lineIds": [
+        "eng-1"
+      ]
     },
     "demo": {
-      "start": 40.258,
-      "end": 64.795,
-      "lineIds": ["demo-1", "demo-2", "demo-3", "demo-4", "demo-5"]
+      "start": 34.05,
+      "end": 48.35,
+      "lineIds": [
+        "demo-1",
+        "demo-2",
+        "demo-3",
+        "demo-4",
+        "demo-5"
+      ]
     },
     "result": {
-      "start": 65.495,
-      "end": 75.994,
-      "lineIds": ["res-1"]
+      "start": 48.35,
+      "end": 57.53,
+      "lineIds": [
+        "res-1"
+      ]
     },
     "close": {
-      "start": 76.694,
-      "end": 82.227,
-      "lineIds": ["close-1"]
+      "start": 57.53,
+      "end": 62.17,
+      "lineIds": [
+        "close-1"
+      ]
     }
   },
-  "sceneOrder": ["hook", "positioning", "fight", "engines", "demo", "result", "close"]
+  "sceneOrder": [
+    "hook",
+    "positioning",
+    "fight",
+    "engines",
+    "demo",
+    "result",
+    "close"
+  ]
 }

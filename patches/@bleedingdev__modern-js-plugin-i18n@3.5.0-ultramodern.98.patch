@@ -1,0 +1,50 @@
+diff --git a/dist/types/runtime/i18n/instance.d.ts b/dist/types/runtime/i18n/instance.d.ts
+index 81b57871ee29e91638fb0de9b194329811850ac8..857386065a5b01edba2ed088219d7fdd5de016dc 100644
+--- a/dist/types/runtime/i18n/instance.d.ts
++++ b/dist/types/runtime/i18n/instance.d.ts
+@@ -1,4 +1,5 @@
+ import type { BaseBackendOptions } from '../../shared/type';
++import type { i18n } from 'i18next';
+ interface I18nResourceStore {
+     data?: {
+         [language: string]: {
+@@ -14,37 +15,9 @@ type I18nWrapperInstance = I18nInstance & {
+ };
+ export declare function isI18nWrapperInstance(obj: unknown): obj is I18nWrapperInstance;
+ export declare function getActualI18nextInstance(instance: I18nInstance): I18nInstance;
+-export interface I18nInstance {
+-    language: string;
+-    isInitialized?: boolean;
+-    init: {
+-        (callback?: (error: unknown, t: unknown) => void): Promise<unknown>;
+-        (options: I18nInitOptions, callback?: (error: unknown, t: unknown) => void): Promise<unknown>;
+-    };
+-    changeLanguage?: (lng?: string, callback?: (error: unknown, t: unknown) => void) => Promise<unknown>;
++export type I18nInstance = i18n & {
+     setLang?: (lang: string) => void | Promise<void>;
+-    use: (plugin: unknown) => void;
+-    createInstance?: (options?: I18nInitOptions) => I18nInstance;
+-    cloneInstance?: (options?: I18nInitOptions) => I18nInstance;
+-    store?: I18nResourceStore;
+-    emit?: (event: string, ...args: unknown[]) => void;
+-    reloadResources?: (language?: string, namespace?: string) => Promise<void>;
+-    removeResourceBundle?: (language: string, namespace: string) => I18nInstance;
+-    services?: {
+-        languageDetector?: {
+-            detect: (request?: unknown, options?: unknown) => string | string[] | undefined;
+-            [key: string]: unknown;
+-        };
+-        resourceStore?: I18nResourceStore;
+-        backend?: unknown;
+-        [key: string]: unknown;
+-    };
+-    options?: {
+-        backend?: BackendOptions;
+-        [key: string]: unknown;
+-    };
+-    [key: string]: unknown;
+-}
++};
+ type LanguageDetectorOrder = string[];
+ type LanguageDetectorCaches = boolean | string[];
+ export interface LanguageDetectorOptions {

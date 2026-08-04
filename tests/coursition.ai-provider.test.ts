@@ -12,6 +12,7 @@ import {
   generateCourseContentWithAi,
   isAiProviderConfigured,
   learningBlueprintFromAxPlanningResult,
+  renderPlayableActivityFromBrief,
 } from '../server/coursition/ai-provider.ts';
 
 const preparation = (language: CoursePreparation['language']): CoursePreparation => ({
@@ -143,6 +144,43 @@ const expectRubricAnswerActivity = (activity: GeneratedActivityResult): RubricAn
 };
 
 describe('Coursition AI provider', () => {
+  test('renders every Ax-planned activity brief into a playable local engine', () => {
+    const draft = sourceFirstDraft();
+    const activityTypes = [
+      'retrieval_check',
+      'scenario_decision',
+      'ordering_matching',
+      'practice_task',
+      'rubric_answer',
+    ] as const;
+
+    for (const type of activityTypes) {
+      const rendered = renderPlayableActivityFromBrief(
+        draft,
+        activityBrief({ id: `brief_${type}`, type }),
+      );
+
+      expect(rendered.type).toBe(type);
+      expect(rendered.status).toBe('generated');
+      expect(rendered.interaction.kind).toBe(type);
+    }
+  });
+
+  test('omits matching-only labels from locally rendered ordering items', () => {
+    const rendered = renderPlayableActivityFromBrief(
+      sourceFirstDraft(),
+      activityBrief({ id: 'brief_ordering', type: 'ordering_matching' }),
+    );
+
+    expect(rendered.type).toBe('ordering_matching');
+    if (rendered.type !== 'ordering_matching') {
+      throw new Error(`Expected ordering_matching, received ${rendered.type}`);
+    }
+    for (const item of rendered.interaction.items) {
+      expect(Object.hasOwn(item, 'matchLabel')).toBe(false);
+    }
+  });
+
   test('reports the configured local Ax provider when available', () => {
     const config = aiProviderConfig();
 
@@ -233,8 +271,65 @@ describe('Coursition AI provider', () => {
 
     expect(learningBlueprint.coursePreparation.language).toBe('en');
     expect(learningBlueprint.objectives).toHaveLength(1);
-    expect(learningBlueprint.activityBriefs).toHaveLength(1);
+    expect(learningBlueprint.activityBriefs).toHaveLength(5);
     expect(learningBlueprint.generatedActivities).toHaveLength(0);
+  });
+
+  test('materializes deterministic Czech activity briefs for a Czech plan', () => {
+    const draft = {
+      ...sourceFirstDraft(),
+      language: 'cs' as const,
+      learningBlueprint: {
+        ...sourceFirstDraft().learningBlueprint,
+        coursePreparation: {
+          ...preparation('cs'),
+          languagePreference: 'cs' as const,
+        },
+      },
+    };
+    const learningBlueprint = learningBlueprintFromAxPlanningResult(draft, {
+      activityBriefs: [],
+      assumptions: 'Kurz je v češtině.',
+      coursePreparation: draft.learningBlueprint.coursePreparation,
+      objectives: [
+        {
+          capability: 'Bezpečně předat odpovědnost před eskalací.',
+          sourceConfidence: 'high',
+          sourceSupport: 'source_backed',
+          title: 'Bezpečné předání odpovědnosti',
+          topicName: 'Řízení incidentu',
+        },
+      ],
+      outputLanguage: 'cs',
+    });
+
+    expect(learningBlueprint.activityBriefs[0]?.title).toContain('kontrola vybavení');
+    expect(learningBlueprint.activityBriefs[0]?.instructions).toContain('Procvičte si schopnost');
+    expect(learningBlueprint.activityBriefs[0]?.feedbackGuidance).toContain('co zlepšit');
+  });
+
+  test('materializes at least one activity brief for every generated objective', () => {
+    const draft = sourceFirstDraft();
+    const objectives = Array.from({ length: 6 }, (_, index) => ({
+      capability: `Apply source-backed capability ${index + 1}.`,
+      id: `objective_${index + 1}`,
+      sourceConfidence: 'high' as const,
+      sourceSupport: 'source_backed' as const,
+      title: `Objective ${index + 1}`,
+      topicName: 'Incident review',
+    }));
+    const learningBlueprint = learningBlueprintFromAxPlanningResult(draft, {
+      activityBriefs: [],
+      assumptions: 'Every objective needs a playable activity.',
+      coursePreparation: draft.learningBlueprint.coursePreparation,
+      objectives,
+      outputLanguage: 'en',
+    });
+
+    expect(learningBlueprint.activityBriefs).toHaveLength(objectives.length);
+    expect(
+      new Set(learningBlueprint.activityBriefs.flatMap((brief) => brief.objectiveIds)),
+    ).toEqual(new Set(learningBlueprint.objectives.map((objective) => objective.id)));
   });
 
   test('rejects wrapped Ax activity brief arrays instead of unwrapping them', () => {

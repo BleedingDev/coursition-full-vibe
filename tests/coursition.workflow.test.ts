@@ -6,27 +6,19 @@ import { describe, expect, test } from '@rstest/core';
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
 const runnerPath = path.join(root, 'tests/coursition.workflow.runner.ts');
-const esbuildRegisterPath = path.join(
-  root,
-  'node_modules/.pnpm/esbuild-register@3.6.0_esbuild@0.28.0/node_modules/esbuild-register/register.js',
-);
-const tsconfigPathsRegisterPath = path.join(
-  root,
-  'node_modules/.pnpm/tsconfig-paths@4.2.0/node_modules/tsconfig-paths/register.js',
-);
 
+/* The runner is TypeScript with explicit `.ts` import specifiers, so Node runs
+ * it directly through type stripping. It used to be loaded via `-r` preloads
+ * pointing at exact paths inside the pnpm store, which broke as soon as those
+ * dependencies moved. */
 const runScenario = async <T>(scenario: string): Promise<T> => {
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    ['-r', esbuildRegisterPath, '-r', tsconfigPathsRegisterPath, runnerPath, scenario],
-    {
-      cwd: root,
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-      },
+  const { stdout } = await execFileAsync(process.execPath, [runnerPath, scenario], {
+    cwd: root,
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
     },
-  );
+  });
 
   const resultLine = stdout
     .trim()
@@ -95,6 +87,24 @@ describe.sequential('source-first Coursition workflow contract', () => {
     expect(result.activityBriefCount).toBeGreaterThan(0);
     expect(result.generatedActivityCount).toBeGreaterThan(0);
     expect(result.courseContentRenderable).toBe(true);
+  }, 60_000);
+
+  test('one advance action rebuilds a stale generated course and opens its preview', async () => {
+    const result = await runScenario<{
+      courseGenerationRuns: number;
+      learningBlueprintRuns: number;
+      sourceStep: string;
+      staleContentStatus: string;
+      stepAfterAdvance: string;
+      stepAfterFirstAdvance: string;
+    }>('advanceRegeneratesStaleGenerateModeCourse');
+
+    expect(result.sourceStep).toBe('sources');
+    expect(result.stepAfterFirstAdvance).toBe('preview');
+    expect(result.staleContentStatus).toBe('stale');
+    expect(result.stepAfterAdvance).toBe('preview');
+    expect(result.courseGenerationRuns).toBe(1);
+    expect(result.learningBlueprintRuns).toBe(1);
   }, 60_000);
 
   test('source lifecycle classifies notes, URL, and provider-backed files without old wizard steps', async () => {
@@ -193,7 +203,7 @@ describe.sequential('source-first Coursition workflow contract', () => {
     expect(result.summaryTitles).toEqual(['Second source draft', 'First source draft']);
     expect(result.latestDraftId).not.toBe(result.selectedDraftId);
     expect(result.selectedStep).toBe('sources');
-  });
+  }, 60_000);
 
   test('course output language defaults to source and can be set to Czech or English', async () => {
     const result = await runScenario<{

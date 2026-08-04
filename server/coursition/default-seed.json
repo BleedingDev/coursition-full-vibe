@@ -1469,6 +1469,7 @@
       },
       "mode": "assist",
       "ownerId": "__coursition_seed_owner__",
+      "revision": 1,
       "sourceProcessingIncomplete": false,
       "sources": [
         {
@@ -3376,6 +3377,7 @@
       },
       "mode": "generate",
       "ownerId": "__coursition_seed_owner__",
+      "revision": 1,
       "sourceProcessingIncomplete": false,
       "sources": [
         {
@@ -3395,5 +3397,6 @@
       "title": "Claude cert",
       "updatedAt": "2026-06-07T05:12:08.481Z"
     }
-  ]
+  ],
+  "ownerRevisions": {}
 }

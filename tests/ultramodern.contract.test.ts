@@ -12,7 +12,7 @@ describe('generated UltraModern contract', () => {
     expect(fs.existsSync(path.join(root, 'src/routes/page.tsx'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'src/routes/layout.tsx'))).toBe(true);
 
-    expect(fs.existsSync(path.join(root, 'postcss.config.mjs'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'postcss.config.mjs'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'tailwind.config.ts'))).toBe(true);
   });
 
@@ -43,10 +43,11 @@ describe('generated UltraModern contract', () => {
     expect(packageSource.modernPackages?.packages).toContain('@modern-js/runtime');
     expect(packageSource.modernPackages?.packages).toContain('@modern-js/app-tools');
     expect(packageSource.modernPackages?.packages).toContain('@modern-js/adapter-rstest');
+    expect(packageSource.modernPackages?.packages).toContain('@modern-js/create');
     expect(packageSource.modernPackages?.specifier).toBeTruthy();
     expect(packageJson.devDependencies?.['@modern-js/adapter-rstest']).toBeTruthy();
 
-    expect(packageJson.devDependencies?.tailwindcss).toBe('^4.3.0');
-    expect(packageJson.devDependencies?.['@tailwindcss/postcss']).toBe('^4.3.0');
+    expect(packageJson.devDependencies?.tailwindcss).toBe('^4.3.2');
+    expect(packageJson.devDependencies?.['@rsbuild/plugin-tailwindcss']).toBe('^2.0.3');
   });
 });

@@ -5,6 +5,7 @@
 .env.local
 .env
 .env.*.local
+.dev.vars
 .history
 *.log*
 
@@ -16,10 +17,24 @@ node_modules/
 .agents/skills/
 
 dist/
+dist-cloudflare/
 .output/
+.modern-js/
+.tmp/
+.claude/worktrees/
 coverage/
 .coursition-data/
 .scratch/
+tmp/
+demo-raw.webm
+
+# SEO research. Keyword universes, competitor crawls and autocomplete dumps are
+# pipeline intermediates that ran to tens of thousands of lines; the signed
+# deliverables live elsewhere. `scripts/generate-seo-static.mjs` is application
+# code that emits robots.txt and sitemap.xml, and stays tracked.
+docs/czechinvest/seo/
+docs/czechinvest/workflows/seo-research/
+hackathon-video/**/work-*/
 .vera/
 artifacts/
 dogfood-output/
@@ -37,3 +52,6 @@ log/
 **/*/typings/auto-generated
 
 modern.config.local.*
+config/public/robots.txt
+config/public/sitemap.xml
+server/coursition/default-seed.generated.ts

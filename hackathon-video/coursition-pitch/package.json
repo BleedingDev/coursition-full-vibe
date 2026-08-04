@@ -3,9 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "voiceover": "node tools/build-voiceover.mjs",
+    "subs": "node tools/build-subtitles.mjs",
+    "html": "node tools/build-html.mjs",
+    "build": "node tools/build-voiceover.mjs && node tools/build-subtitles.mjs && node tools/build-html.mjs",
+    "slides": "node tools/build-slides.mjs",
+    "pdf": "node tools/build-slides.mjs && node tools/print-pdf.mjs",
     "dev": "npx --yes hyperframes@0.6.79 preview",
     "check": "npx --yes hyperframes@0.6.79 lint && npx --yes hyperframes@0.6.79 validate && npx --yes hyperframes@0.6.79 inspect",
-    "render": "npx --yes hyperframes@0.6.79 render",
+    "render": "npx --yes hyperframes@0.6.79 render --output coursition-pitch.mp4",
+    "mux-subs": "node tools/mux-subs.mjs",
+    "package": "npx --yes hyperframes@0.6.79 render --output coursition-pitch.mp4 && node tools/build-subtitles.mjs && node tools/mux-subs.mjs",
     "publish": "npx --yes hyperframes@0.6.79 publish"
   }
 }

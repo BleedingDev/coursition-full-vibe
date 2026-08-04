@@ -1,9 +1,5 @@
 import * as Schema from 'effect/Schema';
-import {
-  draftStepSchema,
-  sessionUserSchema,
-  workflowSnapshotSchema,
-} from '@shared/coursition/effect-api';
+import { draftStepSchema, sessionUserSchema, workflowSnapshotSchema } from '@shared/api';
 
 const courseRouteLanguageSchema = Schema.Literals(['en', 'cs']);
 

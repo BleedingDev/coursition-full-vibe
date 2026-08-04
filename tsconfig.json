@@ -8,6 +8,7 @@
     "module": "preserve",
     "moduleResolution": "Bundler",
     "moduleDetection": "force",
+    "types": ["node", "@cloudflare/workers-types"],
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
