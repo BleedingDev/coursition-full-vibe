@@ -669,7 +669,7 @@ Wrangler observability je v konfiguraci zapnuta, ale to samo nedokládá histori
 
 ### 11.1 Požadavky pracovní stanice
 
-Repozitář deklaruje Node.js 26 nebo novější, pnpm 11 nebo novější a package manager `pnpm@11.13.1`. Doporučený vstup je přes `mise`, aby se použily verzované nástroje projektu.
+Repozitář deklaruje Node.js 26 nebo novější, pnpm 11 nebo novější a package manager `pnpm@11.20.0`. Doporučený vstup je přes `mise`, aby se použily verzované nástroje projektu.
 
 Následující instalační příkazy mění pouze lokální toolchain a dependencies, nikoli cloudové prostředky:
 
