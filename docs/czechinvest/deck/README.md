@@ -1,61 +1,52 @@
-# Produktová prezentace Coursition pro CzechInvest
+# Produktová prezentace Coursition
 
-Slidev deck - prezentace je kód, ne binární soubor. Struktura vychází ze sdílené
-Slidev sady v repozitáři BleedingDev (téma jako balíček s vlastními layouty,
-markdown jako obsah, export přes CLI), vizuální jazyk je Coursition.
+Slidev deck: obsah je v Markdownu, vzhled v lokálním tématu a PDF vzniká reprodukovatelným exportem. Aktualizace 5. 8. 2026 nahrazuje staré zelené snímky současným fialovým rozhraním a opravuje produktová tvrzení.
 
 ## Spuštění
 
 ```bash
-pnpm install --ignore-workspace   # jednorázově
-pnpm dev                          # http://localhost:3131 (presenter mode na /presenter)
-pnpm export                       # PDF do ../coursition-czechinvest-ivo-2026-08-03.pdf
-pnpm build                        # statický web do dist/
+pnpm install --ignore-workspace # jednorázově
+node_modules/.bin/playwright install chromium # jednorázově
+pnpm dev                         # http://localhost:3131
+pnpm export                      # ../coursition-prezentace.pdf
+pnpm build                       # statický web do dist/
 ```
-
-Export vyžaduje Chromium: `node_modules/.bin/playwright install chromium`.
 
 ## Struktura
 
-| Cesta                     | Obsah                                                          |
-| ------------------------- | -------------------------------------------------------------- |
-| `slides.md`               | Obsah prezentace v češtině + poznámky pro řečníka              |
-| `theme/`                  | Lokální Slidev téma `slidev-theme-coursition`                  |
-| `theme/styles/layout.css` | Tokeny, typografie, sdílené prvky (`cs-*`)                     |
-| `theme/layouts/`          | `cover`, `default`, `end`                                      |
-| `theme/CsFooter.vue`      | Patička se zdrojem tvrzení, vkládá se do každého layoutu       |
-| `public/shots/`           | Snímky aplikace ze 3. 8. 2026, zaoblené karty                  |
-| `public/icons/`           | Ikony (dokument, editace, štítek, obnovení, telefon, kontrola) |
-| `public/logo*.svg`        | Oficiální vektorové logo, světlá varianta pro tmavý slide      |
+| Cesta | Obsah |
+| --- | --- |
+| `slides.md` | 7 slidů v češtině a poznámky s proveniencí |
+| `theme/` | lokální Slidev téma |
+| `theme/styles/layout.css` | typografie, layout a CSS rámování screenshotů bez ořezu |
+| `theme/CsFooter.vue` | viditelná patička z pole `source` |
+| `public/shots/` | kopie úplných viewportů použitých deckem |
+| `public/icons/` | doprovodné ikony |
+| `public/logo*.svg` | logo pro téma |
 
-## Slidy
+## Mapování screenshotů
 
-| #   | Slide                      | Snímek                                     |
-| --- | -------------------------- | ------------------------------------------ |
-| 1   | Úvodní příslib             | veřejná stránka, desktop + mobil           |
-| 2   | Krok 1 - Zdroje            | `03-sources-desktop`                       |
-| 3   | Krok 2 - Mapa cílů         | `04-objectives-desktop`                    |
-| 4   | Krok 3 - Plán aktivit      | `05-activities-desktop`                    |
-| 5   | Krok 4 - Studentský náhled | `07-preview-desktop` + `09-preview-mobile` |
-| 6   | Vaše kurzy                 | `02-dashboard-desktop`                     |
-| 7   | Závěr a odkaz na záznam    | -                                          |
+| Slide | Obraz | Autoritativní zdroj |
+| ---: | --- | --- |
+| 1 | cíle + mobilní interní náhled | `../methodologies/figures/10-objectives-cs-desktop-reused.png`, `14-preview-cs-mobile-reused.png` |
+| 2 | nástěnka | `../application-screenshots/16-dashboard-cs-desktop-rebrand.png` |
+| 3 | zdroje | `../application-screenshots/17-sources-cs-desktop-rebrand.png` |
+| 4 | mapa cílů | `../methodologies/figures/10-objectives-cs-desktop-reused.png` |
+| 5 | plán aktivit | `../methodologies/figures/11-activities-cs-desktop-reused.png` |
+| 6 | interní náhled desktop + telefon | `../methodologies/figures/13-preview-cs-desktop-reused.png`, `14-preview-cs-mobile-reused.png` |
+| 7 | závěr | bez screenshotu |
 
-## Pravidla obsahu
+Všechny zdrojové obrazy zachovávají celý viewport: desktop 1440 × 900, telefon 390 × 844. Deck nepoužívá `object-fit: cover`, maskování ani destruktivní ořez; rámeček a zaoblení přidává CSS.
 
-- Prezentace ukazuje **produkt**, ne průběh inkubace. Finance, dopad inkubace,
-  testy a stav projektu patří do závěrečné zprávy, ne na slide.
-- Jeden slide = jedna obrazovka aplikace + jeden nadpis s přínosem + nejvýš tři
-  krátké popisky. Snímek zabírá víc plochy než text.
-- Každý slide má ve frontmatteru `source` - v patičce je vidět, z čeho snímek je.
-- Poznámky pro řečníka (`<!-- ... -->`) drží cesty ke zdrojovým snímkům
-  a scénář dema; na slidu samotném citace nejsou.
-- Slovo z rozhraní „hratelný náhled“ se v textu slidů nepoužívá; mluvíme
-  o studentském náhledu. Ve snímcích obrazovky zůstává, protože jde o skutečné
-  rozhraní.
+## Provenience a omezení
 
-## Obnovení snímků
+- Nástěnka a Zdroje byly zachyceny 5. 8. 2026 z lokálního Cloudflare Worker preview nad syntetickým účtem a kurzem. Nebyla změněna produkce ani externí systém.
+- Cíle, aktivity a náhled pocházejí z rebrandované metodické sady, zachycené 5. 8. 2026 nad kurzem `Bezpečnost práce ve výrobě`.
+- Snímky dokládají lokálně reprodukovaný stav aplikace, ne shodu veřejného produkčního deploymentu.
+- Náhled je interní kontrolní obrazovka autora. Není důkazem LMS, veřejného publikování ani doručení účastníkům.
+- Štítky opory ve zdroji jsou deklarované klasifikace systému; správnost ověřuje autor.
+- Příprava, cíle a zadání aktivit jsou přímo upravitelné. Text obsahu se opravuje přes vstupy a regeneraci.
 
-Snímky vznikly z lokálního buildu na `http://localhost:8080` v českém rozhraní,
-ve světlém režimu, nad kurzem `Onboarding zákazníků` (české zadání i výstup). Zdrojové soubory jsou
-v `../application-screenshots/`; zaoblené karty v `public/shots/` se z nich
-generují oříznutím rohů a přidáním rámečku.
+## Landing page
+
+Současná landing page používá 32 specializovaných runtime stillů v `../../../public/landing/`: CS/EN × desktop/telefon × light/dark × mapa/cíle/aktivity/obsah. Komponenta je vybírá podle jazyka, viewportu a režimu. Lokální Cloudflare preview 5. 8. 2026 načetlo české desktopové assety HTTP 200. Produkční deploy parity nebyla tímto ověřena a zdroj landing page nebyl při refreshi decku změněn.

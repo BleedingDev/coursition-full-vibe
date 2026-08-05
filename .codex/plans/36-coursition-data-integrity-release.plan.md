@@ -47,7 +47,7 @@ Depends on `coursition-server-workflow-integrity`, `coursition-source-asset-life
 - Pre-migration D1 export: `artifacts/backups/coursition-2026-07-15T17-48-02-151Z.sql`, ignored by git.
 - Migrations `0001_warm_miss_america.sql` and `0002_ancient_inertia.sql` applied remotely; no migrations remain pending.
 - Backfill verified the four legacy drafts and owners while preserving one newer authoritative QA row during deployment; the QA row was removed after smoke verification.
-- Production Worker: `https://coursition-full-vibe.edution.workers.dev`, version `71888359-1351-4ff0-ab95-e9bfaabd0318`.
+- Production URL: `https://coursition.com`, version `71888359-1351-4ff0-ab95-e9bfaabd0318`.
 - Production browser smoke passed create → immediate dashboard return, locale switch without workflow reload, explicit URL-step navigation, and non-navigation mode mutation without a hidden step jump.
 - Fresh PDF upload showed immediate persistent progress, reset the native file control after completion, and produced a processed `cloudflare_markdown` source through the Workers AI binding without LlamaParse credentials.
 - Production deletion removed the QA draft plus all three captured R2 objects; the verified cleanup outbox was empty. QA user, sessions, operations, draft, and owner state were removed.

@@ -32,13 +32,9 @@ const coursitionAiBaseUrl = processEnv('COURSITION_AI_BASE_URL') ?? 'https://ope
 const coursitionAiModel = processEnv('COURSITION_AI_MODEL') ?? 'openai/gpt-oss-20b:free';
 const buildTarget = cloudflareDeployEnabled ? 'cloudflare' : 'web';
 
-/* `workers.dev` hosts serve straight off the Worker subdomain, so only a real
- * origin turns into a Cloudflare custom domain. */
 const cloudflareCustomDomain = (() => {
   const host = URL.parse(coursitionConfig.siteUrl)?.hostname;
-  return host === undefined || host.endsWith('.workers.dev') || host === 'localhost'
-    ? undefined
-    : host;
+  return host === undefined || host === 'localhost' ? undefined : host;
 })();
 
 // https://bleedingdev.github.io/ultramodern.js/configure/app/usage.html
@@ -120,7 +116,6 @@ export default defineConfig(
                   noindex: {
                     localhost: true,
                     previewHostnames: [],
-                    workersDev: true,
                   },
                 },
                 ssr: true,
@@ -130,15 +125,7 @@ export default defineConfig(
                   },
                   minify: true,
                   observability: { enabled: true },
-                  /* Adding any route makes Wrangler disable the workers.dev
-                   * subdomain by default. Keep it on: it is the URL every
-                   * release is smoke-tested against, and losing it takes the
-                   * app offline the moment a custom domain is not yet live. */
-                  workers_dev: true,
-                  /* A workers.dev release needs no route; the Worker is already
-                   * reachable at its subdomain. Once the build targets the real
-                   * origin, the apex has to be attached explicitly, otherwise
-                   * the deploy would silently keep serving the old site. */
+                  workers_dev: false,
                   ...(cloudflareCustomDomain === undefined
                     ? {}
                     : {

@@ -33,7 +33,7 @@ The earlier one-sheet export is preserved as `source-files/seo-reference-obsahov
 - [Design manual](source-files/design-manual-coursition.pdf)
 - [Activity-scope screenshots](source-screenshots/)
 - [Application screenshots and provenance](application-screenshots/README.md)
-- [CzechInvest presentation source](deck/slides.md) and [exported PDF](coursition-czechinvest-ivo-2026-08-03.pdf)
+- [Product presentation source](deck/slides.md) and [exported PDF](coursition-prezentace.pdf) — refreshed 5. 8. 2026 with current rebrand screenshots; local evidence, not production-deploy verification
 - [Acceptance audit](../czechinvest-acceptance-audit-2026-07-14.md)
 - [Output evidence matrix](../czechinvest-output-evidence-matrix.md)
 - [Existing user-manual draft](../czechinvest-user-manual-cs.md)

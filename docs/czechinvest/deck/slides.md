@@ -1,11 +1,9 @@
 ---
 theme: ./theme
-title: Coursition - tvorba kurzů z vlastních podkladů
+title: Coursition — první návrh kurzu z vlastních podkladů
 info: |
-  Produktová prezentace pro CzechInvest (Ivo Stanček), 3. 8. 2026.
-  Snímky jsou z aktuálního buildu aplikace, české rozhraní,
-  kurz Onboarding zákazníků.
-author: Petr Glaser
+  Produktová prezentace Coursition, aktualizovaná 5. 8. 2026.
+  Snímky zachycují české rozhraní současného rebrandovaného buildu.
 class: text-left
 transition: none
 mdc: true
@@ -14,18 +12,19 @@ drawings:
 fonts:
   provider: none
 layout: cover
+source: Lokální Cloudflare Worker preview, 5. 8. 2026 · kurz „Bezpečnost práce ve výrobě“
 ---
 
-# Z jednoho podkladu celý hotový kurz
+# Z podkladu propojený první návrh kurzu
 
-Vložíte materiál, který už máte. Coursition z něj sám poskládá cíle, aktivity
-i obsah a hotový kurz si hned prohlédnete.
+Coursition připraví cíle, zadání aktivit a navazující obsah. Autor výstup
+zkontroluje, upraví přípravu, cíle a zadání aktivit a podle potřeby obsah znovu vygeneruje.
 
 ::media::
 
 <div class="cover-stack">
-  <img class="cs-shot cover-desktop" :src="'/shots/04-objectives-desktop-card.png'" alt="Vygenerovaná mapa cílů kurzu" />
-  <img class="cs-shot cs-shot--phone cover-phone" :src="'/shots/09-preview-mobile-card.png'" alt="Hotový kurz v telefonu" />
+  <img class="cs-shot cover-desktop" :src="'/shots/10-objectives-cs-desktop-rebrand.png'" alt="Mapa cílů v současném fialovém rozhraní Coursition" />
+  <img class="cs-shot cs-shot--phone cover-phone" :src="'/shots/14-preview-cs-mobile-rebrand.png'" alt="Interní náhled kurzu v mobilním viewportu" />
 </div>
 
 <style>
@@ -40,17 +39,57 @@ i obsah a hotový kurz si hned prohlédnete.
 </style>
 
 <!--
-Otevírací věta: tvůrce vloží jediný podklad a dostane hotový kurz.
-Vizuál: vlevo vygenerovaná mapa cílů, vpravo hotový kurz v telefonu.
-Zdroj: application-screenshots/04-objectives-desktop.png, 09-preview-mobile.png
+Zdroje: methodologies/figures/10-objectives-cs-desktop-reused.png a
+methodologies/figures/14-preview-cs-mobile-reused.png. Celé viewporty bez ořezu.
 -->
 
 ---
-
 layout: default
-kicker: Start kurzu
-title: Jediný krok, který děláte vy.
-lead: Vložíte materiál k tématu. Všechno ostatní, co uvidíte na dalších obrazovkách, si Coursition vygeneruje sám.
+kicker: Nástěnka
+title: Rozpracované návrhy zůstávají pohromadě
+lead: Z nástěnky založíte nový kurz nebo otevřete existující návrh a pokračujete v práci.
+source: application-screenshots/16-dashboard-cs-desktop-rebrand.png · lokální preview 5. 8. 2026
+---
+
+<div class="shot-left">
+  <img class="cs-shot" :src="'/shots/16-dashboard-cs-desktop-rebrand.png'" alt="Nástěnka Coursition s rozpracovaným kurzem" />
+
+  <div class="cs-points">
+    <div class="cs-point">
+      <img :src="'/icons/resume.png'" alt="" />
+      <div>
+        <h3>Pokračování bez hledání</h3>
+        <p>Karta kurzu nabízí návrat do uloženého workflow. Snímek dokládá lokální stav aplikace, nikoli produkční dostupnost.</p>
+      </div>
+    </div>
+    <div class="cs-point">
+      <img :src="'/icons/layers.png'" alt="" />
+      <div>
+        <h3>Stav je vidět na kartě</h3>
+        <p>Počty zdrojů, aktivit a částí obsahu ukazují aktuální rozsah rozpracovaného návrhu.</p>
+      </div>
+    </div>
+    <div class="cs-point">
+      <img :src="'/icons/doc.png'" alt="" />
+      <div>
+        <h3>Nový kurz začíná názvem</h3>
+        <p>Nástěnka je výchozí pracovní plocha autora, ne katalog nebo distribuční prostředí pro studující.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--
+Zdroj: application-screenshots/16-dashboard-cs-desktop-rebrand.png, celý viewport
+1440 × 900. Lokální syntetický stav; bez produkčního zásahu.
+-->
+
+---
+layout: default
+kicker: Zdroje
+title: Vlastní podklady otevřou první návrh
+lead: Autor může přidat poznámky, URL nebo soubor. Zpracovaný zdroj je vstupem pro generování, ne garancí správnosti výstupu.
+source: application-screenshots/17-sources-cs-desktop-rebrand.png · lokální preview 5. 8. 2026
 ---
 
 <div class="shot-right">
@@ -58,81 +97,80 @@ lead: Vložíte materiál k tématu. Všechno ostatní, co uvidíte na dalších
     <div class="cs-point">
       <img :src="'/icons/doc.png'" alt="" />
       <div>
-        <h3>Pár vteřin a máte hotovo</h3>
-        <p>Poznámky, odkaz na stránku nebo soubor z disku. Nic se nedopisuje ani neupravuje, podklad stačí tak, jak je.</p>
+        <h3>Tři typy vstupu</h3>
+        <p>Poznámky, veřejná URL nebo podporovaný soubor dávají systému materiál pro další kroky.</p>
       </div>
     </div>
     <div class="cs-point">
       <img :src="'/icons/check.png'" alt="" />
       <div>
-        <h3>Stav máte na očích</h3>
-        <p>U podkladu je vidět, kdy je zpracovaný. Do té doby se nemusíte o nic starat.</p>
-      </div>
-    </div>
-    <div class="cs-point">
-      <img :src="'/icons/layers.png'" alt="" />
-      <div>
-        <h3>Nic se neztratí</h3>
-        <p>Materiál zůstává v kurzu. Cíle, aktivity i texty z něj vycházejí a kdykoli si dohledáte, odkud co je.</p>
-      </div>
-    </div>
-  </div>
-  <img class="cs-shot" :src="'/shots/03-sources-desktop-card.png'" alt="Obrazovka Zdroje: poznámky, odkaz a soubor" />
-</div>
-
-<!--
-Snímek: krok Zdroje, záložky Poznámky / URL / Soubor a vložený podklad.
-Zdroj: application-screenshots/03-sources-desktop.png
--->
-
----
-
-layout: default
-kicker: Mapa cílů
-title: Kostra kurzu, kterou nemusíte vymýšlet
-lead: Coursition z vašeho materiálu sám sepíše schopnosti, které má účastník kurzu získat.
----
-
-<div class="shot-left">
-  <img class="cs-shot" :src="'/shots/04-objectives-desktop-card.png'" alt="Vygenerovaná mapa cílů se štítky původu" />
-
-  <div class="cs-points">
-    <div class="cs-point">
-      <img :src="'/icons/label.png'" alt="" />
-      <div>
-        <h3>Cíle máte hotové</h3>
-        <p>Ke každému cíli je název i popis schopnosti. Aktivity a obsah kurzu na ně pak navazují.</p>
+        <h3>Stav zpracování je viditelný</h3>
+        <p>Označení „Zpracováno“ potvrzuje dokončení technického zpracování zdroje, ne věcnou správnost budoucího kurzu.</p>
       </div>
     </div>
     <div class="cs-point">
       <img :src="'/icons/edit.png'" alt="" />
       <div>
-        <h3>Vidíte, odkud se cíl vzal</h3>
-        <p>Štítek Podloženo zdrojem znamená oporu ve vašem materiálu. Odvozeno je doplněk navíc. Nic není záhada.</p>
+        <h3>Autor dál rozhoduje</h3>
+        <p>Příprava kurzu zůstává upravitelná a vygenerované výstupy vyžadují odbornou a didaktickou kontrolu.</p>
+      </div>
+    </div>
+  </div>
+  <img class="cs-shot" :src="'/shots/17-sources-cs-desktop-rebrand.png'" alt="Obrazovka Zdroje s kartami Poznámky, URL a Soubor" />
+</div>
+
+<!--
+Zdroj: application-screenshots/17-sources-cs-desktop-rebrand.png, celý viewport
+1440 × 900. Lokální syntetický kurz; bez externích změn.
+-->
+
+---
+layout: default
+kicker: Mapa cílů
+title: Cíle dostanou strukturu — a zůstávají upravitelné
+lead: Návrh propojí schopnosti s navazujícími aktivitami a obsahem. Autor může názvy i formulace schopností změnit přímo.
+source: methodologies/figures/10-objectives-cs-desktop-reused.png · lokální preview 5. 8. 2026
+---
+
+<div class="shot-left">
+  <img class="cs-shot" :src="'/shots/10-objectives-cs-desktop-rebrand.png'" alt="Upravitelná mapa cílů se štítky deklarované opory ve zdroji" />
+
+  <div class="cs-points">
+    <div class="cs-point">
+      <img :src="'/icons/label.png'" alt="" />
+      <div>
+        <h3>Struktura místo prázdné stránky</h3>
+        <p>Každý cíl obsahuje název a schopnost, na kterou mohou navázat aktivity a části obsahu.</p>
+      </div>
+    </div>
+    <div class="cs-point">
+      <img :src="'/icons/edit.png'" alt="" />
+      <div>
+        <h3>Štítek je deklarace systému</h3>
+        <p>„Podloženo zdrojem“ uvádí, jak systém cíl klasifikoval. Shodu s původním materiálem ověřuje autor.</p>
       </div>
     </div>
     <div class="cs-point">
       <img :src="'/icons/resume.png'" alt="" />
       <div>
-        <h3>Nesedí to? Jedno kliknutí</h3>
-        <p>Novou mapu cílů si necháte navrhnout, kdykoli se vám to hodí. Jednotlivý cíl změníte rovnou na místě.</p>
+        <h3>Přímá úprava nebo regenerace</h3>
+        <p>Jednotlivý cíl lze přepsat na místě. Změny mohou označit navazující výstupy jako zastaralé a vyžádat nové generování.</p>
       </div>
     </div>
   </div>
 </div>
 
 <!--
-Snímek: krok Mapa cílů, štítky Podloženo zdrojem / Odvozeno a tlačítko
-Vygenerovat mapu cílů znovu.
-Zdroj: application-screenshots/04-objectives-desktop.png
+Zdroj: methodologies/figures/10-objectives-cs-desktop-reused.png, celý viewport
+1440 × 900; rebrandovaný kurz „Bezpečnost práce ve výrobě“.
 -->
 
 ---
-
 layout: default
-kicker: Aktivity
-title: Vymýšlení úkolů máte za sebou
-lead: Ta nejzdlouhavější část přípravy kurzu je hotová dřív, než se k ní stihnete dostat.
+kicker: Plán aktivit
+title: Zadání aktivit upravíte přímo
+lead: Coursition navrhne typ a zadání aktivit. Autor upraví instrukce, akci studujícího, kritéria úspěchu i doporučení ke zpětné vazbě.
+source: methodologies/figures/11-activities-cs-desktop-reused.png · lokální preview 5. 8. 2026
 ---
 
 <div class="shot-right">
@@ -140,49 +178,49 @@ lead: Ta nejzdlouhavější část přípravy kurzu je hotová dřív, než se k
     <div class="cs-point">
       <img :src="'/icons/label.png'" alt="" />
       <div>
-        <h3>Prázdná stránka odpadá</h3>
-        <p>V plánu aktivit už úkoly jsou. I s instrukcemi a s tím, co má studující odevzdat.</p>
+        <h3>Návrh navazuje na cíle</h3>
+        <p>Aktivita je přiřazena ke schopnosti, kterou má kurz rozvíjet. Vazbu musí autor posoudit.</p>
       </div>
     </div>
     <div class="cs-point">
       <img :src="'/icons/edit.png'" alt="" />
       <div>
-        <h3>Typ úkolu je vybraný za vás</h3>
-        <p>Vybavovací kontrola, praktický úkol a další. Vždycky ke schopnosti, kterou má kurz naučit.</p>
+        <h3>Brief není uzamčený</h3>
+        <p>Název, typ, instrukce a očekávaná akce jsou přímo upravitelné v pracovním kroku.</p>
       </div>
     </div>
     <div class="cs-point">
       <img :src="'/icons/check.png'" alt="" />
       <div>
-        <h3>Doladíte, když budete chtít</h3>
-        <p>Nic vás k tomu nenutí. Kurz funguje přesně tak, jak se vygeneroval. Změna je na jedno kliknutí.</p>
+        <h3>Obsah se opravuje regenerací</h3>
+        <p>Změna briefu, která ovlivňuje text pro studující, vyžaduje nové vygenerování obsahu a další kontrolu autora.</p>
       </div>
     </div>
   </div>
-  <img class="cs-shot" :src="'/shots/05-activities-desktop-card.png'" alt="Vygenerovaný plán aktivit s typem úkolu a zadáním" />
+  <img class="cs-shot" :src="'/shots/11-activities-cs-desktop-rebrand.png'" alt="Upravitelný plán aktivit v současném rozhraní Coursition" />
 </div>
 
 <!--
-Snímek: krok Plán aktivit, vygenerovaný úkol s typem, instrukcemi a akcí
-studujícího. Zdroj: application-screenshots/05-activities-desktop.png
+Zdroj: methodologies/figures/11-activities-cs-desktop-reused.png, celý viewport
+1440 × 900. Screenshot dokládá přímou editaci briefu, ne správnost návrhu.
 -->
 
 ---
-
 layout: default
-kicker: Hotový výsledek
-title: Kurz vidíte hotový, ještě než ho pošlete dál
-lead: Otevřete náhled a projdete si celý kurz přesně tak, jak ho uvidí vaši účastníci.
+kicker: Interní náhled
+title: Výsledek zkontrolujete před dalším použitím
+lead: Náhled ukazuje současný vygenerovaný kurz na desktopu i telefonu. Coursition jej zde nepublikuje ani nedoručuje účastníkům.
+source: methodologies/figures/13-preview-cs-desktop-reused.png + 14-preview-cs-mobile-reused.png · 5. 8. 2026
 ---
 
 <div class="learner">
   <div class="learner-desk">
-    <img class="cs-shot" :src="'/shots/07-preview-desktop-card.png'" alt="Hotový kurz na počítači" />
-    <div class="cs-fact learner-note"><img :src="'/icons/check.png'" alt="" /><span>Na počítači sekce, vysvětlení opřené o váš materiál a praktický úkol pod sebou</span></div>
+    <img class="cs-shot" :src="'/shots/13-preview-cs-desktop-rebrand.png'" alt="Interní náhled vygenerovaného kurzu na desktopu" />
+    <div class="cs-fact learner-note"><img :src="'/icons/check.png'" alt="" /><span>Autor projde sekce, vysvětlení a aktivity a porovná je s původními podklady.</span></div>
   </div>
   <div class="learner-phone">
-    <img class="cs-shot cs-shot--phone" :src="'/shots/09-preview-mobile-card.png'" alt="Hotový kurz v telefonu" />
-    <div class="cs-fact learner-note"><img :src="'/icons/phone.png'" alt="" /><span>V telefonu úplně stejný kurz, žádná druhá verze a nic k nastavování</span></div>
+    <img class="cs-shot cs-shot--phone" :src="'/shots/14-preview-cs-mobile-rebrand.png'" alt="Interní náhled vygenerovaného kurzu v mobilním viewportu" />
+    <div class="cs-fact learner-note"><img :src="'/icons/phone.png'" alt="" /><span>Mobilní viewport odhalí čitelnost a responzivní chování před případným dalším zpracováním.</span></div>
   </div>
 </div>
 
@@ -200,60 +238,19 @@ lead: Otevřete náhled a projdete si celý kurz přesně tak, jak ho uvidí va�
 </style>
 
 <!--
-Zdroje: 07-preview-desktop.png (1440x900), 09-preview-mobile.png (390x844)
+Zdroje: methodologies/figures/13-preview-cs-desktop-reused.png (1440 × 900)
+a 14-preview-cs-mobile-reused.png (390 × 844). Interní autorský náhled, ne LMS.
 -->
 
 ---
-
-layout: default
-kicker: Nástěnka
-title: Všechny kurzy na jednom místě
-lead: Otevřete nástěnku a hned vidíte, co máte hotové. Jedno kliknutí a jste zpátky uvnitř kurzu.
----
-
-<div class="shot-left">
-  <img class="cs-shot" :src="'/shots/02-dashboard-desktop-card.png'" alt="Nástěnka s přehledem kurzů" />
-
-  <div class="cs-points">
-    <div class="cs-point">
-      <img :src="'/icons/resume.png'" alt="" />
-      <div>
-        <h3>Zpátky jedním kliknutím</h3>
-        <p>Tlačítko Pokračovat vás vrátí do kurzu tam, kde jste skončili. I po odhlášení a na jiném počítači.</p>
-      </div>
-    </div>
-    <div class="cs-point">
-      <img :src="'/icons/layers.png'" alt="" />
-      <div>
-        <h3>Poznáte kurz bez otevírání</h3>
-        <p>U každého kurzu je počet zdrojů, aktivit a částí obsahu. Rozsah vidíte na první pohled.</p>
-      </div>
-    </div>
-    <div class="cs-point">
-      <img :src="'/icons/doc.png'" alt="" />
-      <div>
-        <h3>Nový kurz hned vedle</h3>
-        <p>Další kurz začnete přímo z nástěnky. Ukázkové kurzy jsou označené, ať se nepletou s vašimi.</p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!--
-Snímek: nástěnka s kartami kurzů, tlačítkem Pokračovat a počty zdrojů,
-aktivit a částí obsahu. Zdroj: application-screenshots/02-dashboard-desktop.png
--->
-
----
-
 layout: end
 ---
 
-# Odcházíte s hotovým kurzem.
+# První návrh vznikne rychleji. Odpovědnost zůstává autorovi.
 
-Vložíte materiál, který už máte. Cíle, aktivity, obsah i studentský náhled
-zvládne Coursition sám.
+Coursition propojí podklady, cíle, zadání aktivit a obsah. Autor rozhoduje,
+co upraví, co znovu vygeneruje a co je připravené k dalšímu použití.
 
 <!--
-Závěr. Slot ::next:: je zatím prázdný, protože záznam dema ještě neexistuje.
+Závěr bez tvrzení o publikaci, doručení studujícím nebo automatické správnosti.
 -->

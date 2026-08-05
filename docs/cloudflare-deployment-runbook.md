@@ -13,7 +13,7 @@ The verified Worker dry run is about 1.95 MiB gzip, below Cloudflare's 3 MB Free
 ## Prerequisites
 
 - Cloudflare account with Workers, D1, and R2 enabled. The verified bundle fits the Free-plan upload limit.
-- Node 26+, mise, and the repository-pinned pnpm 11.13.1.
+- Node 26+, mise, and the repository-pinned pnpm 11.20.0.
 - A custom HTTPS production origin, for example `https://app.example.cz`.
 - Cloudflare authentication available to Wrangler.
 - Production AI/provider credentials agreed for the acceptance scenario.

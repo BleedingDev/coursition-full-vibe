@@ -49,7 +49,7 @@ Kanonický pracovní seznam pro podklady Janě Drozenové (Elohir). Při nové k
 
 ## 3. Části, které doplní Jana nebo je nutné potvrdit
 
-- [ ] Přenést relevantní informace z předchozích zpráv a přidat poslední období.
+- [x] Předchozí zpráva a její již doložené aktivity jsou uzavřené; znovu je nedohledávat ani nedokládat.
 - [ ] Doplnit finální tabulku celkových nákladů.
 - [x] Rozsah detailu akcí ověřen s Ivem: jednotlivé události není nutné rozsáhle rozvádět.
 - [x] Podklady k absolvovaným workshopům a jejich přínosu jsou uložené a oddělené od ostatních akcí.
@@ -66,17 +66,12 @@ Celková přímá podpora: **4 500 000 Kč**.
 ### Průzkum trhu - 250 000 Kč - hotovo
 
 - [x] Aktivita označena jako dokončená.
-- [x] Petr 5. 8. 2026 potvrdil, že tržní analýza byla doložena v předchozí zprávě; nevytvářet ji znovu.
-- [x] Připravit společný solo-agent [handoff](workflows/completed-activity-evidence/HANDOFF.md) pro dohledání předchozí zprávy a příloh A1/A3/A7.
-- [ ] Najít a lokálně propojit finální tržní analýzu z předchozí zprávy.
-- [ ] Připravit jednu stručnou větu: jak analýza změnila priority, cílové segmenty nebo roadmapu.
+- [x] Petr 5. 8. 2026 potvrdil, že předchozí zpráva i průzkum trhu jsou hotové a doložené; nic znovu nedohledávat, nepropojovat ani nevytvářet.
 
 ### Ochranná známka - 50 171 Kč - hotovo
 
 - [x] Aktivita označena jako dokončená.
-- [x] Evidenční dohledání je zahrnuto ve společném solo-agent [handoffu A1/A3/A7](workflows/completed-activity-evidence/HANDOFF.md).
-- [ ] Doložit ochrannou známku EU.
-- [ ] Doložit IP scan.
+- [x] Petr 5. 8. 2026 potvrdil, že ochranná známka i související podklady jsou hotové; znovu je nedokládat.
 
 ### SEO - 180 000 Kč - hotovo, datum dokumentu 27. 7. 2026
 
@@ -110,33 +105,23 @@ Technický crawl `coursition.com` potvrzuje serverově vykreslené lokalizované
 správnými metadaty, kanonickými adresami a jazykovým párováním. Hlavním SEO omezením je
 malá veřejná obsahová vrstva: sitemapa má šest adres, z toho čtyři právní stránky.
 
-### UX/UI Design - 380 000 Kč - částečně hotovo
+### UX/UI Design - 380 000 Kč - doložit produktem
 
-- [ ] Dokončit UX/UI Design Manual; současné PDF obsahuje nedokončený text copywritera.
-- [x] Logo produktu je v Design Manualu.
-- [ ] Doložit UX analýzy a uživatelské testování.
-- [ ] Propojit výstupy se screenshoty finální aplikace.
+- [x] Logo a současný vizuální systém jsou součástí aplikace a strategického balíčku.
+- [x] Finální UX/UI je od 5. 8. 2026 dostupné na `https://coursition.com` a bylo produkčně proklikáno v češtině i angličtině. Povinná publicita CzechInvest / Technologická inkubace se po načtení patičky zobrazuje; zbývá krátké video. Samostatné detailní UX/UI dokazování není priorita.
 
-### Vývoj - 3 049 929 Kč - částečně hotovo
+### Vývoj - 3 049 929 Kč - doložit produktem
 
-- [ ] Doložit funkční prototyp editoru.
-- [ ] Doložit editor kurzů.
-- [ ] Doložit průvodce personalizací uživatele pro AI nástroje.
-- [ ] Doložit AI mentora kvality, který při tvorbě kurzu vrací zpětnou vazbu.
-- [ ] Doložit rozšířené výstupy: PDF, prezentace, video a audio, pokud jsou skutečně implementované.
-- [ ] Připravit výsledky testů a stručný akceptační protokol.
-- [ ] Pro každý bod uvést konkrétní obrazovku, URL, soubor, test nebo commit; ne pouze obecný popis.
-- [ ] Prověřit i ostatní pokusy v `/Users/satan/work/coursition-all`, aby se neztratil relevantní výstup.
-
-Existující technické podklady: [akceptační audit](../czechinvest-acceptance-audit-2026-07-14.md), [evidence matrix](../czechinvest-output-evidence-matrix.md) a [uživatelský manuál](../czechinvest-user-manual-cs.md).
+- [x] Zajistit dostupnou nasazenou aplikaci, kterou si hodnotitelé sami proklikají. Hotovo 5. 8. 2026: `coursition.com` běží přímo na Cloudflare Workeru `coursition-full-vibe`, verze `15420de0-c4e3-4967-965a-aab1d323eb4c`, se serverovým vykreslením CS/EN.
+- [x] Ověřit hlavní průchod. Hotovo 5. 8. 2026 na produkci: registrace → odhlášení/přihlášení → dashboard → poznámkový, souborový a URL zdroj → příprava → AI mapa cílů → plán aktivit → obsah → náhled → správné vyhodnocení aktivity → AI zpětná vazba → návrat k uloženému kurzu. Přidání zdroje správně označilo navazující výstupy jako zastaralé a regenerace je obnovila. Přepnutí CS/EN zachovalo účet, kurz i krok. AI volání fungují, ale jsou pomalá (desítky sekund až přibližně dvě minuty).
+- [x] Po ověření odstranit pouze syntetická produkční data. Testovací kurz a účet odstraněny; D1 se vrátila na 0 uživatelů, 0 sessions a původních 10 draftů. R2 se vrátilo na původních 8 objektů / 1 513 764 B; pro testovací draft nezůstal žádný objekt ani cleanup řádek.
+- [ ] Natočit krátké video stejného průchodu jako záložní a prezentační důkaz.
+- [x] Uvádět jen schopnosti skutečně viditelné v nasazené aplikaci; technický audit, commitová evidence a detailní UX/UI dokumentace nejsou priorita.
 
 ### Právní poradenství - 170 000 Kč - hotovo
 
 - [x] Aktivita označena jako dokončená.
-- [x] Petr 5. 8. 2026 potvrdil, že právní spolupráce byla doložena v předchozí zprávě; právní výstupy nevytvářet znovu.
-- [x] Evidenční dohledání je zahrnuto ve společném solo-agent [handoffu A1/A3/A7](workflows/completed-activity-evidence/HANDOFF.md).
-- [ ] Propojit GDPR metodiku z předchozí zprávy.
-- [ ] Doložit smlouvy, dohody, podmínky užívání a další smluvní ujednání.
+- [x] Petr 5. 8. 2026 potvrdil, že předchozí zpráva, GDPR i právní výstupy jsou hotové a doložené; nic znovu nedohledávat, nepropojovat ani nevytvářet.
 
 ### Tvorba metodik - 70 000 Kč - hotovo 4. 8. 2026
 
@@ -152,23 +137,32 @@ Výstupy jsou v [`methodologies/`](methodologies/). Dokumenty se přegenerují p
 - [x] Vyčistit branding obou metodik ve zdrojích i MD/DOCX/PDF: wordmark je jediným označením firmy na obálce, názvy a patičky neopakují Coursition a není použit co-branding poskytovatele podpory.
 - [x] Přegenerovat všech deset obrázků v [`figures/`](methodologies/figures/) po rebrandu aplikace do fialové na krémovém podkladu (WCAG 2.1 AAA) a znovu sestavit DOCX/PDF. Hotovo 5. 8. 2026; snímky 10-14 vznikly reálným průchodem kurzu "Bezpečnost práce ve výrobě" proti Cloudflare worker preview.
 
-### Branding + Marketing + Copywriting - 349 900 Kč - částečně hotovo
+### Branding + Marketing + Copywriting - 349 900 Kč - strategický balíček schválen Petrem 5. 8. 2026
 
-- [x] Připravit samostatný solo-agent [handoff](workflows/branding-marketing-copywriting/HANDOFF.md) pro dokončení celého strategického balíčku bez zásahu do paralelní práce na landing page a aplikaci.
-- [ ] Dokončit brand a grafický manuál.
-- [ ] Vytvořit komunikační strategii a stručný komunikační manuál.
-- [ ] Vytvořit marketingovou strategii.
-- [ ] Vytvořit novou landing page včetně textů a vizuálů.
-- [ ] Doložit Discovery Session, vizuální podobu, interní analýzu a grafické podklady.
+- [x] Připravit samostatný solo-agent [handoff](workflows/branding-marketing-copywriting/HANDOFF.md) pro dokončení strategického balíčku bez zásahu do paralelní práce na landing page a aplikaci.
+- [x] Oddělit interní strategické dokumenty Coursition od CzechInvest administrativy: finální zdroje a exporty jsou v `../branding-marketing-copywriting/`, nikoli pod `docs/czechinvest/`.
+- [x] Dokončit brand a grafický manuál: `../branding-marketing-copywriting/Brand-a-graficky-manual-Coursition.{md,docx,pdf}`.
+- [x] Vytvořit komunikační strategii, manuál a komunikační matici: `../branding-marketing-copywriting/Komunikacni-strategie-a-manual-Coursition.{md,docx,pdf}`.
+- [x] Vytvořit marketingovou strategii pro validační fázi: `../branding-marketing-copywriting/Marketingova-strategie-Coursition.{md,docx,pdf}`.
+- [x] Zmapovat současnou landing copy a vizuály: `../branding-marketing-copywriting/Web-copy-a-vizualni-mapa-Coursition.{md,docx,pdf}`. Produkční deploy zůstává neověřen.
+- [x] Pokrýt Discovery a vnitřní analýzu současnou evidenční rekonstrukcí: `../branding-marketing-copywriting/Discovery-a-vnitrni-analyza-Coursition.{md,docx,pdf}`.
+- [x] Petr 5. 8. 2026 obsahově schválil všech pět strategických dokumentů.
+- [x] Doplnit kanonické logo Coursition na obálky všech pěti dokumentů a opravit světlou variantu assetu.
+- [x] Odstranit z interních dokumentů CzechInvest/Jana/A1–A8 terminologii, rozpočtové kódy, byrokratické členění a cesty `docs/czechinvest`.
+- [x] Odstranit nepotřebný dokument `A2-podklady-pro-Janu` ze zdrojů, exportů i buildu.
+- [x] Ověřit nový build: 5 PDF A4, 5 validních DOCX, čistý scan zakázaných referencí a vizuálně přítomné logo na obálkách.
+- [ ] Administrativní akceptace, historické dodavatelské autorství a produkční dostupnost nejsou tímto balíčkem potvrzeny.
 
 ## 5. Prezentační a demonstrační balíček
 
-- [ ] Krátká prezentace pro CzechInvest: problém, řešení, postup inkubace, konkrétní výsledky, finance/tým, další kroky.
+- [ ] Krátká prezentace pro CzechInvest: problém, řešení, postup inkubace, konkrétní výsledky, finance/tým, další kroky. Produktová část je obnovena v `coursition-prezentace.pdf`; širší závěrečná prezentace stále nemá finance/tým/postup inkubace.
+- [x] Obnovit produktovou prezentaci současnými rebrandovanými screenshoty a fakticky přesným popisem workflow. Hotovo 5. 8. 2026: 7 slidů, úplné viewporty, viditelné zdrojové patičky, interní náhled bez tvrzení o publikaci/LMS.
+- [x] Ověřit screenshoty současné landing page. Zdroj používá 32 runtime stillů v `public/landing/` pro CS/EN, desktop/telefon a light/dark; lokální preview i přímý produkční Cloudflare Worker deploy 5. 8. 2026 byly ověřeny.
 - [ ] Jednotný demonstrační scénář aplikace.
-- [ ] Screenshoty: přihlášení, dashboard, zdroje, příprava kurzu, cíle, aktivity, editor, studentský náhled, mobilní zobrazení a obnovení uloženého kurzu.
-- [ ] Krátké video nebo živé demo podle finální dohody s Janou.
+- [x] Produkční aplikace je od 5. 8. 2026 dostupná hodnotitelům na `https://coursition.com` s Worker SSR a přihlášený CS/EN průchod byl ověřen od registrace přes všechny tři typy zdrojů, AI generování, obsah a interní náhled až po odhlášení, nové přihlášení a obnovení uloženého kurzu.
+- [ ] Krátké video hlavního průchodu aplikací.
 - [ ] Finální zpráva pro Janu: co je hotové, co musí doplnit, odkazy na všechny soubory.
-- [ ] Každé tvrzení v prezentaci propojit s jedním konkrétním důkazem.
+- [x] Každé produktové tvrzení v obnovené sedmislidové prezentaci propojit s konkrétním lokálním screenshotem nebo explicitním omezením. Širší závěrečná prezentace zůstává samostatný úkol.
 
 ## 6. Mapa screenshotů
 
@@ -196,8 +190,7 @@ Výstupy jsou v [`methodologies/`](methodologies/). Dokumenty se přegenerují p
 
 1. ~~Nechat doběhnout existující SEO workflow a ověřit finální A4 balíček.~~ Hotovo 4. 8. 2026, výstupy v `seo/`.
 2. ~~Spustit a dokončit samostatný workflow pro A8 metodiky.~~ Hotovo 4. 8. 2026, výstupy v `methodologies/`.
-3. Dokončit minimální věrohodný A5 UX/UI/design-manual výstup.
-4. Uzavřít A6 důkazy vývoje pomocí současné aplikace, testů, screenshotů a dema.
-5. Dokončit A2 branding/marketing/copy výstupy a propojit je s landing page.
-6. Lokálně propojit již hotové výstupy A1, A3 a A7.
-7. Sestavit finální text a seznam příloh pro Janu; fotografie doplnit až po předání Petrem.
+3. ~~Zajistit a produkčně ověřit nasazenou aplikaci pro samostatné proklikání hodnotiteli.~~ Nasazeno a celý přihlášený CS/EN demonstrační průchod ověřen 5. 8. 2026 na přímém Cloudflare Workeru.
+4. Natočit krátké video hlavního produktového průchodu a připravit demonstrační scénář.
+5. ~~Dokončit A2 branding/marketing/copy výstupy a propojit je s landing page.~~ Strategický dokumentový balíček schválen 5. 8. 2026; landing source nebyl měněn a produkční deploy zůstává samostatný.
+6. Sestavit finální text a seznam příloh pro Janu; fotografie doplnit až po předání Petrem.

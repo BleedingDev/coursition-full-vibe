@@ -247,17 +247,21 @@ html.print .cs-end {
 
 /* ---------------------------------------------------------------- primitives */
 
-/* Product screenshot: full viewport, never cropped, flat on paper.
-   No drop shadow — Chromium flattens it into a hard grey rectangle in the PDF
-   export, so the rounded border on the image itself carries the edge instead. */
+/* Product screenshot: complete viewport, never cropped. Framing is CSS-only so
+   source captures remain reusable and provenance-preserving. */
 .cs-shot {
   display: block;
   width: 100%;
   height: auto;
+  max-width: 100%;
+  border: 1px solid var(--cs-line);
+  border-radius: 0.72rem;
+  background: #faf7f2;
 }
 .cs-shot--phone {
   width: auto;
   height: 100%;
+  border-radius: 0.9rem;
 }
 
 .cs-caption {

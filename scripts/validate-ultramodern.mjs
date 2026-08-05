@@ -19,7 +19,7 @@ const readPnpmConfig = (key) => {
   return output ? JSON.parse(output) : undefined;
 };
 const enableTailwind = true;
-const expectedPnpmVersion = '11.13.1';
+const expectedPnpmVersion = '11.20.0';
 const activePnpmVersion = execFileSync('pnpm', ['--version'], {
   cwd: process.cwd(),
   encoding: 'utf-8',

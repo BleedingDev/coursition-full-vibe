@@ -41,7 +41,7 @@ The creator journey is:
 
 `mode → sources → course preparation → objective map → activity plan → course content → playable preview`
 
-The deployment uses the latest repository-supported UltraModern cohort `3.5.0-ultramodern.44`, pnpm `11.13.1`, Node 26+, TypeScript 7, strict Effect BFF, Drizzle, BetterAuth, Cloudflare D1, and Cloudflare R2. The migration removed obsolete compatibility shims and server-side route loaders that are incompatible with the current native Cloudflare adapter.
+The deployment uses the latest repository-supported UltraModern cohort `3.5.0-ultramodern.44`, pnpm `11.20.0`, Node 26+, TypeScript 7, strict Effect BFF, Drizzle, BetterAuth, Cloudflare D1, and Cloudflare R2. The migration removed obsolete compatibility shims and server-side route loaders that are incompatible with the current native Cloudflare adapter.
 
 ## Closed blockers from the first audit
 
