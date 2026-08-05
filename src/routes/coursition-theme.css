@@ -521,10 +521,19 @@ html.dark {
 
 .coursition-workflow-step-list {
   max-width: 100%;
-  padding-block-end: 0.25rem;
+  /* A scroll container clips both axes even when only one of them scrolls, and
+   * the step trigger's focus ring is a 2px outline at a 2px offset. Reserving
+   * that room as padding keeps the ring whole on the first and last step — the
+   * ones the rail parks against its own edge — on the 390px rail and on the
+   * desktop row that only just fits. */
+  padding-block: 0.375rem 0.5rem;
+  padding-inline: 0.375rem;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
+  /* Auto-scrolling the current step stops short of the edge, so its ring and
+   * the hint of the neighbouring step both stay visible. */
+  scroll-padding-inline: 0.75rem;
   scrollbar-width: thin;
 }
 

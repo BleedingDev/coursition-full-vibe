@@ -513,6 +513,93 @@ const isNavigationStepStale = (draft: CourseDraft, step: DraftStep) => {
 const navigationGateFor = (draft: CourseDraft, step: DraftStep) =>
   step === 'preview' ? getWorkflowPreviewGate(draft) : getWorkflowStepGate(draft, step);
 
+/* A routed step counts as reachable when its gate opens, and also when the gate
+ * blocks on that very step: a source that is still processing blocks `sources`
+ * while the visitor is already standing on `sources`, and sending them away from
+ * the screen they just acted on is never the right answer. */
+const isRoutedStepReachable = (draft: CourseDraft, routedStep: DraftStep) => {
+  const gate = navigationGateFor(draft, routedStep);
+  return gate.allowed || gate.blockedStep === routedStep;
+};
+
+/* The URL owns the visible step. A snapshot returned by a mutation carries a
+ * step merged from locally held state, because client-side step navigation never
+ * re-reads the draft from the server, so that step can sit behind the URL.
+ * Trusting it for navigation throws the visitor backwards — most visibly to
+ * `mode` right after the first source upload on a freshly created course. The
+ * routed step therefore wins whenever it is ahead of the returned step and still
+ * reachable; a genuine server-side advance lands ahead of the URL and is still
+ * followed. */
+export const preferredNavigationStep = (
+  draft: CourseDraft,
+  routedStep: DraftStep | null,
+): DraftStep => {
+  if (routedStep === null || workflowStepIndex(routedStep) <= workflowStepIndex(draft.step)) {
+    return draft.step;
+  }
+  return isRoutedStepReachable(draft, routedStep) ? routedStep : draft.step;
+};
+
+/* Mirrors the server's route gate. Only an unreachable routed step warrants a
+ * redirect, and it redirects to the step that blocks it. Comparing the returned
+ * step against the routed step instead would bounce on every reachable URL,
+ * because a route read merges the locally held step over the server's. */
+export const routeRedirectStepFor = (
+  draft: CourseDraft,
+  routedStep: DraftStep,
+): DraftStep | null => {
+  if (isRoutedStepReachable(draft, routedStep)) {
+    return null;
+  }
+  return navigationGateFor(draft, routedStep).blockedStep ?? 'mode';
+};
+
+/* Mirrors the formats the server can ingest: the document types the cloud
+ * converter parses, everything the AnyDoc browser conversion covers, the text
+ * types read locally, and the media types handed to transcription and image
+ * text extraction. Both a media type and an extension are listed wherever the
+ * operating system disagrees with the browser about one of them. */
+export const sourceFileAccept = [
+  'audio/*',
+  'image/*',
+  'text/*',
+  'video/*',
+  'application/pdf',
+  '.pdf',
+  'application/msword',
+  '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.docx',
+  'application/vnd.ms-powerpoint',
+  '.ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.pptx',
+  'application/vnd.oasis.opendocument.text',
+  '.odt',
+  'application/vnd.oasis.opendocument.presentation',
+  '.odp',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  '.ods',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xlsx',
+  'application/epub+zip',
+  '.epub',
+  'application/rtf',
+  'text/rtf',
+  '.rtf',
+  'text/csv',
+  '.csv',
+  'application/json',
+  'application/ld+json',
+  '.json',
+  'application/xml',
+  'application/xhtml+xml',
+  '.xml',
+  'application/yaml',
+  '.yaml',
+  '.yml',
+].join(',');
+
 const navigationTriggerClass =
   'min-w-0 shrink rounded-md px-1 py-1 enabled:hover:bg-fill-hover data-[current-step=true]:cursor-default disabled:pointer-events-none disabled:bg-transparent sm:px-1.5';
 
@@ -2074,6 +2161,10 @@ export const CoursitionWorkflowApp = ({
   const navigate = useNavigate();
   const toast = useToast();
   const requestedSnapshotRouteKey = snapshotRouteKeyFor(routeKind, initialRoute);
+  /* `initialRoute` is rebuilt from the pathname on every render, so memoised
+   * callbacks depend on these two primitives instead of the object identity. */
+  const routedDraftId = initialRoute?.draftId ?? null;
+  const routedDraftStep = initialRoute?.step ?? null;
   const isInitialSessionExplicit = initialSessionUser !== undefined;
   const initialSessionState = initialSessionStateFor({
     cachedSessionUser: cachedSessionUserFor(),
@@ -2476,13 +2567,21 @@ export const CoursitionWorkflowApp = ({
           );
         }
         if (shouldNavigate) {
-          setOptimisticStep(nextSnapshot.draft.step);
-          setLoadedSnapshotRouteKey(`${nextSnapshot.draft.id}:${nextSnapshot.draft.step}`);
-          navigateTo(nextSnapshot.draft);
+          /* A mutation response merges the server draft with the locally held
+           * step, so it can report a step behind the URL. Navigating to it would
+           * bounce the visitor backwards — to `mode` right after the first
+           * source upload. The routed step wins whenever it is still reachable. */
+          const nextStep = preferredNavigationStep(
+            nextSnapshot.draft,
+            routedDraftId === nextSnapshot.draft.id ? routedDraftStep : null,
+          );
+          setOptimisticStep(nextStep);
+          setLoadedSnapshotRouteKey(`${nextSnapshot.draft.id}:${nextStep}`);
+          navigateTo(nextSnapshot.draft, nextStep);
         }
       }
     },
-    [language, navigateTo],
+    [language, navigateTo, routedDraftId, routedDraftStep],
   );
 
   const requestIntent = (action: WorkflowActionIntent) => {
@@ -2825,21 +2924,26 @@ export const CoursitionWorkflowApp = ({
           return;
         }
         const nextSnapshot = outcome.snapshot;
-        if (
-          initialRoute !== null &&
-          nextSnapshot.draft !== null &&
-          nextSnapshot.draft.step !== initialRoute.step
-        ) {
+        /* Only a routed step the draft genuinely cannot reach redirects. The
+         * returned step is not a redirect signal on its own: the coordinator
+         * merges the locally held step over the server's for a route read, so
+         * comparing the two bounced every reachable URL — a source upload landed
+         * the visitor back on `mode`. */
+        const redirectStep =
+          initialRoute === null || nextSnapshot.draft === null
+            ? null
+            : routeRedirectStepFor(nextSnapshot.draft, initialRoute.step);
+        if (redirectStep !== null && nextSnapshot.draft !== null) {
           const canonicalDraft = nextSnapshot.draft;
           yield* Effect.sync(() => {
             applySnapshot(nextSnapshot, false);
-            setLoadedSnapshotRouteKey(`${canonicalDraft.id}:${canonicalDraft.step}`);
+            setLoadedSnapshotRouteKey(`${canonicalDraft.id}:${redirectStep}`);
             setSnapshotLoadError(null);
             void navigate({
               params: {
                 courseId: canonicalDraft.id,
                 lang: language,
-                step: courseRouteStepSlug(language, canonicalDraft.step),
+                step: courseRouteStepSlug(language, redirectStep),
               },
               replace: true,
               to: courseRoutePattern(language),
@@ -3826,6 +3930,18 @@ export const CoursitionWorkflowApp = ({
                           className={navigationTriggerClass}
                           data-current-step={isCurrentStep ? true : undefined}
                           disabled={isStepDisabled}
+                          /* Chrome only scrolls a focus target into view when it
+                           * sits entirely outside the rail, so a partially
+                           * visible step keeps its focus ring clipped when
+                           * tabbed to. Scrolling it in ourselves restores the
+                           * ring on the keyboard path the way the step-change
+                           * effect already does on the routed one. */
+                          onFocus={(event) => {
+                            event.currentTarget.scrollIntoView({
+                              block: 'nearest',
+                              inline: 'nearest',
+                            });
+                          }}
                           onClick={(event) => {
                             event.preventDefault();
                             if (!canNavigateToStep) {
@@ -4034,6 +4150,7 @@ export const CoursitionWorkflowApp = ({
                       value={sourceFormDrafts.file.name}
                     />
                     <FormInput
+                      accept={sourceFileAccept}
                       disabled={sourceType !== 'file'}
                       id="sourceFile"
                       key={`source-file-${fileInputResetKey}`}

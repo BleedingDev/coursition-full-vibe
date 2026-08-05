@@ -1,0 +1,36 @@
+diff --git a/dist/cjs/cli/require.js b/dist/cjs/cli/require.js
+index 6438bafbb6c73cb38d734af9dce88175a8f910f7..255d5c6b67f8cccea141a73513466def0ffb0e20 100644
+--- a/dist/cjs/cli/require.js
++++ b/dist/cjs/cli/require.js
+@@ -42,6 +42,7 @@ const external_fs_js_namespaceObject = require("./fs.js");
+ async function importPath(path) {
+     const modulePath = (0, external_node_path_namespaceObject.isAbsolute)(path) ? (0, external_node_url_namespaceObject.pathToFileURL)(path).href : path;
+     if ('development' !== process.env.NODE_ENV) return await import(modulePath);
++    if (!modulePath.startsWith('file:')) return await import(modulePath);
+     {
+         const timestamp = Date.now();
+         return await import(`${modulePath}?t=${timestamp}`);
+diff --git a/dist/esm/cli/require.mjs b/dist/esm/cli/require.mjs
+index fa31c42056ccb545590685e781155b112db80478..65a070a49ad5f292c9bbc80c56f46a81b580ea7c 100644
+--- a/dist/esm/cli/require.mjs
++++ b/dist/esm/cli/require.mjs
+@@ -6,6 +6,7 @@ import { findExists } from "./fs.mjs";
+ async function importPath(path) {
+     const modulePath = isAbsolute(path) ? pathToFileURL(path).href : path;
+     if ('development' !== process.env.NODE_ENV) return await import(modulePath);
++    if (!modulePath.startsWith('file:')) return await import(modulePath);
+     {
+         const timestamp = Date.now();
+         return await import(`${modulePath}?t=${timestamp}`);
+diff --git a/dist/esm-node/cli/require.mjs b/dist/esm-node/cli/require.mjs
+index e8c449739ea25d137d6e021efefffa8a8ff3795c..5edc1c6a916125f44b4fe69eb1d0b949e0274344 100644
+--- a/dist/esm-node/cli/require.mjs
++++ b/dist/esm-node/cli/require.mjs
+@@ -7,6 +7,7 @@ import { findExists } from "./fs.mjs";
+ async function importPath(path) {
+     const modulePath = isAbsolute(path) ? pathToFileURL(path).href : path;
+     if ('development' !== process.env.NODE_ENV) return await import(modulePath);
++    if (!modulePath.startsWith('file:')) return await import(modulePath);
+     {
+         const timestamp = Date.now();
+         return await import(`${modulePath}?t=${timestamp}`);

@@ -45,4 +45,5 @@ patchedDependencies:
   '@bleedingdev/modern-js-app-tools@3.5.0-ultramodern.98': patches/@bleedingdev__modern-js-app-tools@3.5.0-ultramodern.98.patch
   '@bleedingdev/modern-js-plugin-i18n@3.5.0-ultramodern.98': patches/@bleedingdev__modern-js-plugin-i18n@3.5.0-ultramodern.98.patch
   '@bleedingdev/modern-js-plugin-tanstack@3.5.0-ultramodern.98': patches/@bleedingdev__modern-js-plugin-tanstack@3.5.0-ultramodern.98.patch
+  '@bleedingdev/modern-js-utils@3.5.0-ultramodern.98': patches/@bleedingdev__modern-js-utils@3.5.0-ultramodern.98.patch
   react-helmet-async@3.0.0: patches/react-helmet-async@3.0.0.patch
