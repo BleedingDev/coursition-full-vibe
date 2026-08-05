@@ -54,7 +54,13 @@ import {
   workflowStepIndex,
   workflowSteps,
 } from '@shared/coursition/workflow';
-import type { CoursePreparation, SessionUser, WorkflowAction, WorkflowSnapshot } from '@shared/api';
+import type {
+  AnydocExtraction,
+  CoursePreparation,
+  SessionUser,
+  WorkflowAction,
+  WorkflowSnapshot,
+} from '@shared/api';
 import {
   activityEvaluationRequestSchema,
   activityEvaluationResponseSchema,
@@ -67,6 +73,7 @@ import {
 } from '@shared/api';
 import { authRoutePath, courseRoutePattern, courseRouteStepSlug } from '@shared/coursition/routes';
 import type { CoursitionWorkflowAppProps } from './coursition-workflow-app.types';
+import { extractAnydocFromFile } from './anydoc-extraction';
 import { CoursitionLoadingView } from './coursition-loading-view';
 import { sessionRedirectPathFor, snapshotLoadStatusFor, snapshotRouteKeyFor } from './route-state';
 import type { Translate } from './translation';
@@ -3093,18 +3100,21 @@ export const CoursitionWorkflowApp = ({
       setNotice(t('coursition.app.sources.sourceNameRequired'));
       return;
     }
-    const submitSource = (content: string) => {
+    const submitSource = (content: string, localExtraction: AnydocExtraction | null = null) => {
       if (submittedSourceType !== 'file' && content.trim().length === 0) {
         return Effect.sync(() => setNotice(t('coursition.app.errors.generic')));
       }
       return runWorkflowEffect({
         action: 'addSource',
         draftId: draft.id,
-        source: {
-          content,
-          name,
-          type: submittedSourceType,
-        },
+        source:
+          submittedSourceType === 'file' && localExtraction !== null
+            ? { content, localExtraction, name, type: 'file' }
+            : {
+                content,
+                name,
+                type: submittedSourceType,
+              },
       }).pipe(
         Effect.flatMap((result) =>
           Effect.sync(() => {
@@ -3205,7 +3215,10 @@ export const CoursitionWorkflowApp = ({
             });
             return;
           }
-          yield* submitSource(payloadExit.value);
+          /* Opportunistic: a failed or unsupported local conversion resolves to
+           * null and the upload takes the unchanged cloud path. */
+          const localExtraction = yield* extractAnydocFromFile(sourceFile);
+          yield* submitSource(payloadExit.value, localExtraction);
         }).pipe(Effect.ensuring(Effect.sync(() => endBusyAction('file')))),
       );
       return;

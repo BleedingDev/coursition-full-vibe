@@ -2,7 +2,12 @@ import { Data, Effect, Option, Schema } from 'effect';
 import { HttpClient, HttpClientRequest } from 'effect/unstable/http';
 import { fileTypeFromBuffer } from 'file-type';
 import { lookup as lookupMimeType } from 'mime-types';
-import { MAX_SOURCE_FILE_BYTES } from '../../shared/api.ts';
+import {
+  ANYDOC_WASM_VERSION,
+  MAX_ANYDOC_MARKDOWN_CHARS,
+  MAX_SOURCE_FILE_BYTES,
+} from '../../shared/api.ts';
+import type { AnydocExtraction, AnydocFormat } from '../../shared/api.ts';
 import type { SourceAsset, WorkflowAction } from '../../shared/coursition/workflow.ts';
 import { coursitionCloudflareAi } from './cloudflare-bindings.ts';
 import { loadCoursitionSourceProviderConfig, providerKeyConfigured } from './config.ts';
@@ -46,11 +51,16 @@ type DocumentConverter = (
   binary: BinarySourcePayload,
 ) => Effect.Effect<DocumentConversionResult, SourceProcessingError, HttpClient.HttpClient>;
 
-export type ProcessSourceInput = Extract<WorkflowAction, { action: 'addSource' }>['source'] & {
+type WorkflowSourceInput = Extract<WorkflowAction, { action: 'addSource' }>['source'];
+interface ProcessSourceMetadata {
   filePayload?: FileSourcePayload | null | undefined;
   sourceId?: string | undefined;
   storageReference?: string | undefined;
-};
+}
+
+export type ProcessSourceInput =
+  | (Extract<WorkflowSourceInput, { type: 'file' }> & ProcessSourceMetadata)
+  | (Exclude<WorkflowSourceInput, { type: 'file' }> & ProcessSourceMetadata);
 
 export interface SourceProcessorDeps {
   convertDocument?: DocumentConverter;
@@ -197,6 +207,51 @@ const detectBinaryMimeType = (bytes: Uint8Array) =>
   Effect.tryPromise({ catch: toSourceError, try: () => fileTypeFromBuffer(bytes) }).pipe(
     Effect.map((result) => result?.mime),
   );
+
+const anydocMimeTypesByFormat: Readonly<Record<AnydocFormat, readonly string[]>> = {
+  csv: ['text/csv'],
+  doc: ['application/msword', 'application/x-cfb'],
+  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  epub: ['application/epub+zip'],
+  odp: ['application/vnd.oasis.opendocument.presentation'],
+  ods: ['application/vnd.oasis.opendocument.spreadsheet'],
+  odt: ['application/vnd.oasis.opendocument.text'],
+  pdf: ['application/pdf'],
+  ppt: ['application/vnd.ms-powerpoint', 'application/x-cfb'],
+  pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  rtf: ['application/rtf', 'text/rtf'],
+  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+};
+
+const sha256Hex = (bytes: Uint8Array) =>
+  Effect.tryPromise({
+    catch: toSourceError,
+    try: () => crypto.subtle.digest('SHA-256', new Uint8Array(bytes).buffer),
+  }).pipe(
+    Effect.map((digest) =>
+      [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join(''),
+    ),
+  );
+
+const verifiedAnydocExtraction = (
+  extraction: AnydocExtraction | undefined,
+  bytes: Uint8Array,
+  detectedMimeType: string | undefined,
+) =>
+  Effect.gen(function* verifiedAnydocExtractionProgram() {
+    if (
+      extraction === undefined ||
+      extraction.version !== ANYDOC_WASM_VERSION ||
+      extraction.processor !== 'anydoc_wasm' ||
+      extraction.contentMarkdown.trim().length === 0 ||
+      extraction.contentMarkdown.length > MAX_ANYDOC_MARKDOWN_CHARS ||
+      detectedMimeType === undefined ||
+      !anydocMimeTypesByFormat[extraction.format].includes(detectedMimeType)
+    ) {
+      return null;
+    }
+    return (yield* sha256Hex(bytes)) === extraction.sourceSha256 ? extraction : null;
+  }).pipe(Effect.orElseSucceed(() => null));
 
 const parseHttpUrl = (value: string) => {
   try {
@@ -788,7 +843,7 @@ const plainSourceAsset = (
 const fileSourceAsset = (
   deps: SourceProcessorDeps,
   draftId: string,
-  source: ProcessSourceInput,
+  source: Extract<ProcessSourceInput, { type: 'file' }>,
   common: SourceAssetCommon,
   content: string,
 ) =>
@@ -810,6 +865,28 @@ const fileSourceAsset = (
         filePayload === null ? undefined : yield* detectBinaryMimeType(filePayload.bytes);
       const declaredMimeType = filePayload?.declaredMimeType;
       const fileNameMimeType = mimeTypeFromFileName(common.sourceName);
+      const localExtraction =
+        filePayload === null
+          ? null
+          : yield* verifiedAnydocExtraction(
+              source.localExtraction,
+              filePayload.bytes,
+              detectedMimeType,
+            );
+      if (localExtraction !== null) {
+        return {
+          content: localExtraction.contentMarkdown,
+          createdAt: common.createdAt,
+          id: common.sourceId,
+          mimeType: detectedMimeType,
+          name: common.sourceName,
+          processor: 'anydoc_wasm',
+          sizeLabel: source.sizeLabel ?? `${localExtraction.contentMarkdown.length} chars`,
+          status: 'processed',
+          storageReference: fileStorageReference,
+          type: source.type,
+        } satisfies SourceAsset;
+      }
       const fileProcessor = chooseFileProcessor(
         filePayload,
         detectedMimeType,

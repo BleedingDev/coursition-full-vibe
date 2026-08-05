@@ -427,6 +427,38 @@ const sourceFileWithinByteLimit = Schema.makeFilter<string>(
   (content) => sourceFileContentByteLength(content) <= MAX_SOURCE_FILE_BYTES,
   { expected: `source file content of at most ${MAX_SOURCE_FILE_BYTES} bytes` },
 );
+/* Client-side AnyDoc extraction travels with the uploaded file bytes. The
+ * server only trusts it after re-verifying the hash, format, version, and
+ * size caps against the decoded original, so the schema pins every field. */
+export const ANYDOC_WASM_VERSION = '0.1.4';
+export const MAX_ANYDOC_MARKDOWN_CHARS = 2 * 1024 * 1024;
+export const anydocFormatSchema = Schema.Literals([
+  'csv',
+  'doc',
+  'docx',
+  'epub',
+  'odp',
+  'ods',
+  'odt',
+  'pdf',
+  'ppt',
+  'pptx',
+  'rtf',
+  'xlsx',
+]);
+const sha256HexFilter = Schema.makeFilter<string>((value) => /^[0-9a-f]{64}$/u.test(value), {
+  expected: 'a lowercase hex sha-256 digest',
+});
+export const anydocExtractionSchema = Schema.Struct({
+  contentMarkdown: Schema.String.check(Schema.isMaxLength(MAX_ANYDOC_MARKDOWN_CHARS)),
+  format: anydocFormatSchema,
+  processor: Schema.Literal('anydoc_wasm'),
+  sourceSha256: Schema.String.check(sha256HexFilter),
+  version: Schema.Literal(ANYDOC_WASM_VERSION),
+});
+export type AnydocExtraction = Schema.Schema.Type<typeof anydocExtractionSchema>;
+export type AnydocFormat = Schema.Schema.Type<typeof anydocFormatSchema>;
+
 const commonSourceInputSchema = {
   name: Schema.String,
   sizeLabel: Schema.optional(Schema.String),
@@ -448,6 +480,7 @@ const sourceInputSchema = Schema.Union([
       Schema.isMaxLength(maxSourceFileDataUrlLength),
       sourceFileWithinByteLimit,
     ),
+    localExtraction: Schema.optional(anydocExtractionSchema),
     type: Schema.Literal('file'),
   }),
 ]);
